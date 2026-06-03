@@ -3,8 +3,6 @@ import { themeFor, toArabicDigits, ACTION_THEMES } from '../lib/theme'
 
 interface ChallengesProps {
   challenges: Challenge[]
-  loading: boolean
-  error: string | null
   onSelect: (challenge: Challenge) => void
 }
 
@@ -156,7 +154,7 @@ function ChallengeRow({
   )
 }
 
-export default function Challenges({ challenges, loading, error, onSelect }: ChallengesProps) {
+export default function Challenges({ challenges, onSelect }: ChallengesProps) {
   return (
     <section id="challenges" className="mx-auto max-w-3xl px-5 pb-16 pt-4 sm:px-8">
       <div className="mb-8" dir="rtl">
@@ -202,18 +200,6 @@ export default function Challenges({ challenges, loading, error, onSelect }: Cha
           </span>
         </div>
       </div>
-
-      {loading && <p className="text-center text-sm text-[#7a7689]">جارٍ التحميل…</p>}
-
-      {error && (
-        <p className="rounded-2xl bg-[#FEEFD2] p-4 text-center text-sm font-semibold text-[#A66A09]">
-          تعذّر تحميل التحديات. {error}
-        </p>
-      )}
-
-      {!loading && !error && challenges.length === 0 && (
-        <p className="text-center text-sm text-[#7a7689]">لا توجد تحديات بعد.</p>
-      )}
 
       <div className="flex flex-col gap-3">
         {challenges.map((c, i) => (

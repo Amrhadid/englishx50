@@ -13,9 +13,7 @@ import BottomCTA from '../components/BottomCTA'
 export default function Landing() {
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
-  const [loadingChallenges, setLoadingChallenges] = useState(true)
   const [loadingReviews, setLoadingReviews] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Challenge | null>(null)
 
   useEffect(() => {
@@ -23,7 +21,6 @@ export default function Landing() {
 
     if (!supabase) {
       // Supabase not configured — render the static page without data.
-      setLoadingChallenges(false)
       setLoadingReviews(false)
       return
     }
@@ -34,9 +31,9 @@ export default function Landing() {
       .order('number', { ascending: true })
       .then(({ data, error }) => {
         if (!active) return
-        if (error) setError(error.message)
-        else setChallenges((data as Challenge[]) ?? [])
-        setLoadingChallenges(false)
+        // On error (e.g. RLS/permissions), fall back silently to the
+        // placeholder challenges instead of surfacing an error in the UI.
+        if (!error) setChallenges((data as Challenge[]) ?? [])
       })
 
     supabase
@@ -73,12 +70,7 @@ export default function Landing() {
       {/* Intro video */}
       <IntroVideo />
 
-      <Challenges
-        challenges={displayedChallenges}
-        loading={loadingChallenges}
-        error={error}
-        onSelect={setSelected}
-      />
+      <Challenges challenges={displayedChallenges} onSelect={setSelected} />
       <Reviews reviews={reviews} loading={loadingReviews} />
       <BottomCTA onStart={start} />
 
