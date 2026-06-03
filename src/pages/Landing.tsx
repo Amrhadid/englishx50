@@ -83,6 +83,10 @@ export default function Landing() {
         onFeedback={(c) => setFeedbackFor(c.number)}
         onSpeak={(c) => setSpeakingFor(c)}
         onWatch={(c) => (isPremium() && c.video_url ? setLessonFor(c) : setShowPremium(true))}
+        onSource={(c) => {
+          if (isPremium() && c.pdf_url) window.open(c.pdf_url, '_blank', 'noopener')
+          else setShowPremium(true)
+        }}
       />
       <Countdown onStart={start} />
       <Reviews reviews={displayedReviews} />

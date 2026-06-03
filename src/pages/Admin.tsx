@@ -217,7 +217,7 @@ function ChallengesAdmin() {
           className={field}
         />
         <input
-          placeholder="PDF URL"
+          placeholder="Source link / PDF URL (https://...)"
           value={form.pdf_url}
           onChange={(e) => setForm({ ...form, pdf_url: e.target.value })}
           className={field}
