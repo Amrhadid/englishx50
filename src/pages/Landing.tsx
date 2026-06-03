@@ -6,14 +6,12 @@ import Navbar from '../components/Navbar'
 import Hero from '../components/Hero'
 import IntroVideo from '../components/IntroVideo'
 import Challenges from '../components/Challenges'
-import ChallengeModal from '../components/ChallengeModal'
 import PremiumModal from '../components/PremiumModal'
 import Reviews from '../components/Reviews'
 
 export default function Landing() {
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
-  const [selected, setSelected] = useState<Challenge | null>(null)
   const [showPremium, setShowPremium] = useState(false)
 
   useEffect(() => {
@@ -71,7 +69,7 @@ export default function Landing() {
       {/* Intro video */}
       <IntroVideo />
 
-      <Challenges challenges={displayedChallenges} onSelect={setSelected} />
+      <Challenges challenges={displayedChallenges} onSelect={() => setShowPremium(true)} />
       <Reviews reviews={displayedReviews} />
 
       <footer className="border-t border-[#f0ecf8] bg-white py-10 text-center" dir="rtl">
@@ -91,7 +89,6 @@ export default function Landing() {
         </p>
       </footer>
 
-      {selected && <ChallengeModal challenge={selected} onClose={() => setSelected(null)} />}
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
     </div>
   )
