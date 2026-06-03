@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import { BRAND_GRADIENT } from '../lib/theme'
+import { supabase } from '../lib/supabase'
+import type { Challenge } from '../types'
 
 interface PremiumModalProps {
   onClose: () => void
@@ -32,9 +35,44 @@ function WhatsAppIcon() {
 }
 
 export default function PremiumModal({ onClose }: PremiumModalProps) {
+  const [code, setCode] = useState('')
+  const [verifying, setVerifying] = useState(false)
+  const [codeMsg, setCodeMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
   const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
     'حابب اشترك في تحدي ٥٠ يوم المميز 🚀',
   )}`
+
+  const submitCode = async () => {
+    const value = code.trim()
+    if (!value) {
+      setCodeMsg({ ok: false, text: 'أدخل كود الاشتراك أولاً' })
+      return
+    }
+    if (!supabase) {
+      setCodeMsg({ ok: false, text: 'تعذّر التحقق الآن، تواصل معنا عبر واتساب' })
+      return
+    }
+    setVerifying(true)
+    setCodeMsg(null)
+
+    const { data, error } = await supabase
+      .from('x50_challenges')
+      .select('*')
+      .eq('access_code', value)
+
+    setVerifying(false)
+    const matches = (data as Challenge[] | null) ?? []
+    if (error || matches.length === 0) {
+      setCodeMsg({ ok: false, text: 'كود غير صحيح، تأكد منه أو اشترك للحصول على كود' })
+      return
+    }
+
+    setCodeMsg({ ok: true, text: 'تم فتح التحدي ✓' })
+    const target = matches[0]
+    const link = target.video_url || target.pdf_url
+    if (link) window.open(link, '_blank', 'noopener')
+  }
 
   return (
     <div
@@ -95,6 +133,44 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
           <p className="mt-3 text-center text-[12px] text-[#a39ec0]">
             عند الاشتراك ستحصل على كود لفتح كل التحديات 🔓
           </p>
+
+          {/* Divider */}
+          <div className="my-4 flex items-center gap-3">
+            <span className="h-px flex-1 bg-[#efeafc]" />
+            <span className="text-[12px] font-bold text-[#a39ec0]">عندك كود اشتراك؟</span>
+            <span className="h-px flex-1 bg-[#efeafc]" />
+          </div>
+
+          {/* Code entry */}
+          <div className="flex gap-2">
+            <input
+              value={code}
+              onChange={(e) => {
+                setCode(e.target.value)
+                setCodeMsg(null)
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && submitCode()}
+              placeholder="أدخل كود الاشتراك هنا..."
+              className="flex-1 rounded-2xl border border-[#ece7fb] bg-[#faf9ff] px-4 py-3 text-[13px] text-right outline-none transition focus:border-[#7C6FF0] focus:bg-white"
+            />
+            <button
+              onClick={submitCode}
+              disabled={verifying}
+              className="shrink-0 rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-lg shadow-[#A964F0]/30 transition hover:-translate-y-0.5 disabled:opacity-60"
+              style={{ background: BRAND_GRADIENT }}
+            >
+              {verifying ? '...' : 'افتح'}
+            </button>
+          </div>
+          {codeMsg && (
+            <p
+              className={`mt-2 text-center text-[12px] font-semibold ${
+                codeMsg.ok ? 'text-[#0C7C62]' : 'text-[#C2410C]'
+              }`}
+            >
+              {codeMsg.text}
+            </p>
+          )}
         </div>
       </div>
     </div>
