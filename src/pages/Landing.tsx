@@ -8,12 +8,14 @@ import IntroVideo from '../components/IntroVideo'
 import Challenges from '../components/Challenges'
 import Countdown from '../components/Countdown'
 import PremiumModal from '../components/PremiumModal'
+import FeedbackModal from '../components/FeedbackModal'
 import Reviews from '../components/Reviews'
 
 export default function Landing() {
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
   const [showPremium, setShowPremium] = useState(false)
+  const [feedbackFor, setFeedbackFor] = useState<number | null>(null)
 
   useEffect(() => {
     let active = true
@@ -70,7 +72,11 @@ export default function Landing() {
       {/* Intro video */}
       <IntroVideo />
 
-      <Challenges challenges={displayedChallenges} onSelect={() => setShowPremium(true)} />
+      <Challenges
+        challenges={displayedChallenges}
+        onSelect={() => setShowPremium(true)}
+        onFeedback={(c) => setFeedbackFor(c.number)}
+      />
       <Countdown onStart={start} />
       <Reviews reviews={displayedReviews} />
 
@@ -92,6 +98,9 @@ export default function Landing() {
       </footer>
 
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
+      {feedbackFor != null && (
+        <FeedbackModal challengeNumber={feedbackFor} onClose={() => setFeedbackFor(null)} />
+      )}
     </div>
   )
 }

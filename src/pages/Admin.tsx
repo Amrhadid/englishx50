@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase, REVIEWS_BUCKET } from '../lib/supabase'
-import type { Challenge, Review, Code } from '../types'
+import type { Challenge, Review, Code, SpeakingFeedback } from '../types'
 import { TrashIcon } from '../components/icons'
+import FeedbackView from '../components/FeedbackView'
 
 const ADMIN_PASSWORD = 'amr2024'
 
-type Tab = 'challenges' | 'reviews' | 'codes'
+type Tab = 'challenges' | 'reviews' | 'codes' | 'students'
 
 type ChallengeForm = {
   number: string
@@ -91,7 +92,7 @@ export default function Admin() {
 
       <div className="mx-auto max-w-4xl px-5 py-6">
         <div className="mb-6 flex gap-2">
-          {(['challenges', 'reviews', 'codes'] as Tab[]).map((t) => (
+          {(['challenges', 'reviews', 'codes', 'students'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -107,6 +108,7 @@ export default function Admin() {
         {tab === 'challenges' && <ChallengesAdmin />}
         {tab === 'reviews' && <ReviewsAdmin />}
         {tab === 'codes' && <CodesAdmin />}
+        {tab === 'students' && <StudentsAdmin />}
       </div>
     </div>
   )
@@ -605,6 +607,172 @@ function CodesAdmin() {
           </table>
         </div>
       )}
+    </div>
+  )
+}
+
+interface VideoView {
+  id: string
+  student: string | null
+  video_id: string | null
+  opened_at: string
+  watched_percent: number
+}
+
+interface Submission {
+  id: string
+  student: string | null
+  challenge_number: number | null
+  question: string | null
+  transcript: string | null
+  score: number | null
+  passed: boolean | null
+  feedback: SpeakingFeedback | null
+  created_at: string
+}
+
+interface StudentRow {
+  name: string
+  views: VideoView[]
+  subs: Submission[]
+}
+
+function StudentsAdmin() {
+  const [students, setStudents] = useState<StudentRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+    Promise.all([
+      supabase.from('x50_video_views').select('*').order('opened_at', { ascending: false }),
+      supabase.from('x50_submissions').select('*').order('created_at', { ascending: false }),
+    ]).then(([views, subs]) => {
+      const map = new Map<string, StudentRow>()
+      const keyOf = (s: string | null) => s || 'زائر غير معرّف'
+      const get = (s: string | null) => {
+        const key = keyOf(s)
+        if (!map.has(key)) map.set(key, { name: key, views: [], subs: [] })
+        return map.get(key)!
+      }
+      ;((views.data as VideoView[]) ?? []).forEach((v) => get(v.student).views.push(v))
+      ;((subs.data as Submission[]) ?? []).forEach((s) => get(s.student).subs.push(s))
+      setStudents(Array.from(map.values()))
+      setLoading(false)
+    })
+  }, [])
+
+  const fmt = (s?: string | null) =>
+    s ? new Date(s).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
+
+  if (loading) return <p className="text-sm text-[#9a9aa2]">Loading…</p>
+  if (students.length === 0)
+    return <p className="text-sm text-[#9a9aa2]">No student activity yet.</p>
+
+  return (
+    <div className="space-y-3">
+      {students.map((st) => {
+        const maxPct = st.views.reduce((m, v) => Math.max(m, v.watched_percent), 0)
+        const isOpen = open === st.name
+        return (
+          <div key={st.name} className="rounded-2xl border border-[#f0ecf8]">
+            <button
+              onClick={() => setOpen(isOpen ? null : st.name)}
+              className="flex w-full items-center justify-between gap-3 p-4 text-left"
+            >
+              <div>
+                <p className="font-bold text-[#111]">{st.name}</p>
+                <p className="text-xs text-[#9a9aa2]">
+                  {st.views.length} video view{st.views.length === 1 ? '' : 's'} · max {maxPct}% watched ·{' '}
+                  {st.subs.length} speaking task{st.subs.length === 1 ? '' : 's'}
+                </p>
+              </div>
+              <span className="text-[#534AB7]">{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="space-y-4 border-t border-[#f0ecf8] p-4">
+                {/* Video engagement */}
+                <div>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#9a9aa2]">
+                    Video engagement
+                  </p>
+                  {st.views.length === 0 ? (
+                    <p className="text-sm text-[#9a9aa2]">No video opens recorded.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {st.views.map((v) => (
+                        <div key={v.id} className="flex items-center gap-3">
+                          <span className="w-44 shrink-0 text-xs text-[#5b5670]">
+                            Opened {fmt(v.opened_at)}
+                          </span>
+                          <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#EEEDFE]">
+                            <div
+                              className="h-full rounded-full bg-[#534AB7]"
+                              style={{ width: `${Math.min(100, v.watched_percent)}%` }}
+                            />
+                          </div>
+                          <span className="w-12 shrink-0 text-right text-xs font-bold text-[#534AB7]">
+                            {v.watched_percent}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Speaking tasks */}
+                <div>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#9a9aa2]">
+                    Speaking tasks
+                  </p>
+                  {st.subs.length === 0 ? (
+                    <p className="text-sm text-[#9a9aa2]">No speaking submissions.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {st.subs.map((s) => (
+                        <div key={s.id} className="rounded-xl border border-[#f0ecf8] p-3">
+                          <div className="mb-1 flex items-center justify-between">
+                            <p className="text-xs font-bold text-[#534AB7]">
+                              {s.challenge_number != null ? `Challenge ${s.challenge_number}` : 'Speaking'} ·{' '}
+                              {fmt(s.created_at)}
+                            </p>
+                            <span
+                              className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                                s.passed ? 'bg-[#E1F5EE] text-[#0C7C62]' : 'bg-[#FEE2E2] text-[#B91C1C]'
+                              }`}
+                            >
+                              {s.passed ? 'Passed' : 'Not passed'} · {s.score ?? 0}%
+                            </span>
+                          </div>
+                          {s.transcript && (
+                            <p className="mb-2 rounded-lg bg-[#faf9ff] p-2 text-[13px] text-[#3a3550]" dir="ltr">
+                              “{s.transcript}”
+                            </p>
+                          )}
+                          {s.feedback && (
+                            <details>
+                              <summary className="cursor-pointer text-xs font-bold text-[#534AB7]">
+                                View AI feedback
+                              </summary>
+                              <div className="mt-2">
+                                <FeedbackView result={{ passed: !!s.passed, feedback: s.feedback }} />
+                              </div>
+                            </details>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
