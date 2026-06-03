@@ -1,0 +1,4 @@
+project_id = "hiqhbxxlbonlyemxuvad"
+
+[functions.speaking-feedback]
+verify_jwt = false
