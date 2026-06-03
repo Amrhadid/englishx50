@@ -17,12 +17,15 @@ function PlayIcon() {
   )
 }
 
-function BookIcon() {
+function LinkIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" className="h-[15px] w-[15px]" aria-hidden="true">
       <path
-        d="M4 5a2 2 0 0 1 2-2h6v16H6a2 2 0 0 0-2 2V5Zm16 0a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 1 2 2V5Z"
-        fill="currentColor"
+        d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 1 0-5.66-5.66l-1.5 1.5M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 1 0 5.66 5.66l1.5-1.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   )
@@ -57,7 +60,7 @@ function LockIcon() {
 }
 
 const ACTIONS = [
-  { key: 'source', label: 'المصدر', icon: <BookIcon />, theme: ACTION_THEMES.source },
+  { key: 'source', label: 'المصدر', icon: <LinkIcon />, theme: ACTION_THEMES.source },
   { key: 'speaking', label: 'تحدّث', icon: <MicIcon />, theme: ACTION_THEMES.speaking },
   { key: 'feedback', label: 'تقييم', icon: <ChartBarIcon />, theme: ACTION_THEMES.feedback },
 ] as const
