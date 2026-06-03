@@ -292,6 +292,7 @@ function ChallengesAdmin() {
 function ReviewsAdmin() {
   const [items, setItems] = useState<Review[]>([])
   const [uploading, setUploading] = useState(false)
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
 
   const load = async () => {
@@ -308,37 +309,54 @@ function ReviewsAdmin() {
   }, [])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
     if (!supabase) {
       setMsg('Supabase is not configured.')
       return
     }
     setUploading(true)
     setMsg(null)
+    setProgress({ done: 0, total: files.length })
 
-    const path = `reviews/${Date.now()}.jpg`
-    const { error: upErr } = await supabase.storage
-      .from(REVIEWS_BUCKET)
-      .upload(path, file, { contentType: file.type || 'image/jpeg', upsert: false })
+    const rows: { image_url: string }[] = []
+    const failures: string[] = []
 
-    if (upErr) {
-      setUploading(false)
-      setMsg(`Upload failed: ${upErr.message}`)
-      return
+    // Upload files to storage one by one so a single failure doesn't abort
+    // the whole batch. DB rows are inserted together at the end.
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+      const path = `reviews/${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+
+      const { error: upErr } = await supabase.storage
+        .from(REVIEWS_BUCKET)
+        .upload(path, file, { contentType: file.type || 'image/jpeg', upsert: false })
+
+      if (upErr) {
+        failures.push(`${file.name}: ${upErr.message}`)
+      } else {
+        const { data: pub } = supabase.storage.from(REVIEWS_BUCKET).getPublicUrl(path)
+        rows.push({ image_url: pub.publicUrl })
+      }
+      setProgress({ done: i + 1, total: files.length })
     }
 
-    const { data: pub } = supabase.storage.from(REVIEWS_BUCKET).getPublicUrl(path)
-    const { error: insErr } = await supabase
-      .from('x50_reviews')
-      .insert({ image_url: pub.publicUrl })
+    if (rows.length > 0) {
+      const { error: insErr } = await supabase.from('x50_reviews').insert(rows)
+      if (insErr) failures.push(`DB insert failed: ${insErr.message}`)
+    }
 
     setUploading(false)
+    setProgress(null)
     e.target.value = ''
-    if (insErr) {
-      setMsg(`Saved file but DB insert failed: ${insErr.message}`)
-      return
-    }
+    setMsg(
+      failures.length === 0
+        ? `Uploaded ${rows.length} image${rows.length === 1 ? '' : 's'} ✓`
+        : `Uploaded ${rows.length}/${files.length}. ${failures.length} failed: ${failures
+            .slice(0, 3)
+            .join(' · ')}${failures.length > 3 ? ' …' : ''}`,
+    )
     load()
   }
 
@@ -359,16 +377,32 @@ function ReviewsAdmin() {
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-[#f0ecf8] p-5">
-        <h3 className="mb-3 font-bold text-[#111]">Upload review image</h3>
+        <h3 className="mb-1 font-bold text-[#111]">Upload review images</h3>
+        <p className="mb-3 text-xs text-[#9a9aa2]">
+          Select multiple files at once (you can pick all 56 together).
+        </p>
         <input
           type="file"
           accept="image/*"
+          multiple
           onChange={handleUpload}
           disabled={uploading}
-          className="block w-full text-sm text-[#5b5670] file:mr-3 file:rounded-xl file:border-0 file:bg-[#534AB7] file:px-4 file:py-2 file:text-sm file:font-bold file:text-white"
+          className="block w-full text-sm text-[#5b5670] file:mr-3 file:rounded-xl file:border-0 file:bg-[#534AB7] file:px-4 file:py-2 file:text-sm file:font-bold file:text-white disabled:opacity-60"
         />
-        {uploading && <p className="mt-2 text-xs text-[#534AB7]">Uploading…</p>}
-        {msg && <p className="mt-2 text-xs text-[#FF6B6B]">{msg}</p>}
+        {uploading && progress && (
+          <div className="mt-3">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-[#EEEDFE]">
+              <div
+                className="h-full rounded-full bg-[#534AB7] transition-all"
+                style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-[#534AB7]">
+              Uploading {progress.done} / {progress.total}…
+            </p>
+          </div>
+        )}
+        {msg && !uploading && <p className="mt-2 text-xs text-[#5b5670]">{msg}</p>}
       </div>
 
       {items.length === 0 ? (
