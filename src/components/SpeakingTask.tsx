@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { BRAND_GRADIENT, toArabicDigits } from '../lib/theme'
+import { gradeSpeaking } from '../lib/grading'
 import FeedbackView from './FeedbackView'
 import type { SpeakingResult } from '../types'
 
@@ -103,15 +104,13 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
     }
     setLoading(true)
     setError(null)
-    const { data, error: fnErr } = await supabase.functions.invoke('speaking-feedback', {
-      body: { question, transcript, student, challengeId, challengeNumber },
-    })
+    const res = await gradeSpeaking({ question, transcript, student, challengeId, challengeNumber })
     setLoading(false)
-    if (fnErr || !data) {
+    if (!res) {
       setError('تعذّر تقييم الإجابة، حاول مرة أخرى')
       return
     }
-    setResult(data as SpeakingResult)
+    setResult(res)
   }
 
   const reset = () => {
