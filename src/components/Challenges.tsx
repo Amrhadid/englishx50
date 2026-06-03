@@ -61,6 +61,16 @@ const ACTIONS = [
   { key: 'feedback', label: 'تقييم', icon: <ChartBarIcon />, theme: ACTION_THEMES.feedback },
 ] as const
 
+const STEPS = [
+  'راجع المصدر جيداً',
+  'سجل ملاحظاتك يدوياً',
+  'شاهد درس الشرح وسجل كل الملاحظات الاضافية',
+  'تعلم النطق والتحدث من فيديو الشرح',
+  'مارس التحدث مع AI Coach',
+  'احصل على تقييم و اقتراحات للتطوير',
+  'قم بمراجعة غلطاتك جيداً',
+]
+
 function ChallengeRow({
   challenge,
   index,
@@ -149,12 +159,48 @@ function ChallengeRow({
 export default function Challenges({ challenges, loading, error, onSelect }: ChallengesProps) {
   return (
     <section id="challenges" className="mx-auto max-w-3xl px-5 pb-16 pt-4 sm:px-8">
-      <div className="mb-8 text-center" dir="rtl">
-        <span className="mb-3 inline-block rounded-full bg-[#f1edff] px-4 py-1.5 text-[12px] font-bold tracking-wide text-[#7C6FF0]">
-          خريطة الرحلة
-        </span>
-        <h2 className="text-[28px] font-black text-[#1b1730] sm:text-[34px]">٥٠ يوم، ١٠ تحديات 🎯</h2>
-        <p className="mt-2 text-[15px] text-[#7a7596]">كل تحدٍّ يقرّبك خطوة من الطلاقة</p>
+      <div className="mb-8" dir="rtl">
+        <div className="text-center">
+          <span className="mb-3 inline-block rounded-full bg-[#f1edff] px-4 py-1.5 text-[12px] font-bold tracking-wide text-[#7C6FF0]">
+            نظام التحدي
+          </span>
+          <h2 className="text-[28px] font-black text-[#1b1730] sm:text-[34px]">٢ تحدي كل اسبوع ⚡</h2>
+        </div>
+
+        {/* Steps card */}
+        <div className="mt-6 rounded-[28px] border border-[#efeafc] bg-white p-5 shadow-[0_10px_36px_-18px_rgba(124,111,240,0.35)] sm:p-7">
+          <p className="mb-4 text-lg font-extrabold text-[#1b1730]">الخطوات :</p>
+          <ol className="flex flex-col gap-2.5">
+            {STEPS.map((step, i) => {
+              const theme = themeFor(i)
+              return (
+                <li key={i} className="flex items-center gap-3">
+                  <span
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[14px] font-black text-white"
+                    style={{ backgroundColor: theme.accent }}
+                  >
+                    {toArabicDigits(i + 1)}
+                  </span>
+                  <span className="text-[14px] font-semibold leading-relaxed text-[#3a3550] sm:text-[15px]">
+                    {step}
+                  </span>
+                </li>
+              )
+            })}
+          </ol>
+        </div>
+
+        {/* Info badges */}
+        <div className="mt-5 flex flex-wrap justify-center gap-3">
+          <span className="flex items-center gap-2 rounded-full bg-[#FEEFD2] px-4 py-2.5 text-[13px] font-bold text-[#A66A09]">
+            <span className="text-base">⏱️</span>
+            ٤ إلى ٦ ساعات اسبوعياً
+          </span>
+          <span className="flex items-center gap-2 rounded-full bg-[#D8FAF0] px-4 py-2.5 text-[13px] font-bold text-[#0C7C62]">
+            <span className="text-base">✅</span>
+            يناسب كل المستويات (بشرط تكون طالب او خريج جامعي)
+          </span>
+        </div>
       </div>
 
       {loading && <p className="text-center text-sm text-[#7a7689]">جارٍ التحميل…</p>}
