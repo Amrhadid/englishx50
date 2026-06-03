@@ -24,3 +24,18 @@ export interface Code {
   /** Identity of whoever redeemed the code (name + phone), if known. */
   used_by?: string | null
 }
+
+export interface SpeakingFeedback {
+  on_topic: boolean
+  complete_sentence_count: number
+  score: number
+  overall: string
+  strengths: string[]
+  mistakes: { error: string; correction: string }[]
+  vocabulary: { word: string; meaning: string; example: string }[]
+}
+
+export interface SpeakingResult {
+  passed: boolean
+  feedback: SpeakingFeedback
+}
