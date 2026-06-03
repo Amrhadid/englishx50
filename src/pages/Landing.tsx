@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { PLACEHOLDER_CHALLENGES } from '../lib/placeholders'
 import type { Challenge, Review } from '../types'
 import Navbar from '../components/Navbar'
 import Hero from '../components/Hero'
@@ -56,6 +57,13 @@ export default function Landing() {
     document.getElementById('challenges')?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  // Fall back to 10 placeholder challenges so the "٥٠ يوم، ١٠ تحديات" grid
+  // always renders the full design, even before Supabase is wired up.
+  const displayedChallenges = useMemo(
+    () => (challenges.length > 0 ? challenges : PLACEHOLDER_CHALLENGES),
+    [challenges],
+  )
+
   return (
     <div className="min-h-screen bg-white">
       <Navbar onStart={start} />
@@ -74,7 +82,7 @@ export default function Landing() {
       </div>
 
       <Challenges
-        challenges={challenges}
+        challenges={displayedChallenges}
         loading={loadingChallenges}
         error={error}
         onSelect={setSelected}
