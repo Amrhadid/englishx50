@@ -15,3 +15,12 @@ export interface Review {
   image_url: string
   created_at?: string
 }
+
+export interface Code {
+  id: string
+  code: string
+  created_at?: string
+  used_at?: string | null
+  /** Identity of whoever redeemed the code (name + phone), if known. */
+  used_by?: string | null
+}

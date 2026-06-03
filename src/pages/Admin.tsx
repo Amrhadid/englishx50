@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { supabase, REVIEWS_BUCKET } from '../lib/supabase'
-import type { Challenge, Review } from '../types'
+import type { Challenge, Review, Code } from '../types'
 import { TrashIcon } from '../components/icons'
 
 const ADMIN_PASSWORD = 'amr2024'
 
-type Tab = 'challenges' | 'reviews'
+type Tab = 'challenges' | 'reviews' | 'codes'
 
 type ChallengeForm = {
   number: string
@@ -91,7 +91,7 @@ export default function Admin() {
 
       <div className="mx-auto max-w-4xl px-5 py-6">
         <div className="mb-6 flex gap-2">
-          {(['challenges', 'reviews'] as Tab[]).map((t) => (
+          {(['challenges', 'reviews', 'codes'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -104,7 +104,9 @@ export default function Admin() {
           ))}
         </div>
 
-        {tab === 'challenges' ? <ChallengesAdmin /> : <ReviewsAdmin />}
+        {tab === 'challenges' && <ChallengesAdmin />}
+        {tab === 'reviews' && <ReviewsAdmin />}
+        {tab === 'codes' && <CodesAdmin />}
       </div>
     </div>
   )
@@ -421,6 +423,186 @@ function ReviewsAdmin() {
               </button>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function randomCode() {
+  const part = () => Math.random().toString(36).slice(2, 6).toUpperCase()
+  return `X50-${part()}-${part()}`
+}
+
+function CodesAdmin() {
+  const [items, setItems] = useState<Code[]>([])
+  const [count, setCount] = useState('1')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
+
+  const load = async () => {
+    if (!supabase) return
+    const { data } = await supabase
+      .from('x50_codes')
+      .select('*')
+      .order('created_at', { ascending: false })
+    setItems((data as Code[]) ?? [])
+  }
+
+  useEffect(() => {
+    load()
+  }, [])
+
+  const generate = async () => {
+    if (!supabase) {
+      setMsg('Supabase is not configured.')
+      return
+    }
+    const n = Math.min(Math.max(Number(count) || 1, 1), 200)
+    setBusy(true)
+    setMsg(null)
+    const rows = Array.from({ length: n }, () => ({ code: randomCode() }))
+    const { error } = await supabase.from('x50_codes').insert(rows)
+    setBusy(false)
+    if (error) {
+      setMsg(`Error: ${error.message}`)
+      return
+    }
+    setMsg(`Generated ${n} code${n === 1 ? '' : 's'} ✓`)
+    load()
+  }
+
+  const copy = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(code)
+      setTimeout(() => setCopied((c) => (c === code ? null : c)), 1500)
+    } catch {
+      /* clipboard may be blocked; ignore */
+    }
+  }
+
+  const copyAllUnused = async () => {
+    const unused = items.filter((c) => !c.used_at).map((c) => c.code)
+    if (unused.length === 0) return
+    try {
+      await navigator.clipboard.writeText(unused.join('\n'))
+      setMsg(`Copied ${unused.length} unused codes to clipboard ✓`)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const remove = async (id: string) => {
+    if (!supabase) return
+    if (!confirm('Delete this code?')) return
+    await supabase.from('x50_codes').delete().eq('id', id)
+    load()
+  }
+
+  const fmt = (s?: string | null) =>
+    s ? new Date(s).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
+
+  const usedCount = items.filter((c) => c.used_at).length
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-[#f0ecf8] p-5">
+        <h3 className="mb-1 font-bold text-[#111]">Generate subscription codes</h3>
+        <p className="mb-3 text-xs text-[#9a9aa2]">
+          Create codes to share with subscribers. They redeem them in the “عندك كود؟” box.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            max={200}
+            value={count}
+            onChange={(e) => setCount(e.target.value)}
+            className="w-24 rounded-xl border border-[#e8e0f0] px-3 py-2 text-sm outline-none focus:border-[#534AB7]"
+          />
+          <button
+            onClick={generate}
+            disabled={busy}
+            className="rounded-xl bg-[#534AB7] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#46409c] disabled:opacity-60"
+          >
+            {busy ? 'Generating…' : 'Generate'}
+          </button>
+          <button
+            onClick={copyAllUnused}
+            className="rounded-xl border border-[#e8e0f0] px-4 py-2.5 text-sm font-bold text-[#5b5670] hover:bg-[#f4f3f7]"
+          >
+            Copy unused
+          </button>
+        </div>
+        {msg && <p className="mt-2 text-xs text-[#5b5670]">{msg}</p>}
+      </div>
+
+      <div className="flex items-center justify-between px-1">
+        <p className="text-sm font-bold text-[#111]">
+          Codes <span className="text-[#9a9aa2]">({items.length})</span>
+        </p>
+        <p className="text-xs text-[#9a9aa2]">
+          {usedCount} used · {items.length - usedCount} available
+        </p>
+      </div>
+
+      {items.length === 0 ? (
+        <p className="text-sm text-[#9a9aa2]">No codes yet.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-[#f0ecf8]">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-[#f0ecf8] bg-[#faf9ff] text-xs uppercase text-[#9a9aa2]">
+                <th className="px-4 py-3 font-bold">Code</th>
+                <th className="px-4 py-3 font-bold">Status</th>
+                <th className="px-4 py-3 font-bold">Created</th>
+                <th className="px-4 py-3 font-bold">Used at</th>
+                <th className="px-4 py-3 font-bold">Used by</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((c) => (
+                <tr key={c.id} className="border-b border-[#f5f2fb] last:border-0">
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => copy(c.code)}
+                      className="font-mono font-bold text-[#534AB7] hover:underline"
+                      title="Copy"
+                    >
+                      {c.code}
+                      {copied === c.code && <span className="ml-2 text-xs text-[#0C7C62]">copied</span>}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3">
+                    {c.used_at ? (
+                      <span className="rounded-full bg-[#FEE2E2] px-2.5 py-1 text-xs font-bold text-[#B91C1C]">
+                        Used
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-[#E1F5EE] px-2.5 py-1 text-xs font-bold text-[#0C7C62]">
+                        Available
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-[#5b5670]">{fmt(c.created_at)}</td>
+                  <td className="px-4 py-3 text-[#5b5670]">{fmt(c.used_at)}</td>
+                  <td className="px-4 py-3 text-[#5b5670]">{c.used_by || '—'}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => remove(c.id)}
+                      className="inline-flex items-center rounded-lg bg-[#FEE2E2] px-2.5 py-1.5 text-xs font-bold text-[#DC2626]"
+                      aria-label="Delete code"
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
