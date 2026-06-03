@@ -82,24 +82,24 @@ export default function Reviews({ reviews }: ReviewsProps) {
       {/* Carousel */}
       <div
         ref={scroller}
-        className="no-scrollbar flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-smooth px-5 pb-4 sm:px-8"
+        className="no-scrollbar flex snap-x snap-mandatory items-start gap-5 overflow-x-auto scroll-smooth px-5 pb-4 sm:px-8"
       >
         {reviews.map((r) => (
           <div
             key={r.id}
-            className="w-[260px] shrink-0 snap-center rounded-[30px] p-[3px] shadow-[0_18px_45px_-20px_rgba(124,111,240,0.55)] sm:w-[300px]"
+            className="w-[300px] shrink-0 snap-center rounded-[26px] p-[2px] shadow-[0_18px_45px_-22px_rgba(124,111,240,0.5)] sm:w-[340px]"
             style={{ background: BRAND_GRADIENT }}
           >
-            <div className="h-[440px] overflow-hidden rounded-[27px] bg-white sm:h-[500px]">
+            <div className="rounded-[24px] bg-white p-2.5">
               {r.image_url ? (
                 <img
                   src={r.image_url}
                   alt="مراجعة طالب"
                   loading="lazy"
-                  className="h-full w-full object-cover object-top"
+                  className="max-h-[560px] w-full rounded-[16px] bg-[#f7f5fc] object-contain"
                 />
               ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-[#F3F0FF] to-[#FFE1EC] text-center">
+                <div className="flex h-[420px] w-full flex-col items-center justify-center gap-3 rounded-[16px] bg-gradient-to-br from-[#F3F0FF] to-[#FFE1EC] text-center">
                   <InstagramIcon className="h-12 w-12 text-[#A964F0]" />
                   <p className="text-sm font-bold text-[#7C6FF0]">لقطة شاشة Instagram</p>
                   <p className="px-6 text-[12px] text-[#a39ec0]">
