@@ -7,12 +7,14 @@ import Hero from '../components/Hero'
 import IntroVideo from '../components/IntroVideo'
 import Challenges from '../components/Challenges'
 import ChallengeModal from '../components/ChallengeModal'
+import PremiumModal from '../components/PremiumModal'
 import Reviews from '../components/Reviews'
 
 export default function Landing() {
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
   const [selected, setSelected] = useState<Challenge | null>(null)
+  const [showPremium, setShowPremium] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -44,9 +46,8 @@ export default function Landing() {
     }
   }, [])
 
-  const start = () => {
-    document.getElementById('challenges')?.scrollIntoView({ behavior: 'smooth' })
-  }
+  // "ابدأ التحدي" CTAs open the premium-features popup.
+  const start = () => setShowPremium(true)
 
   // Fall back to 10 placeholder challenges so the "٥٠ يوم، ١٠ تحديات" grid
   // always renders the full design, even before Supabase is wired up.
@@ -91,6 +92,7 @@ export default function Landing() {
       </footer>
 
       {selected && <ChallengeModal challenge={selected} onClose={() => setSelected(null)} />}
+      {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
     </div>
   )
 }
