@@ -1,4 +1,4 @@
-import type { Challenge } from '../types'
+import type { Challenge, Review } from '../types'
 
 /**
  * 10 placeholder challenges used to render the full "٥٠ يوم، ١٠ تحديات"
@@ -18,6 +18,15 @@ const PLACEHOLDER_TITLES = [
   'المحادثات اليومية (١)',
   'المحادثات اليومية (٢)',
 ]
+
+/**
+ * Empty-image review placeholders so the reviews carousel renders its premium
+ * frames before any real Instagram screenshots are uploaded from the admin.
+ */
+export const PLACEHOLDER_REVIEWS: Review[] = Array.from({ length: 5 }, (_, i) => ({
+  id: `placeholder-review-${i + 1}`,
+  image_url: '',
+}))
 
 export const PLACEHOLDER_CHALLENGES: Challenge[] = Array.from({ length: 10 }, (_, i) => {
   const number = i + 1

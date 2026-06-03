@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { PLACEHOLDER_CHALLENGES } from '../lib/placeholders'
+import { PLACEHOLDER_CHALLENGES, PLACEHOLDER_REVIEWS } from '../lib/placeholders'
 import type { Challenge, Review } from '../types'
 import Navbar from '../components/Navbar'
 import Hero from '../components/Hero'
@@ -8,22 +8,16 @@ import IntroVideo from '../components/IntroVideo'
 import Challenges from '../components/Challenges'
 import ChallengeModal from '../components/ChallengeModal'
 import Reviews from '../components/Reviews'
-import BottomCTA from '../components/BottomCTA'
 
 export default function Landing() {
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
-  const [loadingReviews, setLoadingReviews] = useState(true)
   const [selected, setSelected] = useState<Challenge | null>(null)
 
   useEffect(() => {
     let active = true
 
-    if (!supabase) {
-      // Supabase not configured — render the static page without data.
-      setLoadingReviews(false)
-      return
-    }
+    if (!supabase) return
 
     supabase
       .from('x50_challenges')
@@ -40,10 +34,9 @@ export default function Landing() {
       .from('x50_reviews')
       .select('*')
       .order('created_at', { ascending: false })
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (!active) return
-        setReviews((data as Review[]) ?? [])
-        setLoadingReviews(false)
+        if (!error) setReviews((data as Review[]) ?? [])
       })
 
     return () => {
@@ -62,6 +55,13 @@ export default function Landing() {
     [challenges],
   )
 
+  // Show real uploaded reviews when present, otherwise placeholder frames so
+  // the carousel design is visible before any screenshots are added.
+  const displayedReviews = useMemo(
+    () => (reviews.length > 0 ? reviews : PLACEHOLDER_REVIEWS),
+    [reviews],
+  )
+
   return (
     <div className="min-h-screen bg-white">
       <Navbar onStart={start} />
@@ -71,8 +71,7 @@ export default function Landing() {
       <IntroVideo />
 
       <Challenges challenges={displayedChallenges} onSelect={setSelected} />
-      <Reviews reviews={reviews} loading={loadingReviews} />
-      <BottomCTA onStart={start} />
+      <Reviews reviews={displayedReviews} />
 
       <footer className="border-t border-[#f0ecf8] bg-white py-10 text-center" dir="rtl">
         <div className="mx-auto mb-3 flex items-center justify-center gap-2">
