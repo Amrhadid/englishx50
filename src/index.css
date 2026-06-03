@@ -1,17 +1,33 @@
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 :root {
   font-family: 'Cairo', sans-serif;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 html,
 body {
-  background-color: #ffffff;
-  color: #111111;
+  /* Warm, barely-there pastel base so colourful sections pop. */
+  background-color: #fdfcff;
+  color: #1b1730;
   font-family: 'Cairo', sans-serif;
 }
 
 * {
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Soft floating animation for the hero's decorative blobs. */
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-16px) scale(1.04); }
+}
+
+.animate-float-slow {
+  animation: float-slow 7s ease-in-out infinite;
 }
