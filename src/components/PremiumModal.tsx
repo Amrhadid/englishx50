@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BRAND_GRADIENT } from '../lib/theme'
 import { supabase } from '../lib/supabase'
+import { setPremium } from '../lib/premium'
 import type { Code } from '../types'
 
 interface PremiumModalProps {
@@ -154,8 +155,9 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
       .update({ used_at: new Date().toISOString(), used_by: usedBy })
       .eq('id', found.id)
 
+    setPremium(true)
     setVerifying(false)
-    setCodeMsg({ ok: true, text: 'تم تفعيل الكود بنجاح ✓ بالتوفيق في التحدي!' })
+    setCodeMsg({ ok: true, text: 'تم تفعيل حسابك ✓ يمكنك الآن فتح الفيديوهات. بالتوفيق!' })
   }
 
   return (

@@ -211,7 +211,7 @@ function ChallengesAdmin() {
           className={field}
         />
         <input
-          placeholder="Cloudflare Stream video UID"
+          placeholder="Cloudflare Stream video ID (e.g. 6058ab7c...)"
           value={form.video_url}
           onChange={(e) => setForm({ ...form, video_url: e.target.value })}
           className={field}

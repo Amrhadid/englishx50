@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { isPremium } from '../lib/premium'
 import { PLACEHOLDER_CHALLENGES, PLACEHOLDER_REVIEWS } from '../lib/placeholders'
 import type { Challenge, Review } from '../types'
 import Navbar from '../components/Navbar'
@@ -81,7 +82,7 @@ export default function Landing() {
         onSelect={() => setShowPremium(true)}
         onFeedback={(c) => setFeedbackFor(c.number)}
         onSpeak={(c) => setSpeakingFor(c)}
-        onWatch={(c) => (c.video_url ? setLessonFor(c) : setShowPremium(true))}
+        onWatch={(c) => (isPremium() && c.video_url ? setLessonFor(c) : setShowPremium(true))}
       />
       <Countdown onStart={start} />
       <Reviews reviews={displayedReviews} />

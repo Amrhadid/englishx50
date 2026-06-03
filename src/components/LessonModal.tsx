@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { isPremium } from '../lib/premium'
 import { toArabicDigits } from '../lib/theme'
 import type { Challenge } from '../types'
 
@@ -41,7 +42,8 @@ function CloseIcon() {
 }
 
 export default function LessonModal({ challenge, onClose }: LessonModalProps) {
-  const uid = (challenge.video_url ?? '').trim()
+  const premium = isPremium()
+  const uid = premium ? (challenge.video_url ?? '').trim() : ''
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const rowIdRef = useRef<string | null>(null)
   const maxPctRef = useRef(0)
@@ -125,6 +127,12 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
               allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
               allowFullScreen
             />
+          </div>
+        ) : !premium ? (
+          <div className="rounded-2xl bg-[#f1edff] p-8 text-center">
+            <p className="mb-2 text-3xl">🔒</p>
+            <p className="text-sm font-bold text-[#473BBE]">هذا الدرس متاح للمشتركين فقط</p>
+            <p className="mt-1 text-[13px] text-[#7a7596]">أدخل كود الاشتراك لتفعيل حسابك ومشاهدة الفيديوهات.</p>
           </div>
         ) : (
           <p className="rounded-2xl bg-[#FEEFD2] p-6 text-center text-sm font-semibold text-[#A66A09]">
