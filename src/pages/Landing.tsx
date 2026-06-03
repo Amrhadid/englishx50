@@ -4,6 +4,7 @@ import { PLACEHOLDER_CHALLENGES } from '../lib/placeholders'
 import type { Challenge, Review } from '../types'
 import Navbar from '../components/Navbar'
 import Hero from '../components/Hero'
+import IntroVideo from '../components/IntroVideo'
 import Challenges from '../components/Challenges'
 import ChallengeModal from '../components/ChallengeModal'
 import Reviews from '../components/Reviews'
@@ -69,24 +70,8 @@ export default function Landing() {
       <Navbar onStart={start} />
       <Hero onStart={start} />
 
-      {/* Intro video placeholder */}
-      <div className="mx-auto max-w-4xl px-5 pb-4 sm:px-8">
-        <button
-          className="group relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-[32px] border border-[#efeafc] shadow-[0_18px_50px_-20px_rgba(124,111,240,0.5)]"
-          style={{ background: 'linear-gradient(135deg, #2a2350 0%, #4b3fa0 55%, #7C6FF0 100%)' }}
-          aria-label="شاهد الفيديو التعريفي"
-        >
-          <span className="absolute right-6 top-5 rounded-full bg-white/15 px-3 py-1 text-[12px] font-bold text-white backdrop-blur" dir="rtl">
-            ٢ دقيقة
-          </span>
-          <span className="flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-xl transition group-hover:scale-110">
-            <svg viewBox="0 0 24 24" fill="currentColor" className="ml-1 h-8 w-8 text-[#7C6FF0]" aria-hidden="true">
-              <path d="M8 5.5v13l11-6.5-11-6.5Z" />
-            </svg>
-          </span>
-          <p className="absolute bottom-6 text-sm font-semibold text-white/90">شاهد الفيديو التعريفي 🎬</p>
-        </button>
-      </div>
+      {/* Intro video */}
+      <IntroVideo />
 
       <Challenges
         challenges={displayedChallenges}
