@@ -5,10 +5,12 @@ interface HeroProps {
   onStart: () => void
 }
 
-const STATS = [
-  { value: '٥٠', label: 'يوم', emoji: '🗓️', color: '#7C6FF0' },
-  { value: '١٠', label: 'تحديات', emoji: '🚀', color: '#23C4A0' },
-  { value: '٢٠', label: 'دقيقة شرح', emoji: '⏱️', color: '#FF8A5B' },
+const FEATURES = [
+  { label: 'مصدر للتعلم', emoji: '📚', color: '#7C6FF0' },
+  { label: 'درس شرح قصير', emoji: '🎬', color: '#23C4A0' },
+  { label: 'مهمة للتحدث', emoji: '🎤', color: '#FF8A5B' },
+  { label: 'تقييم واقتراحات للتطوير', emoji: '📊', color: '#37AEF0' },
+  { label: 'التزام للنهاية = نتيجة مضمونة', emoji: '🏆', color: '#F25C8A' },
 ]
 
 export default function Hero({ onStart }: HeroProps) {
@@ -62,19 +64,16 @@ export default function Hero({ onStart }: HeroProps) {
             </a>
           </div>
 
-          {/* Stat chips */}
-          <div className="mt-10 flex flex-wrap justify-center gap-3 md:justify-start">
-            {STATS.map((s) => (
+          {/* Feature chips */}
+          <div className="mt-10 flex flex-wrap justify-center gap-2.5 md:justify-start">
+            {FEATURES.map((f) => (
               <div
-                key={s.label}
-                className="flex items-center gap-2.5 rounded-2xl border border-white bg-white/80 px-4 py-3 shadow-sm backdrop-blur"
+                key={f.label}
+                className="flex items-center gap-2 rounded-full border border-white bg-white/80 px-4 py-2.5 shadow-sm backdrop-blur"
               >
-                <span className="text-xl">{s.emoji}</span>
-                <span>
-                  <span className="block text-xl font-black leading-none" style={{ color: s.color }}>
-                    {s.value}
-                  </span>
-                  <span className="text-[12px] font-semibold text-[#8a85a0]">{s.label}</span>
+                <span className="text-lg">{f.emoji}</span>
+                <span className="text-[13px] font-bold" style={{ color: f.color }}>
+                  {f.label}
                 </span>
               </div>
             ))}
