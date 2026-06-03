@@ -5,6 +5,7 @@ interface ChallengesProps {
   challenges: Challenge[]
   onSelect: (challenge: Challenge) => void
   onFeedback: (challenge: Challenge) => void
+  onSpeak: (challenge: Challenge) => void
 }
 
 function PlayIcon() {
@@ -75,11 +76,13 @@ function ChallengeRow({
   index,
   onSelect,
   onFeedback,
+  onSpeak,
 }: {
   challenge: Challenge
   index: number
   onSelect: () => void
   onFeedback: () => void
+  onSpeak: () => void
 }) {
   const theme = themeFor(index)
   const num = String(challenge.number).padStart(2, '0')
@@ -143,7 +146,7 @@ function ChallengeRow({
           {ACTIONS.map((a) => (
             <button
               key={a.key}
-              onClick={a.key === 'feedback' ? onFeedback : onSelect}
+              onClick={a.key === 'feedback' ? onFeedback : a.key === 'speaking' ? onSpeak : onSelect}
               className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-bold transition hover:brightness-95 sm:px-3"
               style={{ backgroundColor: a.theme.soft, color: a.theme.deep }}
             >
@@ -157,7 +160,7 @@ function ChallengeRow({
   )
 }
 
-export default function Challenges({ challenges, onSelect, onFeedback }: ChallengesProps) {
+export default function Challenges({ challenges, onSelect, onFeedback, onSpeak }: ChallengesProps) {
   return (
     <section id="challenges" className="mx-auto max-w-3xl px-5 pb-16 pt-4 sm:px-8">
       <div className="mb-8" dir="rtl">
@@ -212,6 +215,7 @@ export default function Challenges({ challenges, onSelect, onFeedback }: Challen
             index={i}
             onSelect={() => onSelect(c)}
             onFeedback={() => onFeedback(c)}
+            onSpeak={() => onSpeak(c)}
           />
         ))}
       </div>

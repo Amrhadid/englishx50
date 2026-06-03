@@ -9,6 +9,7 @@ import Challenges from '../components/Challenges'
 import Countdown from '../components/Countdown'
 import PremiumModal from '../components/PremiumModal'
 import FeedbackModal from '../components/FeedbackModal'
+import SpeakingModal from '../components/SpeakingModal'
 import Reviews from '../components/Reviews'
 
 export default function Landing() {
@@ -16,6 +17,7 @@ export default function Landing() {
   const [reviews, setReviews] = useState<Review[]>([])
   const [showPremium, setShowPremium] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<number | null>(null)
+  const [speakingFor, setSpeakingFor] = useState<Challenge | null>(null)
 
   useEffect(() => {
     let active = true
@@ -76,6 +78,7 @@ export default function Landing() {
         challenges={displayedChallenges}
         onSelect={() => setShowPremium(true)}
         onFeedback={(c) => setFeedbackFor(c.number)}
+        onSpeak={(c) => setSpeakingFor(c)}
       />
       <Countdown onStart={start} />
       <Reviews reviews={displayedReviews} />
@@ -100,6 +103,9 @@ export default function Landing() {
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
       {feedbackFor != null && (
         <FeedbackModal challengeNumber={feedbackFor} onClose={() => setFeedbackFor(null)} />
+      )}
+      {speakingFor && (
+        <SpeakingModal challenge={speakingFor} onClose={() => setSpeakingFor(null)} />
       )}
     </div>
   )
