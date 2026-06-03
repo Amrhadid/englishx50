@@ -6,6 +6,7 @@ import Navbar from '../components/Navbar'
 import Hero from '../components/Hero'
 import IntroVideo from '../components/IntroVideo'
 import Challenges from '../components/Challenges'
+import Countdown from '../components/Countdown'
 import PremiumModal from '../components/PremiumModal'
 import Reviews from '../components/Reviews'
 
@@ -70,6 +71,7 @@ export default function Landing() {
       <IntroVideo />
 
       <Challenges challenges={displayedChallenges} onSelect={() => setShowPremium(true)} />
+      <Countdown onStart={start} />
       <Reviews reviews={displayedReviews} />
 
       <footer className="border-t border-[#f0ecf8] bg-white py-10 text-center" dir="rtl">
