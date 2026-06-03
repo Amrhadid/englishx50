@@ -10,6 +10,7 @@ import Countdown from '../components/Countdown'
 import PremiumModal from '../components/PremiumModal'
 import FeedbackModal from '../components/FeedbackModal'
 import SpeakingModal from '../components/SpeakingModal'
+import LessonModal from '../components/LessonModal'
 import Reviews from '../components/Reviews'
 
 export default function Landing() {
@@ -18,6 +19,7 @@ export default function Landing() {
   const [showPremium, setShowPremium] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<number | null>(null)
   const [speakingFor, setSpeakingFor] = useState<Challenge | null>(null)
+  const [lessonFor, setLessonFor] = useState<Challenge | null>(null)
 
   useEffect(() => {
     let active = true
@@ -79,6 +81,7 @@ export default function Landing() {
         onSelect={() => setShowPremium(true)}
         onFeedback={(c) => setFeedbackFor(c.number)}
         onSpeak={(c) => setSpeakingFor(c)}
+        onWatch={(c) => (c.video_url ? setLessonFor(c) : setShowPremium(true))}
       />
       <Countdown onStart={start} />
       <Reviews reviews={displayedReviews} />
@@ -107,6 +110,7 @@ export default function Landing() {
       {speakingFor && (
         <SpeakingModal challenge={speakingFor} onClose={() => setSpeakingFor(null)} />
       )}
+      {lessonFor && <LessonModal challenge={lessonFor} onClose={() => setLessonFor(null)} />}
     </div>
   )
 }

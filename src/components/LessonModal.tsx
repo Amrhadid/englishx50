@@ -1,0 +1,137 @@
+import { useEffect, useRef } from 'react'
+import { supabase } from '../lib/supabase'
+import { toArabicDigits } from '../lib/theme'
+import type { Challenge } from '../types'
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+interface LessonModalProps {
+  challenge: Challenge
+  onClose: () => void
+}
+
+// Load the Cloudflare Stream player SDK once.
+let sdkPromise: Promise<void> | null = null
+function loadStreamSdk(): Promise<void> {
+  if ((window as any).Stream) return Promise.resolve()
+  if (sdkPromise) return sdkPromise
+  sdkPromise = new Promise<void>((resolve) => {
+    const tag = document.createElement('script')
+    tag.src = 'https://embed.cloudflarestream.com/embed/sdk.latest.js'
+    tag.onload = () => resolve()
+    document.head.appendChild(tag)
+  })
+  return sdkPromise
+}
+
+function studentId(): string | null {
+  try {
+    return localStorage.getItem('x50_user')
+  } catch {
+    return null
+  }
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export default function LessonModal({ challenge, onClose }: LessonModalProps) {
+  const uid = (challenge.video_url ?? '').trim()
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+  const rowIdRef = useRef<string | null>(null)
+  const maxPctRef = useRef(0)
+  const pollRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!uid) return
+    let player: any = null
+
+    const recordOpen = async () => {
+      if (!supabase) return
+      const { data } = await supabase
+        .from('x50_video_views')
+        .insert({ student: studentId(), video_id: uid, watched_percent: 0 })
+        .select('id')
+        .single()
+      rowIdRef.current = (data as { id?: string } | null)?.id ?? null
+    }
+
+    const savePercent = async (pct: number) => {
+      const rounded = Math.min(100, Math.round(pct))
+      if (rounded <= maxPctRef.current) return
+      maxPctRef.current = rounded
+      if (!supabase || !rowIdRef.current) return
+      await supabase
+        .from('x50_video_views')
+        .update({ watched_percent: rounded, updated_at: new Date().toISOString() })
+        .eq('id', rowIdRef.current)
+    }
+
+    const setup = async () => {
+      await recordOpen()
+      await loadStreamSdk()
+      const Stream = (window as any).Stream
+      if (!Stream || !iframeRef.current) return
+      player = Stream(iframeRef.current)
+      pollRef.current = window.setInterval(() => {
+        const dur = player?.duration
+        const cur = player?.currentTime
+        if (dur > 0) savePercent((cur / dur) * 100)
+      }, 3000)
+      player.addEventListener?.('ended', () => savePercent(100))
+    }
+    setup()
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [uid])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#1b1730]/60 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-3xl rounded-[28px] border border-white bg-white p-4 shadow-2xl"
+        dir="rtl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          aria-label="إغلاق"
+          className="absolute left-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-[#f4f2fc] text-[#8a85a0] transition hover:bg-[#ece8f8]"
+        >
+          <CloseIcon />
+        </button>
+
+        <p className="mb-1 pr-12 text-[12px] font-bold text-[#7C6FF0]">
+          درس الشرح — التحدي {toArabicDigits(challenge.number)}
+        </p>
+        <h2 className="mb-3 pr-12 text-lg font-extrabold text-[#1b1730]">{challenge.title}</h2>
+
+        {uid ? (
+          <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
+            <iframe
+              ref={iframeRef}
+              src={`https://iframe.cloudflarestream.com/${uid}?autoplay=true&preload=auto`}
+              title={challenge.title}
+              className="absolute inset-0 h-full w-full"
+              allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+              allowFullScreen
+            />
+          </div>
+        ) : (
+          <p className="rounded-2xl bg-[#FEEFD2] p-6 text-center text-sm font-semibold text-[#A66A09]">
+            لم تتم إضافة فيديو لهذا التحدي بعد.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}

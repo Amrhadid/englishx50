@@ -6,6 +6,7 @@ interface ChallengesProps {
   onSelect: (challenge: Challenge) => void
   onFeedback: (challenge: Challenge) => void
   onSpeak: (challenge: Challenge) => void
+  onWatch: (challenge: Challenge) => void
 }
 
 function PlayIcon() {
@@ -77,12 +78,14 @@ function ChallengeRow({
   onSelect,
   onFeedback,
   onSpeak,
+  onWatch,
 }: {
   challenge: Challenge
   index: number
   onSelect: () => void
   onFeedback: () => void
   onSpeak: () => void
+  onWatch: () => void
 }) {
   const theme = themeFor(index)
   const num = String(challenge.number).padStart(2, '0')
@@ -102,7 +105,7 @@ function ChallengeRow({
 
       {/* Thumbnail */}
       <button
-        onClick={onSelect}
+        onClick={onWatch}
         className="relative aspect-video w-28 shrink-0 overflow-hidden rounded-2xl sm:w-44"
         style={{ background: `linear-gradient(135deg, ${theme.soft} 0%, #ffffff 130%)` }}
         aria-label={`التحدي ${num}`}
@@ -160,7 +163,13 @@ function ChallengeRow({
   )
 }
 
-export default function Challenges({ challenges, onSelect, onFeedback, onSpeak }: ChallengesProps) {
+export default function Challenges({
+  challenges,
+  onSelect,
+  onFeedback,
+  onSpeak,
+  onWatch,
+}: ChallengesProps) {
   return (
     <section id="challenges" className="mx-auto max-w-3xl px-5 pb-16 pt-4 sm:px-8">
       <div className="mb-8" dir="rtl">
@@ -216,6 +225,7 @@ export default function Challenges({ challenges, onSelect, onFeedback, onSpeak }
             onSelect={() => onSelect(c)}
             onFeedback={() => onFeedback(c)}
             onSpeak={() => onSpeak(c)}
+            onWatch={() => onWatch(c)}
           />
         ))}
       </div>
