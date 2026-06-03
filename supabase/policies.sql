@@ -7,6 +7,22 @@
 -- is not a real auth boundary — see the note at the bottom.)
 
 -- ---------------------------------------------------------------------------
+-- 0. Table-level GRANTs for the API roles. RLS policies are not enough on
+--    their own — without these you get "permission denied for table ...".
+-- ---------------------------------------------------------------------------
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on public.x50_reviews    to anon, authenticated;
+grant select, insert, update, delete on public.x50_challenges to anon, authenticated;
+-- x50_codes is created in codes.sql; this grant is harmless if it runs first.
+do $$ begin
+  if to_regclass('public.x50_codes') is not null then
+    grant select, insert, update, delete on public.x50_codes to anon, authenticated;
+  end if;
+end $$;
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
 -- 1. Reviews storage bucket — must exist and be PUBLIC so uploaded
 --    Instagram screenshots are viewable on the site via their public URL.
 -- ---------------------------------------------------------------------------

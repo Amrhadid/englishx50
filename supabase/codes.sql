@@ -9,6 +9,9 @@ create table if not exists public.x50_codes (
   used_by    text
 );
 
+-- Table-level grants for the API roles (avoids "permission denied for table").
+grant select, insert, update, delete on public.x50_codes to anon, authenticated;
+
 alter table public.x50_codes enable row level security;
 
 -- The app uses the anon key for the password-gated admin and the public code
