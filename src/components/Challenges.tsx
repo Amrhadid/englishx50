@@ -1,6 +1,7 @@
 import type { Challenge } from '../types'
 import { themeFor, toArabicDigits, ACTION_THEMES } from '../lib/theme'
 import achievement from '../assets/Achievement-bro.svg'
+import LevelTest from './LevelTest'
 
 interface ChallengesProps {
   challenges: Challenge[]
@@ -80,6 +81,7 @@ const STEPS = [
 function ChallengeRow({
   challenge,
   index,
+  id,
   onSelect,
   onFeedback,
   onSpeak,
@@ -88,6 +90,7 @@ function ChallengeRow({
 }: {
   challenge: Challenge
   index: number
+  id?: string
   onSelect: () => void
   onFeedback: () => void
   onSpeak: () => void
@@ -98,7 +101,7 @@ function ChallengeRow({
   const num = String(challenge.number).padStart(2, '0')
 
   return (
-    <div className="group grid min-h-[180px] grid-cols-[120px_1fr] overflow-hidden rounded-[24px] border-[1.5px] border-[#ede8ff] bg-white transition duration-300 hover:border-[#c4b8ff] hover:shadow-[0_8px_32px_rgba(139,92,246,0.12)] sm:grid-cols-[280px_1fr]">
+    <div id={id} className="group grid min-h-[180px] grid-cols-[120px_1fr] overflow-hidden rounded-[24px] border-[1.5px] border-[#ede8ff] bg-white transition duration-300 hover:border-[#c4b8ff] hover:shadow-[0_8px_32px_rgba(139,92,246,0.12)] sm:grid-cols-[280px_1fr]">
       {/* Thumbnail (left) */}
       <button
         onClick={onWatch}
@@ -228,11 +231,13 @@ export default function Challenges({
       {/* Challenge cards — white */}
       <div className="bg-white">
         <div className="mx-auto flex max-w-3xl flex-col gap-3 px-5 py-14 sm:px-8">
+          <LevelTest />
           {challenges.map((c, i) => (
             <ChallengeRow
               key={c.id}
               challenge={c}
               index={i}
+              id={i === 0 ? 'challenge-1' : undefined}
               onSelect={() => onSelect(c)}
               onFeedback={() => onFeedback(c)}
               onSpeak={() => onSpeak(c)}
