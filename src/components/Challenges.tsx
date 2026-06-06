@@ -98,61 +98,47 @@ function ChallengeRow({
   const num = String(challenge.number).padStart(2, '0')
 
   return (
-    <div
-      className="group flex items-center gap-3 rounded-[24px] border-2 border-[#ede8ff] bg-white p-2.5 shadow-[0_6px_24px_-14px_rgba(139,92,246,0.18)] transition duration-300 hover:-translate-y-0.5 hover:border-[#c4b8ff] hover:shadow-[0_16px_38px_-18px_rgba(139,92,246,0.35)] sm:gap-5 sm:p-3"
-      dir="rtl"
-    >
-      {/* Episode number */}
-      <span
-        className="w-7 shrink-0 text-center text-2xl font-black tabular-nums sm:w-12 sm:text-[44px]"
-        style={{ color: theme.accent }}
-      >
-        {toArabicDigits(num)}
-      </span>
-
-      {/* Thumbnail */}
+    <div className="group grid min-h-[180px] grid-cols-[120px_1fr] overflow-hidden rounded-[24px] border-[1.5px] border-[#ede8ff] bg-white transition duration-300 hover:border-[#c4b8ff] hover:shadow-[0_8px_32px_rgba(139,92,246,0.12)] sm:grid-cols-[280px_1fr]">
+      {/* Thumbnail (left) */}
       <button
         onClick={onWatch}
-        className="relative aspect-video w-28 shrink-0 overflow-hidden rounded-2xl sm:w-44"
-        style={{ background: `linear-gradient(135deg, ${theme.soft} 0%, #ffffff 130%)` }}
+        className="relative overflow-hidden"
+        style={{ background: `linear-gradient(135deg, ${theme.soft} 0%, #ffffff 100%)` }}
         aria-label={`التحدي ${num}`}
       >
         <span
-          className="pointer-events-none absolute -bottom-3 right-1 text-[52px] font-black leading-none opacity-15"
-          style={{ color: theme.accent }}
+          className="pointer-events-none absolute -bottom-2 left-2 text-[80px] font-black leading-none tabular-nums"
+          style={{ color: theme.accent, opacity: 0.12 }}
         >
           {num}
         </span>
         <span className="absolute inset-0 flex items-center justify-center">
           <span
-            className="flex h-11 w-11 items-center justify-center rounded-full text-white shadow-lg transition group-hover:scale-110"
-            style={{ backgroundColor: theme.accent, boxShadow: `0 10px 22px -6px ${theme.accent}` }}
+            className="flex h-14 w-14 items-center justify-center rounded-full text-white transition group-hover:scale-110"
+            style={{ backgroundColor: theme.accent, boxShadow: `0 8px 24px ${theme.accent}66` }}
           >
             <PlayIcon />
           </span>
         </span>
         {challenge.is_locked && (
-          <span className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-white/85 text-[#8a85a0] shadow-sm backdrop-blur">
+          <span className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-[#8b85a0]">
             <LockIcon />
           </span>
         )}
       </button>
 
-      {/* Title + actions */}
-      <div className="flex min-w-0 flex-1 flex-col gap-2 py-1 pl-1 text-right">
-        <div>
-          <p className="text-[11px] font-bold" style={{ color: theme.accent }}>
+      {/* Info (right) */}
+      <div className="flex flex-col justify-center gap-3 px-7 py-6" dir="rtl">
+        <div className="flex flex-col gap-1">
+          <p className="text-[12px] font-bold" style={{ color: theme.accent }}>
             التحدي {toArabicDigits(challenge.number)}
           </p>
-          <h3
-            className="truncate text-[15px] font-extrabold sm:text-[17px]"
-            style={{ color: theme.deep }}
-          >
+          <h3 className="text-[22px] font-black leading-tight text-[#1b1730]">
             {challenge.title || `التحدي ${toArabicDigits(challenge.number)}`}
           </h3>
         </div>
 
-        <div className="flex flex-wrap gap-1.5 sm:gap-2">
+        <div className="flex flex-wrap gap-2.5">
           {ACTIONS.map((a) => (
             <button
               key={a.key}
@@ -165,7 +151,7 @@ function ChallengeRow({
                       ? onSource
                       : onSelect
               }
-              className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-bold transition hover:brightness-95 sm:px-3"
+              className="flex items-center gap-1.5 rounded-[30px] px-[18px] py-2.5 text-[13px] font-bold transition hover:brightness-95"
               style={{ backgroundColor: a.theme.soft, color: a.theme.deep }}
             >
               {a.icon}
