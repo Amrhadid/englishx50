@@ -66,15 +66,14 @@ export default function OnboardingModal() {
     setInfoError(null)
     const { error } = await supabase.from('x50_students').insert({
       user_id: user.id,
-      full_name: fullName.trim(),
+      name: fullName.trim(),
       phone: phone.trim(),
       job: job.trim(),
     })
     setSavingInfo(false)
     if (error) {
-      // Temporary: surface the real error so we can diagnose insert failures.
       console.error('Onboarding insert error:', error)
-      setInfoError(error.message)
+      setInfoError('حدث خطأ أثناء الحفظ، حاول مرة أخرى')
       return
     }
     await refetch()
