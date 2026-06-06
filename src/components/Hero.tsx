@@ -90,10 +90,10 @@ export default function Hero({ onStart }: HeroProps) {
         </div>
 
         {/* Right — illustration card */}
-        <div className="relative flex items-center justify-center px-4 py-6">
-          {/* Floating progress card (top-left) */}
+        <div className="relative flex items-center justify-end px-2 py-12 sm:py-10">
+          {/* Floating progress card (top-left corner) */}
           <div
-            className="absolute left-0 top-2 z-10 w-[200px] rounded-2xl border border-[#f0eeff] bg-white p-3.5 shadow-xl shadow-[#8B5CF6]/10"
+            className="absolute -left-2 top-0 z-10 w-[190px] rounded-2xl border border-[#f0eeff] bg-white p-3.5 shadow-xl shadow-[#8B5CF6]/10 sm:-left-4"
             dir="ltr"
           >
             <div className="mb-3 flex items-center gap-2.5">
@@ -117,13 +117,13 @@ export default function Hero({ onStart }: HeroProps) {
           </div>
 
           {/* Illustration card */}
-          <div className="w-full max-w-[340px] rounded-[40px] bg-white p-7 shadow-2xl shadow-[#8B5CF6]/15">
+          <div className="ml-auto w-full max-w-[330px] shrink-0 rounded-[40px] bg-white p-7 shadow-2xl shadow-[#8B5CF6]/15">
             <img src={voiceChat} alt="AI voice coaching" className="w-full" />
           </div>
 
-          {/* AI Coach badge (bottom-right) */}
+          {/* AI Coach badge (bottom-right corner) */}
           <div
-            className="absolute bottom-2 right-0 z-10 flex items-center gap-2 rounded-2xl border border-[#f0eeff] bg-white px-3.5 py-2.5 text-[12px] font-extrabold text-[#8B5CF6] shadow-xl shadow-[#8B5CF6]/10"
+            className="absolute -bottom-2 -right-2 z-10 flex items-center gap-2 rounded-2xl border border-[#f0eeff] bg-white px-3.5 py-2.5 text-[12px] font-extrabold text-[#8B5CF6] shadow-xl shadow-[#8B5CF6]/10 sm:-right-3"
             dir="ltr"
           >
             <span className="relative flex h-2.5 w-2.5">
