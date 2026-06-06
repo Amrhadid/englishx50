@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { useOnboarding } from '../hooks/useOnboarding'
+import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { toArabicDigits } from '../lib/theme'
 import FeedbackView from './FeedbackView'
 import { LockIcon, MicIcon, CloseIcon } from './icons'
@@ -50,7 +50,7 @@ function countSentences(text: string): number {
 
 export default function LevelTest() {
   const [open, setOpen] = useState(false)
-  const { needsCode } = useOnboarding()
+  const { needsCode } = useOnboardingContext()
   const locked = needsCode
 
   return (

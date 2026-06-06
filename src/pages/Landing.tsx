@@ -14,6 +14,7 @@ import SpeakingModal from '../components/SpeakingModal'
 import LessonModal from '../components/LessonModal'
 import OnboardingModal from '../components/OnboardingModal'
 import Reviews from '../components/Reviews'
+import { OnboardingProvider } from '../context/OnboardingContext'
 
 export default function Landing() {
   const [challenges, setChallenges] = useState<Challenge[]>([])
@@ -71,9 +72,10 @@ export default function Landing() {
   )
 
   return (
-    <div className="min-h-screen bg-white">
-      <OnboardingModal />
-      <Navbar onStart={start} />
+    <OnboardingProvider>
+      <div className="min-h-screen bg-white">
+        <OnboardingModal />
+        <Navbar onStart={start} />
       <Hero onStart={start} />
 
       {/* Intro video */}
@@ -118,6 +120,7 @@ export default function Landing() {
         <SpeakingModal challenge={speakingFor} onClose={() => setSpeakingFor(null)} />
       )}
       {lessonFor && <LessonModal challenge={lessonFor} onClose={() => setLessonFor(null)} />}
-    </div>
+      </div>
+    </OnboardingProvider>
   )
 }

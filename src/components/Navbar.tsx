@@ -1,5 +1,5 @@
 import { useAuth } from '../hooks/useAuth'
-import { useOnboarding } from '../hooks/useOnboarding'
+import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import DaysLeftBadge from './DaysLeftBadge'
 import { supabase } from '../lib/supabase'
 
@@ -9,7 +9,7 @@ interface NavbarProps {
 
 export default function Navbar({ onStart }: NavbarProps) {
   const { user, signOut } = useAuth()
-  const { needsOnboarding, needsCode, daysLeft } = useOnboarding()
+  const { needsOnboarding, needsCode, daysLeft } = useOnboardingContext()
 
   const signInWithGoogle = () => {
     if (!supabase) return

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import { useOnboarding } from '../hooks/useOnboarding'
+import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { supabase } from '../lib/supabase'
 import { setPremium } from '../lib/premium'
 import type { Code } from '../types'
@@ -22,7 +22,7 @@ function Logo() {
 
 export default function OnboardingModal() {
   const { user } = useAuth()
-  const { needsOnboarding, needsCode, refetch } = useOnboarding()
+  const { needsOnboarding, needsCode, refetch } = useOnboardingContext()
 
   const [step, setStep] = useState<1 | 2 | 3>(1)
 
