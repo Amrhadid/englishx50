@@ -1,2 +1,3 @@
-/admin       /index.html   200
-/speaking    /index.html   200
+# SPA fallback — serve index.html for all client-side routes (e.g. /admin,
+# /speaking) so deep links and refreshes don't 404 or bounce to the homepage.
+/*    /index.html   200
