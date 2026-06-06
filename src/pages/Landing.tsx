@@ -12,6 +12,7 @@ import PremiumModal from '../components/PremiumModal'
 import FeedbackModal from '../components/FeedbackModal'
 import SpeakingModal from '../components/SpeakingModal'
 import LessonModal from '../components/LessonModal'
+import OnboardingModal from '../components/OnboardingModal'
 import Reviews from '../components/Reviews'
 
 export default function Landing() {
@@ -71,6 +72,7 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-white">
+      <OnboardingModal />
       <Navbar onStart={start} />
       <Hero onStart={start} />
 

@@ -1,21 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { setPremium } from '../lib/premium'
+import { useOnboarding } from '../hooks/useOnboarding'
 import { toArabicDigits } from '../lib/theme'
 import FeedbackView from './FeedbackView'
-import { LockIcon, MicIcon, CheckIcon, CloseIcon } from './icons'
-import type { Code, SpeakingResult, Mistake, VocabItem } from '../types'
+import { LockIcon, MicIcon, CloseIcon } from './icons'
+import type { SpeakingResult, Mistake, VocabItem } from '../types'
 
 /* Design-system colours requested for this feature. */
 const PURPLE = '#534AB7'
 const TEAL = '#0F6E56'
 const CORAL = '#993C1D'
 
-const USER_KEY = 'x50_user'
-const PASSED_KEY = 'x50_level_test_passed'
 const TEST_SECONDS = 60
 
-type Step = 'code' | 'speak' | 'feedback'
+type Step = 'speak' | 'feedback'
 type Outcome = 'passed' | 'failed' | 'rejected'
 
 // Minimal typing for the browser SpeechRecognition API (not in lib.dom yet).
@@ -52,13 +50,8 @@ function countSentences(text: string): number {
 
 export default function LevelTest() {
   const [open, setOpen] = useState(false)
-  const [unlocked, setUnlocked] = useState(() => {
-    try {
-      return localStorage.getItem(PASSED_KEY) === 'true'
-    } catch {
-      return false
-    }
-  })
+  const { needsCode } = useOnboarding()
+  const locked = needsCode
 
   return (
     <>
@@ -81,10 +74,10 @@ export default function LevelTest() {
               className="flex h-14 w-14 items-center justify-center rounded-full text-white transition group-hover:scale-110"
               style={{ backgroundColor: PURPLE, boxShadow: `0 8px 24px ${PURPLE}66` }}
             >
-              {unlocked ? <CheckIcon className="h-6 w-6" /> : <MicIcon className="h-6 w-6" />}
+              {locked ? <LockIcon className="h-6 w-6" /> : <MicIcon className="h-6 w-6" />}
             </span>
           </span>
-          {!unlocked && (
+          {locked && (
             <span className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-[#8b85a0]">
               <LockIcon className="h-4 w-4" />
             </span>
@@ -97,12 +90,12 @@ export default function LevelTest() {
           style={{ fontFamily: "'Cairo', sans-serif" }}
         >
           <div className="flex flex-col gap-1">
-            <p className="flex items-center gap-1.5 text-[12px] font-bold" style={{ color: PURPLE }}>
+            <p className="text-[12px] font-bold" style={{ color: PURPLE }}>
               ابدأ من هنا
             </p>
             <h3 className="flex items-center gap-2 text-[22px] font-black leading-tight text-[#1b1730]">
               اختبار المستوى
-              {!unlocked && <LockIcon className="h-4 w-4 text-[#8b85a0]" />}
+              {locked && <LockIcon className="h-4 w-4 text-[#8b85a0]" />}
             </h3>
             <p className="text-[13px] font-semibold leading-relaxed text-[#7a7596]">
               قيّم مستواك في التحدّث قبل ما تبدأ التحدي الأول
@@ -115,38 +108,21 @@ export default function LevelTest() {
               className="rounded-[30px] px-[20px] py-2.5 text-[13px] font-bold text-white transition hover:brightness-95"
               style={{ backgroundColor: PURPLE }}
             >
-              {unlocked ? 'أعد الاختبار' : 'ابدأ الاختبار'}
+              ابدأ الاختبار
             </button>
           </div>
         </div>
       </div>
 
-      {open && (
-        <LevelTestModal
-          onClose={() => setOpen(false)}
-          onPassed={() => {
-            setUnlocked(true)
-            try {
-              localStorage.setItem(PASSED_KEY, 'true')
-            } catch {
-              /* ignore storage errors */
-            }
-          }}
-        />
-      )}
+      {open && <LevelTestModal locked={locked} onClose={() => setOpen(false)} />}
     </>
   )
 }
 
-function LevelTestModal({ onClose, onPassed }: { onClose: () => void; onPassed: () => void }) {
-  const [step, setStep] = useState<Step>('code')
+function LevelTestModal({ locked, onClose }: { locked: boolean; onClose: () => void }) {
+  const [step, setStep] = useState<Step>('speak')
 
-  // Step 1 — code gate
-  const [code, setCode] = useState('')
-  const [verifying, setVerifying] = useState(false)
-  const [codeError, setCodeError] = useState<string | null>(null)
-
-  // Step 2 — recording
+  // Recording
   const [supported, setSupported] = useState(true)
   const [recording, setRecording] = useState(false)
   const [transcript, setTranscript] = useState('')
@@ -155,7 +131,7 @@ function LevelTestModal({ onClose, onPassed }: { onClose: () => void; onPassed: 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const timerRef = useRef<number | null>(null)
 
-  // Step 3 — feedback
+  // Feedback
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<SpeakingResult | null>(null)
   const [outcome, setOutcome] = useState<Outcome | null>(null)
@@ -169,57 +145,17 @@ function LevelTestModal({ onClose, onPassed }: { onClose: () => void; onPassed: 
     }
   }, [])
 
-  const submitCode = async () => {
-    const value = code.trim()
-    if (!value) {
-      setCodeError('أدخل كود الاشتراك أولاً')
-      return
-    }
-    if (!supabase) {
-      setCodeError('تعذّر التحقق الآن، حاول لاحقاً')
-      return
-    }
-    setVerifying(true)
-    setCodeError(null)
-
-    const { data, error } = await supabase.from('x50_codes').select('*').eq('code', value)
-    const matches = (data as Code[] | null) ?? []
-
-    if (error || matches.length === 0) {
-      setVerifying(false)
-      setCodeError('كود غير صحيح، تأكد منه أو اشترك للحصول على كود')
-      return
-    }
-
-    const found = matches[0]
-    if (found.used_at) {
-      setVerifying(false)
-      setCodeError('هذا الكود مستخدم بالفعل')
-      return
-    }
-
-    let usedBy: string | null = null
-    try {
-      usedBy = localStorage.getItem(USER_KEY)
-    } catch {
-      usedBy = null
-    }
-
-    await supabase
-      .from('x50_codes')
-      .update({ used_at: new Date().toISOString(), used_by: usedBy })
-      .eq('id', found.id)
-
-    setPremium(true)
-    setVerifying(false)
-    setStep('speak')
-  }
-
   const stopTimer = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current)
       timerRef.current = null
     }
+  }
+
+  const stopRecording = () => {
+    recognitionRef.current?.stop()
+    setRecording(false)
+    stopTimer()
   }
 
   const startRecording = () => {
@@ -268,12 +204,6 @@ function LevelTestModal({ onClose, onPassed }: { onClose: () => void; onPassed: 
         return s - 1
       })
     }, 1000)
-  }
-
-  const stopRecording = () => {
-    recognitionRef.current?.stop()
-    setRecording(false)
-    stopTimer()
   }
 
   const getFeedback = async () => {
@@ -336,7 +266,6 @@ function LevelTestModal({ onClose, onPassed }: { onClose: () => void; onPassed: 
 
     setResult(mapped)
     setOutcome(mapped.passed ? 'passed' : 'failed')
-    if (mapped.passed) onPassed()
   }
 
   const retry = () => {
@@ -382,7 +311,6 @@ function LevelTestModal({ onClose, onPassed }: { onClose: () => void; onPassed: 
         </button>
 
         <div className="px-5 py-8 sm:px-8">
-          {/* Header */}
           <div className="mb-6 text-center">
             <span
               className="mb-2 inline-block rounded-full px-3 py-1 text-[12px] font-extrabold text-white"
@@ -392,44 +320,21 @@ function LevelTestModal({ onClose, onPassed }: { onClose: () => void; onPassed: 
             </span>
           </div>
 
-          {/* Step 1 — code gate */}
-          {step === 'code' && (
-            <div className="mx-auto max-w-md">
-              <h2 className="mb-2 text-center text-xl font-extrabold text-[#1b1730]">
-                أدخل كود الاشتراك للبدء
-              </h2>
-              <p className="mb-5 text-center text-[13px] text-[#7a7596]">
-                تحتاج كود مفعّل لخوض اختبار المستوى
-              </p>
-              <input
-                value={code}
-                onChange={(e) => {
-                  setCode(e.target.value)
-                  setCodeError(null)
-                }}
-                onKeyDown={(e) => e.key === 'Enter' && submitCode()}
-                placeholder="أدخل كود الاشتراك هنا..."
-                className="w-full rounded-2xl border border-[#ece7fb] bg-white px-4 py-3 text-right text-[14px] outline-none transition focus:border-[#534AB7]"
-                autoFocus
-              />
-              {codeError && (
-                <p className="mt-2 text-center text-[13px] font-semibold" style={{ color: CORAL }}>
-                  {codeError}
-                </p>
-              )}
-              <button
-                onClick={submitCode}
-                disabled={verifying}
-                className="mt-4 w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5 disabled:opacity-60"
+          {/* Locked — user has not redeemed a code yet */}
+          {locked ? (
+            <div className="mx-auto max-w-md py-6 text-center">
+              <span
+                className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full text-white"
                 style={{ backgroundColor: PURPLE }}
               >
-                {verifying ? 'جارٍ التحقق…' : 'تحقق وابدأ'}
-              </button>
+                <LockIcon className="h-7 w-7" />
+              </span>
+              <p className="text-[15px] font-bold leading-relaxed" style={{ color: CORAL }}>
+                هذا الاختبار للمشتركين فقط، يرجى تفعيل كودك أولاً
+              </p>
             </div>
-          )}
-
-          {/* Step 2 — speaking task */}
-          {step === 'speak' && (
+          ) : step === 'speak' ? (
+            /* Speaking task */
             <div className="mx-auto flex max-w-md flex-col items-center">
               <p className="mb-1 text-[13px] font-bold" style={{ color: PURPLE }}>
                 🎤 مهمة التحدّث
@@ -515,10 +420,8 @@ function LevelTestModal({ onClose, onPassed }: { onClose: () => void; onPassed: 
                 </button>
               )}
             </div>
-          )}
-
-          {/* Step 3 — feedback */}
-          {step === 'feedback' && (
+          ) : (
+            /* Feedback */
             <div className="mx-auto max-w-md">
               {loading ? (
                 <p className="py-10 text-center text-sm font-semibold text-[#7a7596]">

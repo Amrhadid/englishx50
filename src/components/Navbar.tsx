@@ -1,4 +1,6 @@
 import { useAuth } from '../hooks/useAuth'
+import { useOnboarding } from '../hooks/useOnboarding'
+import DaysLeftBadge from './DaysLeftBadge'
 import { supabase } from '../lib/supabase'
 
 interface NavbarProps {
@@ -7,6 +9,7 @@ interface NavbarProps {
 
 export default function Navbar({ onStart }: NavbarProps) {
   const { user, signOut } = useAuth()
+  const { needsOnboarding, needsCode, daysLeft } = useOnboarding()
 
   const signInWithGoogle = () => {
     if (!supabase) return
@@ -50,6 +53,7 @@ export default function Navbar({ onStart }: NavbarProps) {
 
           {user ? (
             <div className="flex items-center gap-2">
+              {!needsOnboarding && !needsCode && <DaysLeftBadge daysLeft={daysLeft} />}
               {user.user_metadata.avatar_url && (
                 <img
                   src={user.user_metadata.avatar_url}

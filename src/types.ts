@@ -25,6 +25,18 @@ export interface Code {
   used_by?: string | null
 }
 
+export interface Student {
+  id: string
+  user_id: string
+  full_name: string | null
+  phone: string | null
+  job: string | null
+  university: string | null
+  code: string | null
+  code_redeemed_at: string | null
+  created_at?: string
+}
+
 export interface Mistake {
   original: string
   correction: string
