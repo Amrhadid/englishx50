@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { BRAND_GRADIENT, toArabicDigits } from '../lib/theme'
+import { toArabicDigits } from '../lib/theme'
+import urgent from '../assets/Urgent-amico.svg'
 
 interface CountdownProps {
   onStart: () => void
@@ -36,37 +37,36 @@ export default function Countdown({ onStart }: CountdownProps) {
   }, [])
 
   return (
-    <section className="px-5 py-16 sm:px-8" dir="rtl">
-      <div
-        className="relative mx-auto max-w-3xl overflow-hidden rounded-[36px] px-6 py-12 text-center shadow-2xl shadow-[#A964F0]/30 sm:px-12"
-        style={{ background: BRAND_GRADIENT }}
-      >
-        {/* Decorative glows */}
-        <div className="absolute -left-10 -top-10 h-48 w-48 rounded-full bg-white/15 blur-2xl" />
-        <div className="absolute -bottom-12 -right-8 h-56 w-56 rounded-full bg-white/15 blur-2xl" />
+    <section className="bg-[#ECEAFF]" dir="rtl">
+      <div className="mx-auto grid max-w-5xl items-center gap-10 px-5 py-16 sm:px-8 md:grid-cols-[1fr_1.1fr]">
+        {/* Illustration — left */}
+        <div className="flex items-center justify-center md:order-1">
+          <img src={urgent} alt="" className="w-full max-w-[340px]" />
+        </div>
 
-        <div className="relative">
-          <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-1.5 text-[13px] font-bold text-white backdrop-blur">
+        {/* Copy — right */}
+        <div className="md:order-2">
+          <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-white px-4 py-1.5 text-[13px] font-extrabold text-[#8B5CF6] shadow-sm">
             ⏳ التحدي القادم
           </span>
-          <h2 className="mb-1 text-[26px] font-black text-white sm:text-[32px]">
+          <h2 className="mb-1.5 text-[28px] font-black text-[#1b1730] sm:text-[36px]">
             يبدأ التحدي القادم
           </h2>
-          <p className="mb-7 text-[15px] font-semibold text-white/90">
+          <p className="mb-7 text-[17px] font-extrabold text-[#8B5CF6]">
             ١٠ يونيو · June 10th
           </p>
 
           {/* Countdown tiles */}
-          <div className="mx-auto mb-8 flex max-w-md justify-center gap-2.5 sm:gap-4">
+          <div className="mb-8 flex max-w-md gap-2.5 sm:gap-3.5">
             {UNITS.map((u) => (
               <div
                 key={u.key}
-                className="flex min-w-[64px] flex-1 flex-col items-center rounded-2xl border border-white/20 bg-white/15 py-3 backdrop-blur sm:min-w-[80px]"
+                className="flex min-w-[64px] flex-1 flex-col items-center rounded-2xl border-2 border-[#d4c9ff] bg-white py-3.5 sm:min-w-[80px]"
               >
-                <span className="text-[28px] font-black leading-none text-white tabular-nums sm:text-[38px]">
+                <span className="text-[28px] font-black leading-none text-[#1b1730] tabular-nums sm:text-[38px]">
                   {toArabicDigits(String(t[u.key]).padStart(2, '0'))}
                 </span>
-                <span className="mt-1.5 text-[11px] font-semibold text-white/80 sm:text-[12px]">
+                <span className="mt-1.5 text-[11px] font-bold text-[#8b85a0] sm:text-[12px]">
                   {u.label}
                 </span>
               </div>
@@ -74,12 +74,12 @@ export default function Countdown({ onStart }: CountdownProps) {
           </div>
 
           {t.done && (
-            <p className="mb-5 text-sm font-bold text-white">انطلق التحدي! انضم الآن 🚀</p>
+            <p className="mb-5 text-sm font-bold text-[#EC4899]">انطلق التحدي! انضم الآن 🚀</p>
           )}
 
           <button
             onClick={onStart}
-            className="rounded-full bg-white px-10 py-4 text-base font-extrabold text-[#7C6FF0] shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
+            className="rounded-full bg-[#8B5CF6] px-10 py-4 text-base font-extrabold text-white transition hover:-translate-y-0.5 hover:bg-[#1b1730]"
           >
             اضمن مكانك الآن ←
           </button>

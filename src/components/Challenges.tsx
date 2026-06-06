@@ -1,5 +1,6 @@
 import type { Challenge } from '../types'
 import { themeFor, toArabicDigits, ACTION_THEMES } from '../lib/theme'
+import achievement from '../assets/Achievement-bro.svg'
 
 interface ChallengesProps {
   challenges: Challenge[]
@@ -98,7 +99,7 @@ function ChallengeRow({
 
   return (
     <div
-      className="group flex items-center gap-3 rounded-[24px] border border-[#efeafc] bg-white p-2.5 shadow-[0_6px_24px_-14px_rgba(124,111,240,0.25)] transition duration-300 hover:-translate-y-0.5 hover:border-[#e0d8fa] hover:shadow-[0_16px_38px_-18px_rgba(124,111,240,0.4)] sm:gap-5 sm:p-3"
+      className="group flex items-center gap-3 rounded-[24px] border-2 border-[#ede8ff] bg-white p-2.5 shadow-[0_6px_24px_-14px_rgba(139,92,246,0.18)] transition duration-300 hover:-translate-y-0.5 hover:border-[#c4b8ff] hover:shadow-[0_16px_38px_-18px_rgba(139,92,246,0.35)] sm:gap-5 sm:p-3"
       dir="rtl"
     >
       {/* Episode number */}
@@ -186,64 +187,74 @@ export default function Challenges({
   onSource,
 }: ChallengesProps) {
   return (
-    <section id="challenges" className="mx-auto max-w-3xl px-5 pb-16 pt-4 sm:px-8">
-      <div className="mb-8" dir="rtl">
-        <div className="text-center">
-          <span className="mb-3 inline-block rounded-full bg-[#f1edff] px-4 py-1.5 text-[12px] font-bold tracking-wide text-[#7C6FF0]">
-            نظام التحدي
-          </span>
-          <h2 className="text-[28px] font-black text-[#1b1730] sm:text-[34px]">٢ تحدي كل اسبوع ⚡</h2>
-        </div>
+    <section id="challenges">
+      {/* Header — lavender */}
+      <div className="bg-[#ECEAFF]">
+        <div className="mx-auto grid max-w-5xl items-center gap-10 px-5 py-14 sm:px-8 md:grid-cols-[1.1fr_1fr]" dir="rtl">
+          {/* Steps card + badges */}
+          <div>
+            <span className="mb-3 inline-block rounded-full bg-white px-4 py-1.5 text-[12px] font-bold tracking-wide text-[#8B5CF6]">
+              نظام التحدي
+            </span>
+            <h2 className="mb-6 text-[28px] font-black text-[#1b1730] sm:text-[34px]">٢ تحدي كل اسبوع ⚡</h2>
 
-        {/* Steps card */}
-        <div className="mt-6 rounded-[28px] border border-[#efeafc] bg-white p-5 shadow-[0_10px_36px_-18px_rgba(124,111,240,0.35)] sm:p-7">
-          <p className="mb-4 text-lg font-extrabold text-[#1b1730]">الخطوات :</p>
-          <ol className="flex flex-col gap-2.5">
-            {STEPS.map((step, i) => {
-              const theme = themeFor(i)
-              return (
-                <li key={i} className="flex items-center gap-3">
-                  <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[14px] font-black text-white"
-                    style={{ backgroundColor: theme.accent }}
-                  >
-                    {toArabicDigits(i + 1)}
-                  </span>
-                  <span className="text-[14px] font-semibold leading-relaxed text-[#3a3550] sm:text-[15px]">
-                    {step}
-                  </span>
-                </li>
-              )
-            })}
-          </ol>
-        </div>
+            <div className="rounded-[28px] border-2 border-[#ede8ff] bg-white p-5 shadow-[0_10px_36px_-18px_rgba(139,92,246,0.3)] sm:p-7">
+              <p className="mb-4 text-lg font-extrabold text-[#1b1730]">الخطوات :</p>
+              <ol className="flex flex-col gap-2.5">
+                {STEPS.map((step, i) => {
+                  const theme = themeFor(i)
+                  return (
+                    <li key={i} className="flex items-center gap-3">
+                      <span
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[14px] font-black text-white"
+                        style={{ backgroundColor: theme.accent }}
+                      >
+                        {toArabicDigits(i + 1)}
+                      </span>
+                      <span className="text-[14px] font-semibold leading-relaxed text-[#3a3550] sm:text-[15px]">
+                        {step}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ol>
+            </div>
 
-        {/* Info badges */}
-        <div className="mt-5 flex flex-wrap justify-center gap-3">
-          <span className="flex items-center gap-2 rounded-full bg-[#FEEFD2] px-4 py-2.5 text-[13px] font-bold text-[#A66A09]">
-            <span className="text-base">⏱️</span>
-            ٤ إلى ٦ ساعات اسبوعياً
-          </span>
-          <span className="flex items-center gap-2 rounded-full bg-[#D8FAF0] px-4 py-2.5 text-[13px] font-bold text-[#0C7C62]">
-            <span className="text-base">✅</span>
-            يناسب كل المستويات (بشرط تكون طالب او خريج جامعي)
-          </span>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <span className="flex items-center gap-2 rounded-full bg-[#FEEFD2] px-4 py-2.5 text-[13px] font-bold text-[#A66A09]">
+                <span className="text-base">⏱️</span>
+                ٤ إلى ٦ ساعات اسبوعياً
+              </span>
+              <span className="flex items-center gap-2 rounded-full bg-[#D8FAF0] px-4 py-2.5 text-[13px] font-bold text-[#0C7C62]">
+                <span className="text-base">✅</span>
+                يناسب كل المستويات (بشرط تكون طالب او خريج جامعي)
+              </span>
+            </div>
+          </div>
+
+          {/* Illustration */}
+          <div className="flex items-center justify-center">
+            <img src={achievement} alt="" className="w-full max-w-[360px]" />
+          </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-3">
-        {challenges.map((c, i) => (
-          <ChallengeRow
-            key={c.id}
-            challenge={c}
-            index={i}
-            onSelect={() => onSelect(c)}
-            onFeedback={() => onFeedback(c)}
-            onSpeak={() => onSpeak(c)}
-            onWatch={() => onWatch(c)}
-            onSource={() => onSource(c)}
-          />
-        ))}
+      {/* Challenge cards — white */}
+      <div className="bg-white">
+        <div className="mx-auto flex max-w-3xl flex-col gap-3 px-5 py-14 sm:px-8">
+          {challenges.map((c, i) => (
+            <ChallengeRow
+              key={c.id}
+              challenge={c}
+              index={i}
+              onSelect={() => onSelect(c)}
+              onFeedback={() => onFeedback(c)}
+              onSpeak={() => onSpeak(c)}
+              onWatch={() => onWatch(c)}
+              onSource={() => onSource(c)}
+            />
+          ))}
+        </div>
       </div>
     </section>
   )

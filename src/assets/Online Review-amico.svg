@@ -1,0 +1,36 @@
+<svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Online review illustration">
+  <ellipse cx="250" cy="438" rx="170" ry="26" fill="#8B5CF6" opacity="0.12"/>
+  <!-- Phone -->
+  <g>
+    <rect x="150" y="78" width="200" height="320" rx="30" fill="#1b1730"/>
+    <rect x="166" y="100" width="168" height="276" rx="16" fill="#fff"/>
+    <rect x="218" y="88" width="64" height="8" rx="4" fill="#3a3550"/>
+    <!-- review card 1 -->
+    <rect x="182" y="120" width="136" height="68" rx="14" fill="#ECEAFF"/>
+    <circle cx="206" cy="144" r="13" fill="#8B5CF6"/>
+    <rect x="226" y="136" width="74" height="9" rx="4.5" fill="#8B5CF6" opacity="0.5"/>
+    <g fill="#F59E0B">
+      <path d="M192 168 l3 6 7 1 -5 5 1 7 -6 -3 -6 3 1 -7 -5 -5 7 -1 z"/>
+      <path d="M214 168 l3 6 7 1 -5 5 1 7 -6 -3 -6 3 1 -7 -5 -5 7 -1 z"/>
+      <path d="M236 168 l3 6 7 1 -5 5 1 7 -6 -3 -6 3 1 -7 -5 -5 7 -1 z"/>
+      <path d="M258 168 l3 6 7 1 -5 5 1 7 -6 -3 -6 3 1 -7 -5 -5 7 -1 z"/>
+      <path d="M280 168 l3 6 7 1 -5 5 1 7 -6 -3 -6 3 1 -7 -5 -5 7 -1 z"/>
+    </g>
+    <!-- review card 2 -->
+    <rect x="182" y="204" width="136" height="60" rx="14" fill="#FCE7F3"/>
+    <circle cx="206" cy="234" r="13" fill="#EC4899"/>
+    <rect x="226" y="222" width="74" height="9" rx="4.5" fill="#EC4899" opacity="0.5"/>
+    <rect x="226" y="238" width="58" height="9" rx="4.5" fill="#EC4899" opacity="0.3"/>
+    <!-- review card 3 -->
+    <rect x="182" y="280" width="136" height="60" rx="14" fill="#ECEAFF"/>
+    <circle cx="206" cy="310" r="13" fill="#F59E0B"/>
+    <rect x="226" y="298" width="74" height="9" rx="4.5" fill="#F59E0B" opacity="0.5"/>
+    <rect x="226" y="314" width="58" height="9" rx="4.5" fill="#F59E0B" opacity="0.3"/>
+  </g>
+  <!-- Floating big star -->
+  <g>
+    <path d="M386 150 l13 27 30 4 -22 21 6 30 -27 -15 -27 15 6 -30 -22 -21 30 -4 z" fill="#F59E0B"/>
+  </g>
+  <!-- Floating heart -->
+  <path d="M96 230 a16 16 0 0 1 28 0 a16 16 0 0 1 28 0 q0 22 -28 40 q-28 -18 -28 -40 z" fill="#EC4899"/>
+</svg>

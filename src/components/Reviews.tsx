@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import type { Review } from '../types'
-import { BRAND_GRADIENT } from '../lib/theme'
+import onlineReview from '../assets/Online Review-amico.svg'
 
 interface ReviewsProps {
   reviews: Review[]
@@ -43,38 +43,44 @@ export default function Reviews({ reviews }: ReviewsProps) {
   }
 
   return (
-    <section id="reviews" className="relative overflow-hidden py-16" dir="rtl">
-      {/* Soft pastel backdrop */}
-      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-[#fdfcff] via-[#F7F3FF] to-[#fdfcff]" />
-      <div className="absolute right-0 top-10 -z-10 h-72 w-72 rounded-full bg-[#A964F0]/15 blur-3xl" />
-      <div className="absolute left-0 bottom-10 -z-10 h-72 w-72 rounded-full bg-[#23C4A0]/12 blur-3xl" />
-
+    <section id="reviews" className="bg-white py-16" dir="rtl">
       <div className="mx-auto mb-8 max-w-5xl px-5 sm:px-8">
-        <div className="flex items-end justify-between gap-4">
-          <div>
+        <div className="grid items-center gap-10 md:grid-cols-[1fr_1.1fr]">
+          {/* Illustration — left */}
+          <div className="flex items-center justify-center md:order-1">
+            <img src={onlineReview} alt="" className="w-full max-w-[320px]" />
+          </div>
+
+          {/* Header — right */}
+          <div className="md:order-2">
             <span className="mb-3 inline-block rounded-full bg-[#D8FAF0] px-4 py-1.5 text-[12px] font-bold tracking-wide text-[#0C7C62]">
               آراء حقيقية
             </span>
             <h2 className="text-[28px] font-black text-[#1b1730] sm:text-[34px]">قالوا عنّا 💬</h2>
             <p className="mt-2 text-[15px] text-[#7a7596]">لقطات من رسائل وتقييمات الطلاب</p>
-          </div>
 
-          {/* Arrows (hidden on small screens — swipe instead) */}
-          <div className="hidden gap-2 sm:flex">
-            <button
-              onClick={() => scroll('right')}
-              aria-label="السابق"
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-[#ece7fb] bg-white text-[#7C6FF0] shadow-sm transition hover:bg-[#f1edff]"
-            >
-              <ChevronIcon dir="right" />
-            </button>
-            <button
-              onClick={() => scroll('left')}
-              aria-label="التالي"
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-[#ece7fb] bg-white text-[#7C6FF0] shadow-sm transition hover:bg-[#f1edff]"
-            >
-              <ChevronIcon dir="left" />
-            </button>
+            <span className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#ECEAFF] px-4 py-2 text-[13px] font-extrabold text-[#8B5CF6]">
+              +2,000 طالب
+              <span className="text-[#F59E0B]">★★★★★</span>
+            </span>
+
+            {/* Arrows (hidden on small screens — swipe instead) */}
+            <div className="mt-6 hidden gap-2 sm:flex">
+              <button
+                onClick={() => scroll('right')}
+                aria-label="السابق"
+                className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#ede8ff] bg-white text-[#8B5CF6] transition hover:border-[#8B5CF6] hover:bg-[#8B5CF6] hover:text-white"
+              >
+                <ChevronIcon dir="right" />
+              </button>
+              <button
+                onClick={() => scroll('left')}
+                aria-label="التالي"
+                className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#ede8ff] bg-white text-[#8B5CF6] transition hover:border-[#8B5CF6] hover:bg-[#8B5CF6] hover:text-white"
+              >
+                <ChevronIcon dir="left" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -87,27 +93,24 @@ export default function Reviews({ reviews }: ReviewsProps) {
         {reviews.map((r) => (
           <div
             key={r.id}
-            className="w-[300px] shrink-0 snap-center rounded-[26px] p-[2px] shadow-[0_18px_45px_-22px_rgba(124,111,240,0.5)] sm:w-[340px]"
-            style={{ background: BRAND_GRADIENT }}
+            className="w-[300px] shrink-0 snap-center rounded-[26px] border-2 border-[#ede8ff] bg-white p-2.5 shadow-[0_18px_45px_-26px_rgba(139,92,246,0.4)] sm:w-[340px]"
           >
-            <div className="rounded-[24px] bg-white p-2.5">
-              {r.image_url ? (
-                <img
-                  src={r.image_url}
-                  alt="مراجعة طالب"
-                  loading="lazy"
-                  className="max-h-[560px] w-full rounded-[16px] bg-[#f7f5fc] object-contain"
-                />
-              ) : (
-                <div className="flex h-[420px] w-full flex-col items-center justify-center gap-3 rounded-[16px] bg-gradient-to-br from-[#F3F0FF] to-[#FFE1EC] text-center">
-                  <InstagramIcon className="h-12 w-12 text-[#A964F0]" />
-                  <p className="text-sm font-bold text-[#7C6FF0]">لقطة شاشة Instagram</p>
-                  <p className="px-6 text-[12px] text-[#a39ec0]">
-                    تُضاف آراء الطلاب من لوحة التحكم
-                  </p>
-                </div>
-              )}
-            </div>
+            {r.image_url ? (
+              <img
+                src={r.image_url}
+                alt="مراجعة طالب"
+                loading="lazy"
+                className="max-h-[560px] w-full rounded-[16px] bg-[#f7f5fc] object-contain"
+              />
+            ) : (
+              <div className="flex h-[420px] w-full flex-col items-center justify-center gap-3 rounded-[16px] bg-[#ECEAFF] text-center">
+                <InstagramIcon className="h-12 w-12 text-[#8B5CF6]" />
+                <p className="text-sm font-bold text-[#8B5CF6]">لقطة شاشة Instagram</p>
+                <p className="px-6 text-[12px] text-[#a39ec0]">
+                  تُضاف آراء الطلاب من لوحة التحكم
+                </p>
+              </div>
+            )}
           </div>
         ))}
       </div>
