@@ -72,7 +72,9 @@ export default function OnboardingModal() {
     })
     setSavingInfo(false)
     if (error) {
-      setInfoError('حدث خطأ أثناء الحفظ، حاول مرة أخرى')
+      // Temporary: surface the real error so we can diagnose insert failures.
+      console.error('Onboarding insert error:', error)
+      setInfoError(error.message)
       return
     }
     await refetch()
