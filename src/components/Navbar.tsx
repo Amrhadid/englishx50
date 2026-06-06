@@ -1,8 +1,20 @@
+import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabase'
+
 interface NavbarProps {
   onStart: () => void
 }
 
 export default function Navbar({ onStart }: NavbarProps) {
+  const { user, signOut } = useAuth()
+
+  const signInWithGoogle = () => {
+    supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    })
+  }
+
   return (
     <header className="sticky top-0 z-30 w-full border-b border-[#f0eeff] bg-white">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5 sm:px-8">
@@ -34,6 +46,34 @@ export default function Navbar({ onStart }: NavbarProps) {
           >
             ابدأ التحدي
           </button>
+
+          {user ? (
+            <div className="flex items-center gap-2">
+              {user.user_metadata.avatar_url && (
+                <img
+                  src={user.user_metadata.avatar_url}
+                  alt={user.user_metadata.full_name ?? ''}
+                  className="h-9 w-9 rounded-full object-cover"
+                />
+              )}
+              <span className="hidden text-sm font-bold text-[#1b1730] sm:inline-block">
+                {user.user_metadata.full_name}
+              </span>
+              <button
+                onClick={signOut}
+                className="rounded-full px-3 py-2 text-sm font-bold text-[#6b6685] transition hover:bg-[#f1edff] hover:text-[#8B5CF6]"
+              >
+                خروج
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={signInWithGoogle}
+              className="rounded-full border border-[#e7e3ff] px-4 py-2.5 text-sm font-extrabold text-[#1b1730] transition hover:bg-[#f1edff] hover:text-[#8B5CF6]"
+            >
+              الدخول بـ Google
+            </button>
+          )}
         </div>
       </nav>
     </header>
