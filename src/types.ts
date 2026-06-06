@@ -28,7 +28,7 @@ export interface Code {
 export interface Student {
   id: string
   user_id: string
-  full_name: string | null
+  name: string | null
   phone: string | null
   job: string | null
   university: string | null
