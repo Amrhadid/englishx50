@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { toArabicDigits } from '../lib/theme'
+import { parseSubmission } from '../lib/grading'
 import FeedbackView from './FeedbackView'
 import type { SpeakingResult } from '../types'
 
@@ -37,7 +38,7 @@ export default function FeedbackModal({ challengeNumber, onClose }: FeedbackModa
 
     let query = supabase
       .from('x50_submissions')
-      .select('passed, feedback')
+      .select('*')
       .eq('student', student)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -45,8 +46,8 @@ export default function FeedbackModal({ challengeNumber, onClose }: FeedbackModa
 
     query.then(({ data }) => {
       if (!active) return
-      const row = (data ?? [])[0] as { passed: boolean; feedback: SpeakingResult['feedback'] } | undefined
-      if (row?.feedback) setResult({ passed: row.passed, feedback: row.feedback })
+      const row = (data ?? [])[0] as Record<string, unknown> | undefined
+      if (row) setResult(parseSubmission(row))
       setLoading(false)
     })
 

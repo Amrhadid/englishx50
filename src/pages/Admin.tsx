@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase, REVIEWS_BUCKET } from '../lib/supabase'
-import type { Challenge, Review, Code, SpeakingFeedback } from '../types'
+import type { Challenge, Review, Code } from '../types'
 import { TrashIcon } from '../components/icons'
 import FeedbackView from '../components/FeedbackView'
+import { parseSubmission } from '../lib/grading'
 
 const ADMIN_PASSWORD = 'amr2024'
 
@@ -627,7 +628,7 @@ interface Submission {
   transcript: string | null
   score: number | null
   passed: boolean | null
-  feedback: SpeakingFeedback | null
+  feedback: string | null
   created_at: string
 }
 
@@ -759,7 +760,7 @@ function StudentsAdmin() {
                                 View AI feedback
                               </summary>
                               <div className="mt-2">
-                                <FeedbackView result={{ passed: !!s.passed, feedback: s.feedback }} />
+                                <FeedbackView result={parseSubmission(s as unknown as Record<string, unknown>)} />
                               </div>
                             </details>
                           )}

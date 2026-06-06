@@ -25,17 +25,25 @@ export interface Code {
   used_by?: string | null
 }
 
-export interface SpeakingFeedback {
-  on_topic: boolean
-  complete_sentence_count: number
-  score: number
-  overall: string
-  strengths: string[]
-  mistakes: { error: string; correction: string }[]
-  vocabulary: { word: string; meaning: string; example: string }[]
+export interface Mistake {
+  original: string
+  correction: string
+  explanation: string
+}
+
+export interface VocabItem {
+  word: string
+  meaning: string
+  example: string
 }
 
 export interface SpeakingResult {
+  score: number
   passed: boolean
-  feedback: SpeakingFeedback
+  feedback: string
+  mistakes: Mistake[]
+  corrected_sentences: string[]
+  vocabulary: VocabItem[]
+  strengths: string[]
+  weaknesses: string[]
 }

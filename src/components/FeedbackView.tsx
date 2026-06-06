@@ -1,29 +1,8 @@
-import { toArabicDigits } from '../lib/theme'
 import type { SpeakingResult } from '../types'
 
-function Card({
-  title,
-  tint,
-  color,
-  children,
-}: {
-  title: string
-  tint: string
-  color: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="rounded-2xl border border-[#efeafc] bg-white p-4">
-      <p
-        className="mb-2 inline-block rounded-full px-3 py-1 text-[12px] font-bold"
-        style={{ backgroundColor: tint, color }}
-      >
-        {title}
-      </p>
-      {children}
-    </div>
-  )
-}
+const PURPLE = '#534AB7'
+const TEAL = '#0F6E56'
+const CORAL = '#993C1D'
 
 /** Renders AI speaking feedback. Shared by the speaking task, the Feedback
  *  chip modal, and the admin Students view. */
@@ -34,79 +13,178 @@ export default function FeedbackView({
   result: SpeakingResult
   onRetry?: () => void
 }) {
-  const f = result.feedback
+  const passed = result.passed
+  const accent = passed ? TEAL : CORAL
+  const mistakes = result.mistakes ?? []
+  const corrected = result.corrected_sentences ?? []
+  const vocabulary = result.vocabulary ?? []
+  const strengths = result.strengths ?? []
+  const weaknesses = result.weaknesses ?? []
+
   return (
-    <div className="space-y-4" dir="rtl">
-      {/* Status + score */}
+    <>
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          .feedback-print-area, .feedback-print-area * { visibility: visible !important; }
+          .feedback-print-area {
+            position: absolute;
+            inset: 0;
+            margin: 0;
+            padding: 24px;
+            width: 100%;
+          }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+
       <div
-        className={`rounded-[24px] p-5 text-center text-white ${result.passed ? '' : 'bg-[#C2410C]'}`}
-        style={result.passed ? { background: 'linear-gradient(135deg,#23C4A0,#0F6E56)' } : undefined}
+        className="feedback-print-area space-y-5"
+        dir="rtl"
+        style={{ fontFamily: "'Cairo', sans-serif" }}
       >
-        <p className="text-3xl font-black">{toArabicDigits(f.score)}٪</p>
-        <p className="mt-1 text-sm font-bold">
-          {result.passed ? 'اكتملت المهمة ✓' : 'لم تكتمل — تحتاج ٣ جمل كاملة مرتبطة بالسؤال'}
-        </p>
-        <p className="mt-1 text-[12px] text-white/90">
-          عدد الجمل الكاملة: {toArabicDigits(f.complete_sentence_count)}
-        </p>
-      </div>
-
-      {f.overall && (
-        <div className="rounded-2xl border border-[#efeafc] bg-white p-4">
-          <p className="text-[14px] leading-relaxed text-[#3a3550]">{f.overall}</p>
+        {/* Score circle */}
+        <div className="flex flex-col items-center">
+          <div
+            className="flex h-32 w-32 flex-col items-center justify-center rounded-full text-white shadow-lg"
+            style={{ backgroundColor: accent }}
+          >
+            <span className="text-4xl font-black leading-none">{result.score}</span>
+            <span className="mt-1 text-xs font-bold opacity-90">من ١٠٠</span>
+          </div>
+          <p className="mt-3 text-lg font-extrabold" style={{ color: accent }}>
+            {passed ? 'ناجح' : 'راسب'}
+          </p>
+          {result.feedback && (
+            <p className="mt-2 max-w-md text-center text-[14px] leading-relaxed text-[#3a3550]">
+              {result.feedback}
+            </p>
+          )}
         </div>
-      )}
 
-      {f.strengths.length > 0 && (
-        <Card title="✅ نقاط القوة" tint="#E1F5EE" color="#0C7C62">
-          <ul className="list-disc space-y-1 pr-5 text-[14px] text-[#3a3550]">
-            {f.strengths.map((s, i) => (
-              <li key={i}>{s}</li>
+        {/* Mistakes */}
+        {mistakes.length > 0 && (
+          <section className="space-y-3">
+            <h3 className="text-base font-extrabold" style={{ color: PURPLE }}>
+              ✏️ الأخطاء والتصحيحات
+            </h3>
+            {mistakes.map((m, i) => (
+              <div key={i} className="rounded-2xl border border-[#efeafc] bg-white p-4 shadow-sm">
+                <p className="font-semibold line-through" style={{ color: CORAL }} dir="ltr">
+                  {m.original}
+                </p>
+                <p className="mt-1 font-bold" style={{ color: TEAL }} dir="ltr">
+                  {m.correction}
+                </p>
+                {m.explanation && (
+                  <p className="mt-2 text-[13px] leading-relaxed text-[#6b6680]">{m.explanation}</p>
+                )}
+              </div>
             ))}
-          </ul>
-        </Card>
-      )}
+          </section>
+        )}
 
-      {f.mistakes.length > 0 && (
-        <Card title="✏️ أخطاء وتصحيحات" tint="#FFE7DB" color="#C2410C">
-          <ul className="space-y-2">
-            {f.mistakes.map((m, i) => (
-              <li key={i} className="text-[14px]" dir="ltr">
-                <span className="text-[#C2410C] line-through">{m.error}</span>
-                <span className="mx-2 text-[#a39ec0]">→</span>
-                <span className="font-semibold text-[#0C7C62]">{m.correction}</span>
-              </li>
+        {/* Corrected sentences */}
+        {corrected.length > 0 && (
+          <section className="space-y-3">
+            <h3 className="text-base font-extrabold" style={{ color: PURPLE }}>
+              ✅ الجمل المُصحّحة
+            </h3>
+            {corrected.map((s, i) => (
+              <div
+                key={i}
+                className="rounded-2xl border-2 p-3 text-[14px] text-[#1b1730]"
+                style={{ borderColor: TEAL, backgroundColor: '#F0FAF6' }}
+                dir="ltr"
+              >
+                {s}
+              </div>
             ))}
-          </ul>
-        </Card>
-      )}
+          </section>
+        )}
 
-      {f.vocabulary.length > 0 && (
-        <Card title="📚 كلمات مقترحة" tint="#EDEBFF" color="#473BBE">
-          <ul className="space-y-2">
-            {f.vocabulary.map((v, i) => (
-              <li key={i} className="text-[14px]">
-                <span className="font-bold text-[#473BBE]" dir="ltr">
-                  {v.word}
-                </span>
-                <span className="mx-1.5 text-[#7a7596]">— {v.meaning}</span>
-                <span className="block text-[12px] text-[#a39ec0]" dir="ltr">
-                  {v.example}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+        {/* Vocabulary */}
+        {vocabulary.length > 0 && (
+          <section className="space-y-3">
+            <h3 className="text-base font-extrabold" style={{ color: PURPLE }}>
+              📚 كلمات مقترحة
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {vocabulary.map((v, i) => (
+                <div key={i} className="rounded-2xl border border-[#efeafc] bg-white p-4 shadow-sm">
+                  <p className="text-lg font-extrabold" style={{ color: PURPLE }} dir="ltr">
+                    {v.word}
+                  </p>
+                  <p className="mt-1 text-[14px] text-[#3a3550]">{v.meaning}</p>
+                  {v.example && (
+                    <p className="mt-2 text-[13px] italic text-[#7a7596]" dir="ltr">
+                      “{v.example}”
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
-      {onRetry && (
-        <button
-          onClick={onRetry}
-          className="w-full rounded-2xl border border-[#ece7fb] py-3 text-sm font-bold text-[#7C6FF0] hover:bg-[#f1edff]"
-        >
-          حاول مرة أخرى
-        </button>
-      )}
-    </div>
+        {/* Strengths */}
+        {strengths.length > 0 && (
+          <section className="space-y-2">
+            <h3 className="text-base font-extrabold" style={{ color: PURPLE }}>
+              نقاط القوة
+            </h3>
+            <ul className="space-y-1.5">
+              {strengths.map((s, i) => (
+                <li key={i} className="flex items-start gap-2 text-[14px] text-[#3a3550]">
+                  <span className="mt-0.5 font-bold" style={{ color: TEAL }}>
+                    ✔
+                  </span>
+                  <span>{s}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Weaknesses */}
+        {weaknesses.length > 0 && (
+          <section className="space-y-2">
+            <h3 className="text-base font-extrabold" style={{ color: PURPLE }}>
+              نقاط الضعف
+            </h3>
+            <ul className="space-y-1.5">
+              {weaknesses.map((w, i) => (
+                <li key={i} className="flex items-start gap-2 text-[14px] text-[#3a3550]">
+                  <span className="mt-0.5 font-bold" style={{ color: CORAL }}>
+                    ⚠
+                  </span>
+                  <span>{w}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Actions (hidden when printing) */}
+        <div className="no-print flex gap-2.5 pt-2">
+          <button
+            onClick={() => window.print()}
+            className="flex-1 rounded-2xl py-3 text-sm font-bold text-white shadow-lg"
+            style={{ backgroundColor: PURPLE }}
+          >
+            تصدير PDF
+          </button>
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="rounded-2xl border border-[#ece7fb] px-5 py-3 text-sm font-bold"
+              style={{ color: PURPLE }}
+            >
+              حاول مرة أخرى
+            </button>
+          )}
+        </div>
+      </div>
+    </>
   )
 }

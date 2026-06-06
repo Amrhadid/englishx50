@@ -1,16 +1,5 @@
 import { supabase } from './supabase'
-import type { SpeakingResult } from '../types'
-
-/** Rough sentence count from a (often unpunctuated) speech transcript. */
-function countSentences(text: string): number {
-  const byPunct = text
-    .split(/[.!?]+/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-  if (byPunct.length >= 2) return byPunct.length
-  const words = text.trim().split(/\s+/).filter(Boolean).length
-  return Math.max(byPunct.length, Math.round(words / 7))
-}
+import type { SpeakingResult, Mistake, VocabItem } from '../types'
 
 interface GradeParams {
   question: string
@@ -20,38 +9,67 @@ interface GradeParams {
   challengeNumber?: number
 }
 
+/** Coerce a value that may be an array, a JSON string, or null into an array. */
+function toArray<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[]
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? (parsed as T[]) : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+/** Reconstructs a SpeakingResult from a stored x50_submissions row. */
+export function parseSubmission(row: Record<string, unknown>): SpeakingResult {
+  return {
+    score: Math.round(Number(row.score ?? 0)),
+    passed: !!row.passed,
+    feedback: typeof row.feedback === 'string' ? row.feedback : '',
+    mistakes: toArray<Mistake>(row.mistakes_json),
+    corrected_sentences: toArray<string>(row.corrected_sentences_json),
+    vocabulary: toArray<VocabItem>(row.vocabulary_json),
+    strengths: toArray<string>(row.strengths_json),
+    weaknesses: toArray<string>(row.weaknesses_json),
+  }
+}
+
 /**
- * Grades a spoken answer using the shared project's existing `grade-explanation`
- * Edge Function, maps the result into the app's feedback shape, and saves the
- * attempt to x50_submissions. The 3-complete-sentence pass rule is enforced
- * client-side (grade-explanation does not count sentences).
+ * Grades a spoken answer using the `EnglishX50feedback` Edge Function, maps the
+ * result into the app's SpeakingResult shape, and saves the attempt (including
+ * the structured feedback as JSON) to x50_submissions.
  */
 export async function gradeSpeaking(params: GradeParams): Promise<SpeakingResult | null> {
   if (!supabase) return null
 
-  const { data, error } = await supabase.functions.invoke('grade-explanation', {
-    body: { originalText: params.question, transcript: params.transcript },
+  const { data, error } = await supabase.functions.invoke('EnglishX50feedback', {
+    body: { question: params.question, transcript: params.transcript },
   })
   if (error || !data) return null
 
-  const g = data as { score?: number; result?: string; feedback?: string; key_idea?: string }
-  const score = Math.max(0, Math.min(100, Math.round(g.score ?? 0)))
-  const sentences = countSentences(params.transcript)
-  const on_topic = g.result !== 'incorrect'
-  const passed = on_topic && sentences >= 3
+  const g = data as {
+    score?: number
+    passed?: boolean
+    feedback?: string
+    mistakes?: Mistake[]
+    corrected_sentences?: string[]
+    vocabulary?: VocabItem[]
+    strengths?: string[]
+    weaknesses?: string[]
+  }
 
-  const overall = [g.feedback, g.key_idea ? `النقطة الأساسية: ${g.key_idea}` : '']
-    .filter(Boolean)
-    .join(' — ')
-
-  const feedback = {
-    on_topic,
-    complete_sentence_count: sentences,
-    score,
-    overall,
-    strengths: on_topic && g.feedback ? [g.feedback] : [],
-    mistakes: [] as { error: string; correction: string }[],
-    vocabulary: [] as { word: string; meaning: string; example: string }[],
+  const result: SpeakingResult = {
+    score: Math.max(0, Math.min(100, Math.round(g.score ?? 0))),
+    passed: g.passed ?? false,
+    feedback: g.feedback ?? '',
+    mistakes: g.mistakes ?? [],
+    corrected_sentences: g.corrected_sentences ?? [],
+    vocabulary: g.vocabulary ?? [],
+    strengths: g.strengths ?? [],
+    weaknesses: g.weaknesses ?? [],
   }
 
   // Persist (best-effort; anon insert allowed by RLS).
@@ -63,16 +81,19 @@ export async function gradeSpeaking(params: GradeParams): Promise<SpeakingResult
       student: params.student ?? null,
       question: params.question,
       transcript: params.transcript,
-      score,
-      on_topic,
-      complete_sentence_count: sentences,
-      passed,
-      feedback,
+      score: result.score,
+      passed: result.passed,
+      feedback: result.feedback,
+      mistakes_json: JSON.stringify(result.mistakes ?? []),
+      vocabulary_json: JSON.stringify(result.vocabulary ?? []),
+      strengths_json: JSON.stringify(result.strengths ?? []),
+      weaknesses_json: JSON.stringify(result.weaknesses ?? []),
+      corrected_sentences_json: JSON.stringify(result.corrected_sentences ?? []),
     })
     .then(
       () => {},
       () => {},
     )
 
-  return { passed, feedback }
+  return result
 }
