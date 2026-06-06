@@ -30,7 +30,6 @@ export default function OnboardingModal() {
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [job, setJob] = useState('')
-  const [university, setUniversity] = useState('')
   const [savingInfo, setSavingInfo] = useState(false)
   const [infoError, setInfoError] = useState<string | null>(null)
 
@@ -70,7 +69,6 @@ export default function OnboardingModal() {
       full_name: fullName.trim(),
       phone: phone.trim(),
       job: job.trim(),
-      university: university.trim(),
     })
     setSavingInfo(false)
     if (error) {
@@ -194,14 +192,6 @@ export default function OnboardingModal() {
                 <div>
                   <label className="mb-1 block text-[13px] font-bold text-[#1b1730]">وظيفتك</label>
                   <input value={job} onChange={(e) => setJob(e.target.value)} className={input} />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[13px] font-bold text-[#1b1730]">جامعتك</label>
-                  <input
-                    value={university}
-                    onChange={(e) => setUniversity(e.target.value)}
-                    className={input}
-                  />
                 </div>
               </div>
               {infoError && (
