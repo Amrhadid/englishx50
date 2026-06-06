@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase, REVIEWS_BUCKET } from '../lib/supabase'
+import { useAuth } from '../hooks/useAuth'
 import type { Challenge, Review, Code } from '../types'
 import { TrashIcon } from '../components/icons'
 import FeedbackView from '../components/FeedbackView'
 import { parseSubmission } from '../lib/grading'
 
-const ADMIN_PASSWORD = 'amr2024'
+const ADMIN_EMAIL = 'siramrhadid@gmail.com'
 
 type Tab = 'challenges' | 'reviews' | 'codes' | 'students'
 
@@ -28,48 +29,59 @@ const EMPTY_FORM: ChallengeForm = {
 }
 
 export default function Admin() {
-  const [authed, setAuthed] = useState(false)
-  const [pw, setPw] = useState('')
-  const [pwError, setPwError] = useState(false)
+  const { user, signOut } = useAuth()
   const [tab, setTab] = useState<Tab>('challenges')
 
-  if (!authed) {
+  const email = user?.email?.toLowerCase() ?? null
+  const isAdmin = email === ADMIN_EMAIL
+
+  const signInWithGoogle = () => {
+    if (!supabase) return
+    supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/admin` },
+    })
+  }
+
+  // Not signed in → require Google sign-in.
+  if (!user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white px-5" dir="ltr">
-        <div className="w-full max-w-sm rounded-3xl border border-[#f0ecf8] p-8 shadow-sm">
-          <div className="mb-6 flex items-center gap-2">
+        <div className="w-full max-w-sm rounded-3xl border border-[#f0ecf8] p-8 text-center shadow-sm">
+          <div className="mb-6 flex items-center justify-center gap-2">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#534AB7] font-extrabold text-white">
               X
             </span>
             <span className="text-lg font-extrabold text-[#111]">EnglishX50 Admin</span>
           </div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (pw === ADMIN_PASSWORD) {
-                setAuthed(true)
-                setPwError(false)
-              } else {
-                setPwError(true)
-              }
-            }}
+          <p className="mb-5 text-sm text-[#5b5670]">Sign in with the admin Google account to continue.</p>
+          <button
+            onClick={signInWithGoogle}
+            className="w-full rounded-2xl bg-[#534AB7] py-3 text-sm font-bold text-white hover:bg-[#46409c]"
           >
-            <input
-              type="password"
-              value={pw}
-              onChange={(e) => setPw(e.target.value)}
-              placeholder="Password"
-              autoFocus
-              className="w-full rounded-2xl border border-[#e8e0f0] px-4 py-3 text-sm outline-none focus:border-[#534AB7]"
-            />
-            {pwError && <p className="mt-2 text-xs text-[#FF6B6B]">Incorrect password.</p>}
-            <button
-              type="submit"
-              className="mt-4 w-full rounded-2xl bg-[#534AB7] py-3 text-sm font-bold text-white hover:bg-[#46409c]"
-            >
-              Sign in
-            </button>
-          </form>
+            Sign in with Google
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Signed in with the wrong account → deny.
+  if (!isAdmin) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white px-5" dir="ltr">
+        <div className="w-full max-w-sm rounded-3xl border border-[#f0ecf8] p-8 text-center shadow-sm">
+          <p className="mb-1 text-3xl">🔒</p>
+          <p className="mb-1 text-lg font-extrabold text-[#111]">Access denied</p>
+          <p className="mb-5 text-sm text-[#5b5670]">
+            {user.email} is not authorized to view this page.
+          </p>
+          <button
+            onClick={signOut}
+            className="w-full rounded-2xl border border-[#e8e0f0] py-3 text-sm font-bold text-[#5b5670] hover:bg-[#f4f3f7]"
+          >
+            Sign out
+          </button>
         </div>
       </div>
     )
@@ -85,9 +97,14 @@ export default function Admin() {
             </span>
             <span className="font-extrabold text-[#111]">Admin Panel</span>
           </div>
-          <a href="/" className="text-sm font-medium text-[#534AB7] hover:underline">
-            View site →
-          </a>
+          <div className="flex items-center gap-4">
+            <a href="/" className="text-sm font-medium text-[#534AB7] hover:underline">
+              View site →
+            </a>
+            <button onClick={signOut} className="text-sm font-medium text-[#5b5670] hover:underline">
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
