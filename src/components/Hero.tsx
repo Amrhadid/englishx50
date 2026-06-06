@@ -92,7 +92,10 @@ export default function Hero({ onStart }: HeroProps) {
         {/* Right — illustration card */}
         <div className="relative flex items-center justify-center px-4 py-6">
           {/* Floating progress card (top-left) */}
-          <div className="absolute left-0 top-2 z-10 w-[200px] rounded-2xl border border-[#f0eeff] bg-white p-3.5 shadow-xl shadow-[#8B5CF6]/10">
+          <div
+            className="absolute left-0 top-2 z-10 w-[200px] rounded-2xl border border-[#f0eeff] bg-white p-3.5 shadow-xl shadow-[#8B5CF6]/10"
+            dir="ltr"
+          >
             <div className="mb-3 flex items-center gap-2.5">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#F3F0FF] text-lg">🎤</span>
               <div>
@@ -119,7 +122,10 @@ export default function Hero({ onStart }: HeroProps) {
           </div>
 
           {/* AI Coach badge (bottom-right) */}
-          <div className="absolute bottom-2 right-0 z-10 flex items-center gap-2 rounded-2xl border border-[#f0eeff] bg-white px-3.5 py-2.5 text-[12px] font-extrabold text-[#8B5CF6] shadow-xl shadow-[#8B5CF6]/10">
+          <div
+            className="absolute bottom-2 right-0 z-10 flex items-center gap-2 rounded-2xl border border-[#f0eeff] bg-white px-3.5 py-2.5 text-[12px] font-extrabold text-[#8B5CF6] shadow-xl shadow-[#8B5CF6]/10"
+            dir="ltr"
+          >
             <span className="relative flex h-2.5 w-2.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#22C55E] opacity-75" />
               <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#22C55E]" />
