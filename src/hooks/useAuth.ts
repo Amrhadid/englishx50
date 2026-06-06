@@ -6,6 +6,8 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
+    if (!supabase) return
+
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null)
     })
@@ -18,7 +20,7 @@ export function useAuth() {
   }, [])
 
   const signOut = async () => {
-    await supabase.auth.signOut()
+    if (supabase) await supabase.auth.signOut()
     setUser(null)
   }
 

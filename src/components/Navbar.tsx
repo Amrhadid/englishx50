@@ -9,6 +9,7 @@ export default function Navbar({ onStart }: NavbarProps) {
   const { user, signOut } = useAuth()
 
   const signInWithGoogle = () => {
+    if (!supabase) return
     supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.origin },
