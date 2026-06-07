@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { toArabicDigits } from '../lib/theme'
 import FeedbackView from './FeedbackView'
-import { LockIcon, MicIcon, CloseIcon } from './icons'
+import { MicIcon, CloseIcon } from './icons'
 import type { SpeakingResult, Mistake, VocabItem } from '../types'
 
 /* Design-system colours requested for this feature. */
@@ -50,8 +49,6 @@ function countSentences(text: string): number {
 
 export default function LevelTest() {
   const [open, setOpen] = useState(false)
-  const { needsCode } = useOnboardingContext()
-  const locked = needsCode
 
   return (
     <>
@@ -74,14 +71,9 @@ export default function LevelTest() {
               className="flex h-14 w-14 items-center justify-center rounded-full text-white transition group-hover:scale-110"
               style={{ backgroundColor: PURPLE, boxShadow: `0 8px 24px ${PURPLE}66` }}
             >
-              {locked ? <LockIcon className="h-6 w-6" /> : <MicIcon className="h-6 w-6" />}
+              <MicIcon className="h-6 w-6" />
             </span>
           </span>
-          {locked && (
-            <span className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-[#8b85a0]">
-              <LockIcon className="h-4 w-4" />
-            </span>
-          )}
         </button>
 
         <div
@@ -93,9 +85,8 @@ export default function LevelTest() {
             <p className="text-[12px] font-bold" style={{ color: PURPLE }}>
               ابدأ من هنا
             </p>
-            <h3 className="flex items-center gap-2 text-[22px] font-black leading-tight text-[#1b1730]">
+            <h3 className="text-[22px] font-black leading-tight text-[#1b1730]">
               اختبار المستوى
-              {locked && <LockIcon className="h-4 w-4 text-[#8b85a0]" />}
             </h3>
             <p className="text-[13px] font-semibold leading-relaxed text-[#7a7596]">
               قيّم مستواك في التحدّث قبل ما تبدأ التحدي الأول
@@ -114,12 +105,12 @@ export default function LevelTest() {
         </div>
       </div>
 
-      {open && <LevelTestModal locked={locked} onClose={() => setOpen(false)} />}
+      {open && <LevelTestModal onClose={() => setOpen(false)} />}
     </>
   )
 }
 
-function LevelTestModal({ locked, onClose }: { locked: boolean; onClose: () => void }) {
+function LevelTestModal({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState<Step>('speak')
 
   // Recording
@@ -320,20 +311,7 @@ function LevelTestModal({ locked, onClose }: { locked: boolean; onClose: () => v
             </span>
           </div>
 
-          {/* Locked — user has not redeemed a code yet */}
-          {locked ? (
-            <div className="mx-auto max-w-md py-6 text-center">
-              <span
-                className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full text-white"
-                style={{ backgroundColor: PURPLE }}
-              >
-                <LockIcon className="h-7 w-7" />
-              </span>
-              <p className="text-[15px] font-bold leading-relaxed" style={{ color: CORAL }}>
-                هذا الاختبار للمشتركين فقط، يرجى تفعيل كودك أولاً
-              </p>
-            </div>
-          ) : step === 'speak' ? (
+          {step === 'speak' ? (
             /* Speaking task */
             <div className="mx-auto flex max-w-md flex-col items-center">
               <p className="mb-1 text-[13px] font-bold" style={{ color: PURPLE }}>
