@@ -188,16 +188,17 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     rec.lang = 'en-US'
     rec.continuous = true
     rec.interimResults = true
-    let finalText = ''
+    // e.results is cumulative: every event carries all final + interim
+    // segments from the start. Rebuild the transcript from it each time —
+    // appending to a persistent accumulator re-adds each finalized segment on
+    // every event and duplicates the speech.
     rec.onresult = (e) => {
-      let interim = ''
+      let text = ''
       for (let i = 0; i < e.results.length; i++) {
-        const res = e.results[i] as ArrayLike<{ transcript: string }> & { isFinal?: boolean }
-        const text = res[0]?.transcript ?? ''
-        if (res.isFinal) finalText += text + ' '
-        else interim += text
+        const res = e.results[i] as ArrayLike<{ transcript: string }>
+        text += (res[0]?.transcript ?? '') + ' '
       }
-      setTranscript((finalText + interim).trim())
+      setTranscript(text.replace(/\s+/g, ' ').trim())
     }
     rec.onerror = (ev) => {
       setRecError(
