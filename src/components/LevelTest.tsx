@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { isPremium } from '../lib/premium'
 import { reportFunctionError } from '../lib/functionError'
+import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { toArabicDigits } from '../lib/theme'
 import FeedbackView from './FeedbackView'
 import { MicIcon, CloseIcon } from './icons'
@@ -51,11 +52,17 @@ function countSentences(text: string): number {
 
 export default function LevelTest({ onUpgrade }: { onUpgrade?: () => void }) {
   const [open, setOpen] = useState(false)
+  const { student } = useOnboardingContext()
 
-  // The level test (Pre task) is premium-only. Non-premium visitors still see
-  // the card, but tapping it opens the upgrade popup instead of the test.
+  // The level test (Pre task) is premium-only. A visitor counts as premium if
+  // they unlocked in this browser (isPremium) OR they're a signed-in user whose
+  // account already has a redeemed code — otherwise returning premium users on
+  // a fresh browser would wrongly see the upgrade popup. Non-premium visitors
+  // still see the card, but tapping it opens the upgrade popup instead.
+  const premium = isPremium() || !!student?.code
+
   const handleStart = () => {
-    if (isPremium()) setOpen(true)
+    if (premium) setOpen(true)
     else onUpgrade?.()
   }
 
@@ -96,7 +103,7 @@ export default function LevelTest({ onUpgrade }: { onUpgrade?: () => void }) {
             </p>
             <h3 className="flex items-center gap-2 text-[22px] font-black leading-tight text-[#1b1730]">
               اختبار المستوى
-              {!isPremium() && <LockBadge />}
+              {!premium && <LockBadge />}
             </h3>
             <p className="text-[13px] font-semibold leading-relaxed text-[#7a7596]">
               قيّم مستواك في التحدّث قبل ما تبدأ التحدي الأول

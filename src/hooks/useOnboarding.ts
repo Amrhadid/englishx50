@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from './useAuth'
 import { supabase } from '../lib/supabase'
+import { setPremium } from '../lib/premium'
 import type { Student } from '../types'
 
 const PROGRAM_DAYS = 100
@@ -43,6 +44,14 @@ export function useOnboarding() {
   useEffect(() => {
     refetch()
   }, [refetch])
+
+  // Keep the client-side premium flag in sync for returning users: a signed-in
+  // account that already redeemed a code is premium even on a fresh browser
+  // where the flag was never set. Only ever sets it true — never clears an
+  // anonymous unlock (a code redeemed without signing in).
+  useEffect(() => {
+    if (student?.code) setPremium(true)
+  }, [student])
 
   const needsOnboarding = !!user && !loading && student === null
   const needsCode = !!user && !loading && student !== null && !student.code
