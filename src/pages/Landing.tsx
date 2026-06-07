@@ -91,6 +91,7 @@ export default function Landing() {
           if (isPremium() && c.pdf_url) window.open(c.pdf_url, '_blank', 'noopener')
           else setShowPremium(true)
         }}
+        onUpgrade={() => setShowPremium(true)}
       />
       <Countdown onStart={start} />
       <Reviews reviews={displayedReviews} />

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { isPremium } from '../lib/premium'
 import { toArabicDigits } from '../lib/theme'
 import FeedbackView from './FeedbackView'
 import { MicIcon, CloseIcon } from './icons'
@@ -47,15 +48,22 @@ function countSentences(text: string): number {
   return Math.max(byPunct.length, Math.round(words / 7))
 }
 
-export default function LevelTest() {
+export default function LevelTest({ onUpgrade }: { onUpgrade?: () => void }) {
   const [open, setOpen] = useState(false)
+
+  // The level test (Pre task) is premium-only. Non-premium visitors still see
+  // the card, but tapping it opens the upgrade popup instead of the test.
+  const handleStart = () => {
+    if (isPremium()) setOpen(true)
+    else onUpgrade?.()
+  }
 
   return (
     <>
       {/* Card — matches the challenge card size/style, sits before Challenge 1 */}
       <div className="group grid min-h-[180px] grid-cols-[120px_1fr] overflow-hidden rounded-[24px] border-[1.5px] border-[#ede8ff] bg-white transition duration-300 hover:border-[#c4b8ff] hover:shadow-[0_8px_32px_rgba(83,74,183,0.14)] sm:grid-cols-[280px_1fr]">
         <button
-          onClick={() => setOpen(true)}
+          onClick={handleStart}
           className="relative overflow-hidden"
           style={{ background: `linear-gradient(135deg, #EDEBFF 0%, #ffffff 100%)` }}
           aria-label="اختبار المستوى"
@@ -85,8 +93,9 @@ export default function LevelTest() {
             <p className="text-[12px] font-bold" style={{ color: PURPLE }}>
               ابدأ من هنا
             </p>
-            <h3 className="text-[22px] font-black leading-tight text-[#1b1730]">
+            <h3 className="flex items-center gap-2 text-[22px] font-black leading-tight text-[#1b1730]">
               اختبار المستوى
+              {!isPremium() && <LockBadge />}
             </h3>
             <p className="text-[13px] font-semibold leading-relaxed text-[#7a7596]">
               قيّم مستواك في التحدّث قبل ما تبدأ التحدي الأول
@@ -95,7 +104,7 @@ export default function LevelTest() {
 
           <div>
             <button
-              onClick={() => setOpen(true)}
+              onClick={handleStart}
               className="rounded-[30px] px-[20px] py-2.5 text-[13px] font-bold text-white transition hover:brightness-95"
               style={{ backgroundColor: PURPLE }}
             >
@@ -107,6 +116,22 @@ export default function LevelTest() {
 
       {open && <LevelTestModal onClose={() => setOpen(false)} />}
     </>
+  )
+}
+
+/** Small lock pill shown next to the title for non-premium visitors. */
+function LockBadge() {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
+      style={{ backgroundColor: PURPLE }}
+    >
+      <svg viewBox="0 0 24 24" fill="none" className="h-3 w-3" aria-hidden="true">
+        <rect x="5" y="10" width="14" height="10" rx="2.5" fill="currentColor" />
+        <path d="M8 10V8a4 4 0 0 1 8 0v2" stroke="currentColor" strokeWidth="2" />
+      </svg>
+      مميّز
+    </span>
   )
 }
 

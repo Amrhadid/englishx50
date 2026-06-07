@@ -10,6 +10,7 @@ interface ChallengesProps {
   onSpeak: (challenge: Challenge) => void
   onWatch: (challenge: Challenge) => void
   onSource: (challenge: Challenge) => void
+  onUpgrade: () => void
 }
 
 function PlayIcon() {
@@ -174,6 +175,7 @@ export default function Challenges({
   onSpeak,
   onWatch,
   onSource,
+  onUpgrade,
 }: ChallengesProps) {
   return (
     <section id="challenges">
@@ -231,7 +233,7 @@ export default function Challenges({
       {/* Challenge cards — white */}
       <div className="bg-white">
         <div className="mx-auto flex max-w-3xl flex-col gap-3 px-5 py-14 sm:px-8">
-          <LevelTest />
+          <LevelTest onUpgrade={onUpgrade} />
           {challenges.map((c, i) => (
             <ChallengeRow
               key={c.id}
