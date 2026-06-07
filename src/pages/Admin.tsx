@@ -5,8 +5,7 @@ import type { Challenge, Review, Code } from '../types'
 import { TrashIcon } from '../components/icons'
 import FeedbackView from '../components/FeedbackView'
 import { parseSubmission } from '../lib/grading'
-
-const ADMIN_EMAIL = 'siramrhadid@gmail.com'
+import { isAdminEmail } from '../lib/admin'
 
 type Tab = 'challenges' | 'reviews' | 'codes' | 'students'
 
@@ -32,8 +31,7 @@ export default function Admin() {
   const { user, signOut } = useAuth()
   const [tab, setTab] = useState<Tab>('challenges')
 
-  const email = user?.email?.toLowerCase() ?? null
-  const isAdmin = email === ADMIN_EMAIL
+  const isAdmin = isAdminEmail(user?.email)
 
   const signInWithGoogle = () => {
     if (!supabase) return

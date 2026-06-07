@@ -1,7 +1,9 @@
+import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import DaysLeftBadge from './DaysLeftBadge'
 import { supabase } from '../lib/supabase'
+import { isAdminEmail } from '../lib/admin'
 
 interface NavbarProps {
   onStart: () => void
@@ -53,6 +55,14 @@ export default function Navbar({ onStart }: NavbarProps) {
 
           {user ? (
             <div className="flex items-center gap-2">
+              {isAdminEmail(user.email) && (
+                <Link
+                  to="/admin"
+                  className="rounded-full bg-[#534AB7] px-4 py-2.5 text-sm font-extrabold text-white transition hover:bg-[#46409c]"
+                >
+                  Admin
+                </Link>
+              )}
               {!needsOnboarding && !needsCode && <DaysLeftBadge daysLeft={daysLeft} />}
               {user.user_metadata.avatar_url && (
                 <img
