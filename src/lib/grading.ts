@@ -38,20 +38,25 @@ export function parseSubmission(row: Record<string, unknown>): SpeakingResult {
   }
 }
 
+/** Result of a grading attempt — either feedback, or the reason it failed. */
+export type GradeOutcome =
+  | { ok: true; result: SpeakingResult }
+  | { ok: false; detail: string }
+
 /**
  * Grades a spoken answer using the `EnglishX50feedback` Edge Function, maps the
  * result into the app's SpeakingResult shape, and saves the attempt (including
  * the structured feedback as JSON) to x50_submissions.
  */
-export async function gradeSpeaking(params: GradeParams): Promise<SpeakingResult | null> {
-  if (!supabase) return null
+export async function gradeSpeaking(params: GradeParams): Promise<GradeOutcome> {
+  if (!supabase) return { ok: false, detail: 'Supabase not configured' }
 
   const { data, error } = await supabase.functions.invoke('EnglishX50feedback', {
     body: { question: params.question, transcript: params.transcript },
   })
   if (error || !data) {
-    await reportFunctionError('speaking task', error)
-    return null
+    const detail = await reportFunctionError('speaking task', error)
+    return { ok: false, detail }
   }
 
   const g = data as {
@@ -99,5 +104,5 @@ export async function gradeSpeaking(params: GradeParams): Promise<SpeakingResult
       () => {},
     )
 
-  return result
+  return { ok: true, result }
 }

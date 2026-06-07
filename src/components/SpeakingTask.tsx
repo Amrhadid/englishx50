@@ -105,13 +105,13 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
     }
     setLoading(true)
     setError(null)
-    const res = await gradeSpeaking({ question, transcript, student, challengeId, challengeNumber })
+    const outcome = await gradeSpeaking({ question, transcript, student, challengeId, challengeNumber })
     setLoading(false)
-    if (!res) {
-      setError('تعذّر تقييم الإجابة، حاول مرة أخرى')
+    if (!outcome.ok) {
+      setError(`تعذّر تقييم الإجابة، حاول مرة أخرى — ${outcome.detail}`)
       return
     }
-    setResult(res)
+    setResult(outcome.result)
   }
 
   const reset = () => {

@@ -242,8 +242,8 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     setLoading(false)
 
     if (error || !data) {
-      await reportFunctionError('level test', error)
-      setRecError('تعذّر تقييم الإجابة، حاول مرة أخرى')
+      const detail = await reportFunctionError('level test', error)
+      setRecError(`تعذّر تقييم الإجابة، حاول مرة أخرى — ${detail}`)
       setStep('speak')
       return
     }
