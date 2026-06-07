@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { isPremium } from '../lib/premium'
+import { reportFunctionError } from '../lib/functionError'
 import { toArabicDigits } from '../lib/theme'
 import FeedbackView from './FeedbackView'
 import { MicIcon, CloseIcon } from './icons'
@@ -240,6 +241,7 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     setLoading(false)
 
     if (error || !data) {
+      await reportFunctionError('level test', error)
       setRecError('تعذّر تقييم الإجابة، حاول مرة أخرى')
       setStep('speak')
       return

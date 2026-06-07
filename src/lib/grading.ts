@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { reportFunctionError } from './functionError'
 import type { SpeakingResult, Mistake, VocabItem } from '../types'
 
 interface GradeParams {
@@ -48,7 +49,10 @@ export async function gradeSpeaking(params: GradeParams): Promise<SpeakingResult
   const { data, error } = await supabase.functions.invoke('EnglishX50feedback', {
     body: { question: params.question, transcript: params.transcript },
   })
-  if (error || !data) return null
+  if (error || !data) {
+    await reportFunctionError('speaking task', error)
+    return null
+  }
 
   const g = data as {
     score?: number
