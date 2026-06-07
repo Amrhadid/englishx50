@@ -15,11 +15,25 @@ import LessonModal from '../components/LessonModal'
 import OnboardingModal from '../components/OnboardingModal'
 import Reviews from '../components/Reviews'
 import { OnboardingProvider } from '../context/OnboardingContext'
+import { useOnboardingContext } from '../hooks/useOnboardingContext'
+import { useAuth } from '../hooks/useAuth'
 
 export default function Landing() {
+  return (
+    <OnboardingProvider>
+      <LandingInner />
+    </OnboardingProvider>
+  )
+}
+
+function LandingInner() {
+  const { user } = useAuth()
+  const { needsOnboarding, needsCode } = useOnboardingContext()
+
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
   const [showPremium, setShowPremium] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<number | null>(null)
   const [speakingFor, setSpeakingFor] = useState<Challenge | null>(null)
   const [lessonFor, setLessonFor] = useState<Challenge | null>(null)
@@ -54,8 +68,16 @@ export default function Landing() {
     }
   }, [])
 
-  // "ابدأ التحدي" CTAs open the premium-features popup.
-  const start = () => setShowPremium(true)
+  // Gate for locked actions (clicking a challenge or the level test) and the
+  // "ابدأ التحدي" CTAs. The popup only opens on an explicit click — never
+  // automatically on page load. Signed-in users who still need to fill their
+  // info / redeem a code get the onboarding popup; everyone else gets the
+  // premium-features popup (which also has code entry + subscribe).
+  const requireAccess = () => {
+    if (user && (needsOnboarding || needsCode)) setShowOnboarding(true)
+    else setShowPremium(true)
+  }
+  const start = requireAccess
 
   // Fall back to 10 placeholder challenges so the "٥٠ يوم، ١٠ تحديات" grid
   // always renders the full design, even before Supabase is wired up.
@@ -72,9 +94,8 @@ export default function Landing() {
   )
 
   return (
-    <OnboardingProvider>
       <div className="min-h-screen bg-white">
-        <OnboardingModal />
+        <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} />
         <Navbar onStart={start} />
       <Hero onStart={start} />
 
@@ -83,15 +104,15 @@ export default function Landing() {
 
       <Challenges
         challenges={displayedChallenges}
-        onSelect={() => setShowPremium(true)}
+        onSelect={() => requireAccess()}
         onFeedback={(c) => setFeedbackFor(c.number)}
         onSpeak={(c) => setSpeakingFor(c)}
-        onWatch={(c) => (isPremium() && c.video_url ? setLessonFor(c) : setShowPremium(true))}
+        onWatch={(c) => (isPremium() && c.video_url ? setLessonFor(c) : requireAccess())}
         onSource={(c) => {
           if (isPremium() && c.pdf_url) window.open(c.pdf_url, '_blank', 'noopener')
-          else setShowPremium(true)
+          else requireAccess()
         }}
-        onUpgrade={() => setShowPremium(true)}
+        onUpgrade={() => requireAccess()}
       />
       <Countdown onStart={start} />
       <Reviews reviews={displayedReviews} />
@@ -122,6 +143,5 @@ export default function Landing() {
       )}
       {lessonFor && <LessonModal challenge={lessonFor} onClose={() => setLessonFor(null)} />}
       </div>
-    </OnboardingProvider>
   )
 }

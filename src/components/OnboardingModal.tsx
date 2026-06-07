@@ -21,7 +21,13 @@ function Logo() {
   )
 }
 
-export default function OnboardingModal() {
+export default function OnboardingModal({
+  open,
+  onClose,
+}: {
+  open: boolean
+  onClose: () => void
+}) {
   const { user } = useAuth()
   const { needsOnboarding, needsCode, refetch } = useOnboardingContext()
 
@@ -40,20 +46,21 @@ export default function OnboardingModal() {
   const [codeError, setCodeError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
-  // Free users can dismiss the code step and browse (challenges/level test
-  // stay locked until they redeem a code). Session-only.
-  const [dismissed, setDismissed] = useState(false)
-
-  // After success, give the user a moment to read it, then let the modal
-  // self-dismiss (needsCode is already false post-refetch).
+  // After success, give the user a moment to read it, then close the modal
+  // (needsCode is already false post-refetch).
   useEffect(() => {
     if (!success) return
-    const t = setTimeout(() => setSuccess(false), 2200)
+    const t = setTimeout(() => {
+      setSuccess(false)
+      onClose()
+    }, 2200)
     return () => clearTimeout(t)
-  }, [success])
+  }, [success, onClose])
 
-  // Hide entirely unless onboarding/code is required (or we're showing success).
-  if ((!needsOnboarding && !needsCode && !success) || dismissed) return null
+  // Controlled: only render when explicitly opened (e.g. the user clicked a
+  // challenge or the level test) AND onboarding/code is still required. This
+  // prevents the popup from appearing automatically on every visit.
+  if (!open || (!needsOnboarding && !needsCode && !success)) return null
 
   // The code step is optional — free users may close it and keep browsing.
   // The info step (onboarding) stays required.
@@ -144,7 +151,7 @@ export default function OnboardingModal() {
       <div className="relative w-full max-w-md rounded-[28px] border border-white bg-[#fdfcff] p-7 shadow-2xl sm:p-8">
         {closable && (
           <button
-            onClick={() => setDismissed(true)}
+            onClick={onClose}
             aria-label="إغلاق"
             className="absolute left-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-[#f4f2fc] text-[#8a85a0] transition hover:bg-[#ece8f8]"
           >
