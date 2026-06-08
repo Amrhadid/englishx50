@@ -11,7 +11,7 @@ import {
   incrementTrials,
   MAX_TRIALS,
 } from '../lib/progress'
-import { canRecordAudio, recorderOptions, transcribeAudio } from '../lib/transcribe'
+import { LiveSession, canLiveTranscribe } from '../lib/liveTranscribe'
 import { isAdminEmail } from '../lib/admin'
 import { useAuth } from '../hooks/useAuth'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
@@ -144,9 +144,7 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
   const [transcript, setTranscript] = useState('')
   const [secondsLeft, setSecondsLeft] = useState(TEST_SECONDS)
   const [recError, setRecError] = useState<string | null>(null)
-  const recorderRef = useRef<MediaRecorder | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const chunksRef = useRef<Blob[]>([])
+  const sessionRef = useRef<LiveSession | null>(null)
   const timerRef = useRef<number | null>(null)
 
   // Feedback
@@ -162,14 +160,9 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
   const canTry = isAdmin || trialsUsed < MAX_TRIALS
 
   useEffect(() => {
-    if (!canRecordAudio()) setSupported(false)
+    if (!canLiveTranscribe()) setSupported(false)
     return () => {
-      try {
-        recorderRef.current?.stop()
-      } catch {
-        /* recorder already inactive */
-      }
-      streamRef.current?.getTracks().forEach((t) => t.stop())
+      sessionRef.current?.cancel()
       if (timerRef.current) clearInterval(timerRef.current)
     }
   }, [])
@@ -193,18 +186,23 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     }
   }
 
-  const stopRecording = () => {
-    try {
-      recorderRef.current?.stop()
-    } catch {
-      /* recorder already inactive */
-    }
+  const stopRecording = async () => {
     setRecording(false)
     stopTimer()
+    const session = sessionRef.current
+    if (!session) return
+    sessionRef.current = null
+    setTranscribing(true)
+    const text = await session.stop()
+    setTranscribing(false)
+    setTranscript(text)
+    // Grade automatically — no extra click needed.
+    if (text.trim().length >= 2) getFeedback(text)
+    else setRecError('لم نلتقط صوتاً واضحاً، حاول مرة أخرى')
   }
 
-  // Record the answer, then send the audio to the `whisper` Edge Function and
-  // use the returned transcript (replaces the browser Web Speech API).
+  // Live transcription (OpenAI Realtime) with a batch fallback; words stream in
+  // while recording, then grade automatically on stop / timeout.
   const startRecording = async () => {
     setRecError(null)
     setResult(null)
@@ -214,40 +212,20 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
       setRecError('لقد استخدمت محاولتيك لهذه المهمة')
       return
     }
-    if (!canRecordAudio()) {
+    if (!canLiveTranscribe()) {
       setSupported(false)
       return
     }
-    let stream: MediaStream
+    const session = new LiveSession((t) => setTranscript(t))
+    sessionRef.current = session
+    setTranscript('')
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      await session.start()
     } catch {
+      sessionRef.current = null
       setRecError('لم يتم السماح باستخدام الميكروفون')
       return
     }
-    streamRef.current = stream
-    chunksRef.current = []
-    const rec = new MediaRecorder(stream, recorderOptions())
-    rec.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) chunksRef.current.push(e.data)
-    }
-    rec.onstop = async () => {
-      streamRef.current?.getTracks().forEach((t) => t.stop())
-      const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' })
-      if (blob.size === 0) return
-      setTranscribing(true)
-      const res = await transcribeAudio(blob)
-      setTranscribing(false)
-      if (!res.ok) {
-        setRecError(`تعذّر تحويل الصوت إلى نص، حاول مرة أخرى — ${res.detail}`)
-        return
-      }
-      setTranscript(res.transcript)
-      // Grade automatically — no extra click needed.
-      getFeedback(res.transcript)
-    }
-    recorderRef.current = rec
-    rec.start()
     setRecording(true)
     setSecondsLeft(TEST_SECONDS)
 

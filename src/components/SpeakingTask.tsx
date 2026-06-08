@@ -10,7 +10,7 @@ import {
   incrementTrials,
   MAX_TRIALS,
 } from '../lib/progress'
-import { canRecordAudio, recorderOptions, transcribeAudio } from '../lib/transcribe'
+import { LiveSession, canLiveTranscribe } from '../lib/liveTranscribe'
 import { isAdminEmail } from '../lib/admin'
 import { useAuth } from '../hooks/useAuth'
 import FeedbackView from './FeedbackView'
@@ -40,9 +40,7 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<SpeakingResult | null>(null)
-  const recorderRef = useRef<MediaRecorder | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const chunksRef = useRef<Blob[]>([])
+  const sessionRef = useRef<LiveSession | null>(null)
   const taskId = challengeTaskId(challengeId, challengeNumber)
 
   // Every user gets MAX_TRIALS grading attempts per task; the admin is unlimited.
@@ -52,15 +50,8 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
   const canTry = isAdmin || trialsUsed < MAX_TRIALS
 
   useEffect(() => {
-    if (!canRecordAudio()) setSupported(false)
-    return () => {
-      try {
-        recorderRef.current?.stop()
-      } catch {
-        /* recorder already inactive */
-      }
-      streamRef.current?.getTracks().forEach((t) => t.stop())
-    }
+    if (!canLiveTranscribe()) setSupported(false)
+    return () => sessionRef.current?.cancel()
   }, [])
 
   // Restore a previously completed attempt: show the saved transcript + feedback
@@ -73,55 +64,39 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
     }
   }, [taskId])
 
-  // Record the answer, then send the audio to the `whisper` Edge Function and
-  // use the returned transcript (replaces the browser Web Speech API).
+  // Live transcription (OpenAI Realtime) with a batch fallback; the transcript
+  // streams in word-by-word while recording, then grades automatically on stop.
   const start = async () => {
     setError(null)
     setResult(null)
-    if (!canRecordAudio()) {
+    if (!canLiveTranscribe()) {
       setSupported(false)
       return
     }
-    let stream: MediaStream
+    const session = new LiveSession((t) => setTranscript(t))
+    sessionRef.current = session
+    setTranscript('')
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      await session.start()
     } catch {
+      sessionRef.current = null
       setError('لم يتم السماح باستخدام الميكروفون')
       return
     }
-    streamRef.current = stream
-    chunksRef.current = []
-    const rec = new MediaRecorder(stream, recorderOptions())
-    rec.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) chunksRef.current.push(e.data)
-    }
-    rec.onstop = async () => {
-      streamRef.current?.getTracks().forEach((t) => t.stop())
-      const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' })
-      if (blob.size === 0) return
-      setTranscribing(true)
-      const res = await transcribeAudio(blob)
-      setTranscribing(false)
-      if (!res.ok) {
-        setError(`تعذّر تحويل الصوت إلى نص، حاول مرة أخرى — ${res.detail}`)
-        return
-      }
-      setTranscript(res.transcript)
-      // Grade automatically — no extra click needed.
-      grade(res.transcript)
-    }
-    recorderRef.current = rec
-    rec.start()
     setRecording(true)
   }
 
-  const stop = () => {
-    try {
-      recorderRef.current?.stop()
-    } catch {
-      /* recorder already inactive */
-    }
+  const stop = async () => {
+    const session = sessionRef.current
+    if (!session) return
+    sessionRef.current = null
     setRecording(false)
+    setTranscribing(true)
+    const text = await session.stop()
+    setTranscribing(false)
+    setTranscript(text)
+    if (text.trim().length >= 2) grade(text)
+    else setError('لم نلتقط صوتاً واضحاً، حاول مرة أخرى')
   }
 
   const grade = async (text: string) => {
