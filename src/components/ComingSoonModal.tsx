@@ -50,8 +50,7 @@ export default function ComingSoonModal({
         </span>
         <h2 className="mb-2 text-2xl font-black text-[#1b1730]">قريباً — الأسبوع القادم 🔓</h2>
         <p className="text-[14px] font-semibold leading-relaxed text-[#7a7596]">
-          بننزّل تحديين كل أسبوع. هذا التحدي لسه ما اتفعّلش — هيكون متاح الأسبوع الجاي إن شاء الله،
-          كمّل اللي اتفعّل دلوقتي وانتظر الباقي.
+          التحدي القادم بعد اسبوع - راجع معلوماتك اكثر خلال الاسبوع
         </p>
 
         <button
