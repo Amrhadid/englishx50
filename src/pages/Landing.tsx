@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { isPremium } from '../lib/premium'
-import { PLACEHOLDER_CHALLENGES, PLACEHOLDER_REVIEWS } from '../lib/placeholders'
+import { PLACEHOLDER_REVIEWS, mergeWithPlaceholders, isPlaceholderChallenge } from '../lib/placeholders'
 import type { Challenge, Review } from '../types'
 import Navbar from '../components/Navbar'
 import Hero from '../components/Hero'
@@ -9,6 +9,7 @@ import IntroVideo from '../components/IntroVideo'
 import Challenges from '../components/Challenges'
 import Countdown from '../components/Countdown'
 import PremiumModal from '../components/PremiumModal'
+import ComingSoonModal from '../components/ComingSoonModal'
 import FeedbackModal from '../components/FeedbackModal'
 import SpeakingModal from '../components/SpeakingModal'
 import LessonModal from '../components/LessonModal'
@@ -28,7 +29,7 @@ export default function Landing() {
 
 function LandingInner() {
   const { user } = useAuth()
-  const { needsOnboarding, needsCode } = useOnboardingContext()
+  const { needsOnboarding, needsCode, student } = useOnboardingContext()
 
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
@@ -37,6 +38,11 @@ function LandingInner() {
   const [feedbackFor, setFeedbackFor] = useState<number | null>(null)
   const [speakingFor, setSpeakingFor] = useState<Challenge | null>(null)
   const [lessonFor, setLessonFor] = useState<Challenge | null>(null)
+  const [comingSoonFor, setComingSoonFor] = useState<Challenge | null>(null)
+
+  // A visitor is premium if they unlocked in this browser or their signed-in
+  // account already redeemed a code.
+  const premium = isPremium() || !!student?.code
 
   useEffect(() => {
     let active = true
@@ -79,12 +85,20 @@ function LandingInner() {
   }
   const start = requireAccess
 
-  // Fall back to 10 placeholder challenges so the "٥٠ يوم، ١٠ تحديات" grid
-  // always renders the full design, even before Supabase is wired up.
-  const displayedChallenges = useMemo(
-    () => (challenges.length > 0 ? challenges : PLACEHOLDER_CHALLENGES),
-    [challenges],
-  )
+  // Single gate for every challenge action:
+  //  - free user            → upgrade / onboarding popup
+  //  - premium, not-yet-added challenge → "Next Week" coming-soon popup
+  //  - premium, real challenge          → run the action (watch/source/speak/…)
+  const gateChallenge = (c: Challenge, run: () => void) => {
+    if (!premium) return requireAccess()
+    if (isPlaceholderChallenge(c)) return setComingSoonFor(c)
+    run()
+  }
+
+  // Always render the full set of slots: real challenges by number, locked
+  // placeholders for the rest. Adding one real challenge no longer hides the
+  // others.
+  const displayedChallenges = useMemo(() => mergeWithPlaceholders(challenges), [challenges])
 
   // Show real uploaded reviews when present, otherwise placeholder frames so
   // the carousel design is visible before any screenshots are added.
@@ -105,13 +119,14 @@ function LandingInner() {
       <Challenges
         challenges={displayedChallenges}
         onSelect={() => requireAccess()}
-        onFeedback={(c) => setFeedbackFor(c.number)}
-        onSpeak={(c) => setSpeakingFor(c)}
-        onWatch={(c) => (isPremium() && c.video_url ? setLessonFor(c) : requireAccess())}
-        onSource={(c) => {
-          if (isPremium() && c.pdf_url) window.open(c.pdf_url, '_blank', 'noopener')
-          else requireAccess()
-        }}
+        onFeedback={(c) => gateChallenge(c, () => setFeedbackFor(c.number))}
+        onSpeak={(c) => gateChallenge(c, () => setSpeakingFor(c))}
+        onWatch={(c) => gateChallenge(c, () => (c.video_url ? setLessonFor(c) : setComingSoonFor(c)))}
+        onSource={(c) =>
+          gateChallenge(c, () =>
+            c.pdf_url ? window.open(c.pdf_url, '_blank', 'noopener') : setComingSoonFor(c),
+          )
+        }
         onUpgrade={() => requireAccess()}
       />
       <Countdown onStart={start} />
@@ -135,6 +150,9 @@ function LandingInner() {
       </footer>
 
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
+      {comingSoonFor && (
+        <ComingSoonModal challenge={comingSoonFor} onClose={() => setComingSoonFor(null)} />
+      )}
       {feedbackFor != null && (
         <FeedbackModal challengeNumber={feedbackFor} onClose={() => setFeedbackFor(null)} />
       )}
