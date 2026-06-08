@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { toArabicDigits } from '../lib/theme'
-import { parseSubmission } from '../lib/grading'
+import { normalizeFeedback } from '../lib/grading'
+import { challengeTaskId, getAttempt } from '../lib/progress'
 import FeedbackView from './FeedbackView'
-import type { SpeakingResult } from '../types'
+import type { Challenge, SpeakingResult } from '../types'
 
 interface FeedbackModalProps {
-  challengeNumber?: number
+  challenge: Challenge
   onClose: () => void
 }
 
@@ -18,43 +19,57 @@ function CloseIcon() {
   )
 }
 
-export default function FeedbackModal({ challengeNumber, onClose }: FeedbackModalProps) {
+export default function FeedbackModal({ challenge, onClose }: FeedbackModalProps) {
   const [loading, setLoading] = useState(true)
   const [result, setResult] = useState<SpeakingResult | null>(null)
+  const [transcript, setTranscript] = useState('')
 
   useEffect(() => {
     let active = true
+
+    // Primary source: the attempt this browser saved when the student completed
+    // the speaking task — shows the exact same feedback they received.
+    const saved = getAttempt(challengeTaskId(challenge.id, challenge.number))
+    if (saved) {
+      setResult(saved.result)
+      setTranscript(saved.transcript)
+      setLoading(false)
+      return
+    }
+
+    // Fallback: look up the latest stored submission for this challenge.
     let student: string | null = null
     try {
       student = localStorage.getItem('x50_user')
     } catch {
       student = null
     }
-
     if (!supabase || !student) {
       setLoading(false)
       return
     }
 
-    let query = supabase
+    supabase
       .from('x50_submissions')
       .select('*')
       .eq('student', student)
+      .eq('challenge_number', challenge.number)
       .order('created_at', { ascending: false })
       .limit(1)
-    if (challengeNumber != null) query = query.eq('challenge_number', challengeNumber)
-
-    query.then(({ data }) => {
-      if (!active) return
-      const row = (data ?? [])[0] as Record<string, unknown> | undefined
-      if (row) setResult(parseSubmission(row))
-      setLoading(false)
-    })
+      .then(({ data }) => {
+        if (!active) return
+        const row = (data ?? [])[0] as Record<string, unknown> | undefined
+        if (row) {
+          setResult(normalizeFeedback(row))
+          if (typeof row.transcript === 'string') setTranscript(row.transcript)
+        }
+        setLoading(false)
+      })
 
     return () => {
       active = false
     }
-  }, [challengeNumber])
+  }, [challenge.id, challenge.number])
 
   return (
     <div
@@ -75,13 +90,23 @@ export default function FeedbackModal({ challengeNumber, onClose }: FeedbackModa
         </button>
 
         <h2 className="mb-4 text-lg font-extrabold text-[#1b1730]">
-          {challengeNumber != null ? `تقييم التحدي ${toArabicDigits(challengeNumber)}` : 'تقييمك'} 📊
+          تقييم التحدي {toArabicDigits(challenge.number)} 📊
         </h2>
 
         {loading ? (
           <p className="py-8 text-center text-sm text-[#7a7596]">جارٍ التحميل…</p>
         ) : result ? (
-          <FeedbackView result={result} />
+          <>
+            {transcript && (
+              <div className="mb-4 rounded-2xl border border-[#ece7fb] bg-[#faf9ff] p-4" dir="ltr">
+                <p className="mb-1 text-right text-[12px] font-bold text-[#a39ec0]" dir="rtl">
+                  النص المُسجّل
+                </p>
+                <p className="text-[15px] leading-relaxed text-[#3a3550]">{transcript}</p>
+              </div>
+            )}
+            <FeedbackView result={result} />
+          </>
         ) : (
           <div className="py-6 text-center">
             <p className="mb-2 text-3xl">🗒️</p>

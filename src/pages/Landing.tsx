@@ -35,7 +35,7 @@ function LandingInner() {
   const [reviews, setReviews] = useState<Review[]>([])
   const [showPremium, setShowPremium] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
-  const [feedbackFor, setFeedbackFor] = useState<number | null>(null)
+  const [feedbackFor, setFeedbackFor] = useState<Challenge | null>(null)
   const [speakingFor, setSpeakingFor] = useState<Challenge | null>(null)
   const [lessonFor, setLessonFor] = useState<Challenge | null>(null)
   const [comingSoonFor, setComingSoonFor] = useState<Challenge | null>(null)
@@ -119,7 +119,7 @@ function LandingInner() {
       <Challenges
         challenges={displayedChallenges}
         onSelect={() => requireAccess()}
-        onFeedback={(c) => gateChallenge(c, () => setFeedbackFor(c.number))}
+        onFeedback={(c) => gateChallenge(c, () => setFeedbackFor(c))}
         onSpeak={(c) => gateChallenge(c, () => setSpeakingFor(c))}
         onWatch={(c) => gateChallenge(c, () => (c.video_url ? setLessonFor(c) : setComingSoonFor(c)))}
         onSource={(c) =>
@@ -153,8 +153,8 @@ function LandingInner() {
       {comingSoonFor && (
         <ComingSoonModal challenge={comingSoonFor} onClose={() => setComingSoonFor(null)} />
       )}
-      {feedbackFor != null && (
-        <FeedbackModal challengeNumber={feedbackFor} onClose={() => setFeedbackFor(null)} />
+      {feedbackFor && (
+        <FeedbackModal challenge={feedbackFor} onClose={() => setFeedbackFor(null)} />
       )}
       {speakingFor && (
         <SpeakingModal challenge={speakingFor} onClose={() => setSpeakingFor(null)} />
