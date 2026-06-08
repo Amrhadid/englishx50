@@ -3,8 +3,17 @@ import { supabase } from '../lib/supabase'
 import { isPremium } from '../lib/premium'
 import { reportFunctionError } from '../lib/functionError'
 import { invokeFeedback, normalizeFeedback } from '../lib/grading'
-import { LEVEL_TEST_TASK_ID, getAttempt, saveAttempt } from '../lib/progress'
+import {
+  LEVEL_TEST_TASK_ID,
+  getAttempt,
+  saveAttempt,
+  getTrials,
+  incrementTrials,
+  MAX_TRIALS,
+} from '../lib/progress'
 import { canRecordAudio, recorderOptions, transcribeAudio } from '../lib/transcribe'
+import { isAdminEmail } from '../lib/admin'
+import { useAuth } from '../hooks/useAuth'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { toArabicDigits } from '../lib/theme'
 import FeedbackView from './FeedbackView'
@@ -146,6 +155,12 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [rejectMsg, setRejectMsg] = useState<string | null>(null)
 
+  // Every user gets MAX_TRIALS grading attempts; the admin is unlimited.
+  const { user } = useAuth()
+  const isAdmin = isAdminEmail(user?.email)
+  const [trialsUsed, setTrialsUsed] = useState(() => getTrials(LEVEL_TEST_TASK_ID))
+  const canTry = isAdmin || trialsUsed < MAX_TRIALS
+
   useEffect(() => {
     if (!canRecordAudio()) setSupported(false)
     return () => {
@@ -195,6 +210,10 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     setResult(null)
     setOutcome(null)
     setRejectMsg(null)
+    if (!canTry) {
+      setRecError('لقد استخدمت محاولتيك لهذه المهمة')
+      return
+    }
     if (!canRecordAudio()) {
       setSupported(false)
       return
@@ -243,6 +262,10 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
   }
 
   const getFeedback = async () => {
+    if (!canTry) {
+      setRecError('لقد استخدمت محاولتيك لهذه المهمة')
+      return
+    }
     if (!supabase) {
       setRecError('الخدمة غير متاحة حالياً')
       return
@@ -287,6 +310,7 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     setResult(mapped)
     setOutcome(finalOutcome)
     saveAttempt(LEVEL_TEST_TASK_ID, { transcript, result: mapped, outcome: finalOutcome })
+    if (!isAdmin) setTrialsUsed(incrementTrials(LEVEL_TEST_TASK_ID))
   }
 
   const retry = () => {
@@ -405,6 +429,11 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
                         ? 'جارٍ التسجيل… اضغط للإيقاف'
                         : 'اضغط لبدء التسجيل (دقيقة واحدة)'}
                   </p>
+                  {!isAdmin && (
+                    <p className="mt-1 text-[12px] font-semibold text-[#a39ec0]">
+                      المحاولات المتبقية: {toArabicDigits(Math.max(0, MAX_TRIALS - trialsUsed))}
+                    </p>
+                  )}
                 </>
               )}
 
@@ -423,7 +452,7 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
                 </p>
               )}
 
-              {transcript && !recording && (
+              {transcript && !recording && canTry && (
                 <button
                   onClick={getFeedback}
                   className="mt-5 w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5"
@@ -431,6 +460,12 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
                 >
                   احصل على التقييم
                 </button>
+              )}
+
+              {!canTry && (
+                <p className="mt-5 rounded-2xl bg-[#FEEFD2] p-4 text-center text-sm font-semibold text-[#A66A09]">
+                  لقد استخدمت محاولتيك لهذه المهمة.
+                </p>
               )}
             </div>
           ) : (
@@ -477,13 +512,19 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
                   <p className="mb-5 text-[14px] leading-relaxed text-[#3a3550]">
                     مستواك كويس وفيه أساس تبني عليه — كمّل التحديات وهتتطور بسرعة إن شاء الله.
                   </p>
-                  <button
-                    onClick={retry}
-                    className="w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5"
-                    style={{ backgroundColor: PURPLE }}
-                  >
-                    حاول مرة أخرى
-                  </button>
+                  {canTry ? (
+                    <button
+                      onClick={retry}
+                      className="w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5"
+                      style={{ backgroundColor: PURPLE }}
+                    >
+                      حاول مرة أخرى
+                    </button>
+                  ) : (
+                    <p className="text-[13px] font-semibold text-[#a39ec0]">
+                      لقد استخدمت محاولتيك لهذه المهمة.
+                    </p>
+                  )}
                 </div>
               ) : outcome === 'passed' && result ? (
                 <div>

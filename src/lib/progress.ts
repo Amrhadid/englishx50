@@ -16,6 +16,33 @@ export interface SavedAttempt {
 }
 
 const PREFIX = 'x50_attempt_'
+const TRIALS_PREFIX = 'x50_trials_'
+
+/** Max grading attempts a normal user gets per speaking task. */
+export const MAX_TRIALS = 2
+
+/** How many grading attempts have been used for a task. */
+export function getTrials(taskId: string | null): number {
+  if (!taskId) return 0
+  try {
+    const n = parseInt(localStorage.getItem(TRIALS_PREFIX + taskId) ?? '0', 10)
+    return Number.isFinite(n) && n > 0 ? n : 0
+  } catch {
+    return 0
+  }
+}
+
+/** Record one used grading attempt; returns the new count. */
+export function incrementTrials(taskId: string | null): number {
+  if (!taskId) return 0
+  const next = getTrials(taskId) + 1
+  try {
+    localStorage.setItem(TRIALS_PREFIX + taskId, String(next))
+  } catch {
+    /* ignore storage errors */
+  }
+  return next
+}
 
 /** Stable id for the level test (pre task). */
 export const LEVEL_TEST_TASK_ID = 'level_test'

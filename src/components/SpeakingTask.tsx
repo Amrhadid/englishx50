@@ -2,8 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { BRAND_GRADIENT, toArabicDigits } from '../lib/theme'
 import { gradeSpeaking } from '../lib/grading'
-import { challengeTaskId, getAttempt, saveAttempt } from '../lib/progress'
+import {
+  challengeTaskId,
+  getAttempt,
+  saveAttempt,
+  getTrials,
+  incrementTrials,
+  MAX_TRIALS,
+} from '../lib/progress'
 import { canRecordAudio, recorderOptions, transcribeAudio } from '../lib/transcribe'
+import { isAdminEmail } from '../lib/admin'
+import { useAuth } from '../hooks/useAuth'
 import FeedbackView from './FeedbackView'
 import type { SpeakingResult } from '../types'
 
@@ -35,6 +44,12 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
   const streamRef = useRef<MediaStream | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const taskId = challengeTaskId(challengeId, challengeNumber)
+
+  // Every user gets MAX_TRIALS grading attempts per task; the admin is unlimited.
+  const { user } = useAuth()
+  const isAdmin = isAdminEmail(user?.email)
+  const [trialsUsed, setTrialsUsed] = useState(() => getTrials(taskId))
+  const canTry = isAdmin || trialsUsed < MAX_TRIALS
 
   useEffect(() => {
     if (!canRecordAudio()) setSupported(false)
@@ -112,6 +127,10 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
       setError('سجّل إجابتك أولاً')
       return
     }
+    if (!canTry) {
+      setError('لقد استخدمت محاولتيك لهذه المهمة')
+      return
+    }
     if (!supabase) {
       setError('الخدمة غير متاحة حالياً')
       return
@@ -130,6 +149,7 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
       result: outcome.result,
       outcome: outcome.result.passed ? 'passed' : 'failed',
     })
+    if (!isAdmin) setTrialsUsed(incrementTrials(taskId))
   }
 
   const reset = () => {
@@ -163,8 +183,15 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
         </p>
       )}
 
+      {/* No attempts left */}
+      {supported && !result && !canTry && (
+        <p className="mt-5 rounded-2xl bg-[#FEEFD2] p-4 text-center text-sm font-semibold text-[#A66A09]">
+          لقد استخدمت محاولتيك لهذه المهمة.
+        </p>
+      )}
+
       {/* Recorder — hidden once a result is shown (retry brings it back). */}
-      {supported && !result && (
+      {supported && !result && canTry && (
         <div className="mt-5 flex flex-col items-center">
           <button
             onClick={recording ? stop : start}
@@ -184,6 +211,11 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
                 ? 'جارٍ التسجيل… اضغط للإيقاف'
                 : 'اضغط لبدء التسجيل'}
           </p>
+          {!isAdmin && (
+            <p className="mt-1 text-[12px] font-semibold text-[#a39ec0]">
+              المحاولات المتبقية: {toArabicDigits(Math.max(0, MAX_TRIALS - trialsUsed))}
+            </p>
+          )}
         </div>
       )}
 
@@ -222,7 +254,12 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
       {/* Feedback */}
       {result && (
         <div className="mt-6">
-          <FeedbackView result={result} onRetry={reset} />
+          <FeedbackView result={result} onRetry={canTry ? reset : undefined} />
+          {!canTry && (
+            <p className="mt-3 text-center text-[12px] font-semibold text-[#a39ec0]">
+              لقد استخدمت محاولتيك لهذه المهمة.
+            </p>
+          )}
         </div>
       )}
     </div>
