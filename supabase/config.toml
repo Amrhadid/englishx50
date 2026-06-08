@@ -1,4 +1,4 @@
 project_id = "hiqhbxxlbonlyemxuvad"
 
-[functions.speaking-feedback]
+[functions.EnglishX50feedback]
 verify_jwt = false

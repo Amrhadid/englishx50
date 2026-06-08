@@ -5,7 +5,7 @@
 // and returns structured feedback.
 //
 // Deploy (project already has ANTHROPIC_API_KEY set):
-//   supabase functions deploy speaking-feedback --no-verify-jwt
+//   supabase functions deploy EnglishX50feedback --no-verify-jwt
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -13,9 +13,14 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
 const MODEL = 'claude-sonnet-4-6'
 
+// CORS must cover the preflight (OPTIONS) AND every real response — otherwise
+// the browser blocks the call before any status is read, which surfaces in the
+// app as "Failed to send a request to the Edge Function".
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 }
 
 const SYSTEM_PROMPT = `You are an encouraging but precise English-speaking coach for Arabic-speaking learners in the "EnglishX50" 50-day challenge.
