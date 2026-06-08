@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { isPremium } from '../lib/premium'
 import { reportFunctionError } from '../lib/functionError'
+import { invokeFeedback, normalizeFeedback } from '../lib/grading'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { toArabicDigits } from '../lib/theme'
 import FeedbackView from './FeedbackView'
 import { MicIcon, CloseIcon } from './icons'
-import type { SpeakingResult, Mistake, VocabItem } from '../types'
+import type { SpeakingResult } from '../types'
 
 /* Design-system colours requested for this feature. */
 const PURPLE = '#534AB7'
@@ -242,8 +243,10 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     setOutcome(null)
     setResult(null)
 
-    const { data, error } = await supabase.functions.invoke('EnglishX50feedback', {
-      body: { question: 'Introduce yourself in English', transcript, mode: 'level_test' },
+    const { data, error } = await invokeFeedback({
+      question: 'Introduce yourself in English',
+      transcript,
+      mode: 'level_test',
     })
 
     setLoading(false)
@@ -255,27 +258,7 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
       return
     }
 
-    const g = data as {
-      score?: number
-      passed?: boolean
-      feedback?: string
-      mistakes?: Mistake[]
-      corrected_sentences?: string[]
-      vocabulary?: VocabItem[]
-      strengths?: string[]
-      weaknesses?: string[]
-    }
-
-    const mapped: SpeakingResult = {
-      score: Math.max(0, Math.min(100, Math.round(g.score ?? 0))),
-      passed: g.passed ?? false,
-      feedback: g.feedback ?? '',
-      mistakes: g.mistakes ?? [],
-      corrected_sentences: g.corrected_sentences ?? [],
-      vocabulary: g.vocabulary ?? [],
-      strengths: g.strengths ?? [],
-      weaknesses: g.weaknesses ?? [],
-    }
+    const mapped = normalizeFeedback(data)
 
     // Client-side rejection rules.
     const sentences = countSentences(transcript)
