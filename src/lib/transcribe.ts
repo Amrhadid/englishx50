@@ -9,7 +9,10 @@
 import { supabase } from './supabase'
 import { reportFunctionError } from './functionError'
 
-const FUNCTION = 'whisper'
+// The transcription Edge Function's slug. A few candidates are tried so a
+// name/slug mismatch doesn't break it (Supabase invokes by slug, not display
+// name). Deploy the function in supabase/functions/transcribe as `transcribe`.
+const FUNCTION_SLUGS = ['transcribe', 'whisper', 'transcription', 'voice-to-text']
 
 export type TranscribeOutcome =
   | { ok: true; transcript: string }
@@ -53,32 +56,36 @@ function extOf(mime: string): string {
 export async function transcribeAudio(blob: Blob): Promise<TranscribeOutcome> {
   if (!supabase) return { ok: false, detail: 'Supabase not configured' }
   const mime = blob.type || 'audio/webm'
+  const base64 = await blobToBase64(blob).catch(() => null)
   let lastError: unknown = null
 
-  // Attempt 1: multipart form-data (file field) — standard OpenAI passthrough.
-  try {
-    const form = new FormData()
-    form.append('file', blob, `audio.${extOf(mime)}`)
-    form.append('model', 'whisper-1')
-    const { data, error } = await supabase.functions.invoke(FUNCTION, { body: form })
-    const t = extractTranscript(data)
-    if (!error && t != null) return { ok: true, transcript: t.trim() }
-    lastError = error ?? lastError
-  } catch (e) {
-    lastError = e
-  }
+  for (const slug of FUNCTION_SLUGS) {
+    // Attempt 1: multipart form-data (file field) — standard OpenAI passthrough.
+    try {
+      const form = new FormData()
+      form.append('file', blob, `audio.${extOf(mime)}`)
+      form.append('model', 'whisper-1')
+      const { data, error } = await supabase.functions.invoke(slug, { body: form })
+      const t = extractTranscript(data)
+      if (!error && t != null) return { ok: true, transcript: t.trim() }
+      lastError = error ?? lastError
+    } catch (e) {
+      lastError = e
+    }
 
-  // Attempt 2: base64 JSON.
-  try {
-    const audio = await blobToBase64(blob)
-    const { data, error } = await supabase.functions.invoke(FUNCTION, {
-      body: { audio, mime, model: 'whisper-1' },
-    })
-    const t = extractTranscript(data)
-    if (!error && t != null) return { ok: true, transcript: t.trim() }
-    lastError = error ?? lastError
-  } catch (e) {
-    lastError = e
+    // Attempt 2: base64 JSON.
+    if (base64 != null) {
+      try {
+        const { data, error } = await supabase.functions.invoke(slug, {
+          body: { audio: base64, mime, model: 'whisper-1' },
+        })
+        const t = extractTranscript(data)
+        if (!error && t != null) return { ok: true, transcript: t.trim() }
+        lastError = error ?? lastError
+      } catch (e) {
+        lastError = e
+      }
+    }
   }
 
   const detail = await reportFunctionError('transcription', lastError)
