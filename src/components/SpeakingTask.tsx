@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { BRAND_GRADIENT, toArabicDigits } from '../lib/theme'
 import { gradeSpeaking } from '../lib/grading'
+import { challengeTaskId, getAttempt, saveAttempt } from '../lib/progress'
 import FeedbackView from './FeedbackView'
 import type { SpeakingResult } from '../types'
 
@@ -50,11 +51,22 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<SpeakingResult | null>(null)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const taskId = challengeTaskId(challengeId, challengeNumber)
 
   useEffect(() => {
     if (!getRecognition()) setSupported(false)
     return () => recognitionRef.current?.stop()
   }, [])
+
+  // Restore a previously completed attempt: show the saved transcript + feedback
+  // instead of a fresh recording when this task is reopened.
+  useEffect(() => {
+    const saved = getAttempt(taskId)
+    if (saved) {
+      setTranscript(saved.transcript)
+      setResult(saved.result)
+    }
+  }, [taskId])
 
   const start = () => {
     setError(null)
@@ -112,6 +124,11 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
       return
     }
     setResult(outcome.result)
+    saveAttempt(taskId, {
+      transcript,
+      result: outcome.result,
+      outcome: outcome.result.passed ? 'passed' : 'failed',
+    })
   }
 
   const reset = () => {
@@ -145,8 +162,8 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
         </p>
       )}
 
-      {/* Recorder */}
-      {supported && (
+      {/* Recorder — hidden once a result is shown (retry brings it back). */}
+      {supported && !result && (
         <div className="mt-5 flex flex-col items-center">
           <button
             onClick={recording ? stop : start}

@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { isPremium } from '../lib/premium'
 import { reportFunctionError } from '../lib/functionError'
 import { invokeFeedback, normalizeFeedback } from '../lib/grading'
+import { LEVEL_TEST_TASK_ID, getAttempt, saveAttempt } from '../lib/progress'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { toArabicDigits } from '../lib/theme'
 import FeedbackView from './FeedbackView'
@@ -170,6 +171,18 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     }
   }, [])
 
+  // Restore a previously completed attempt: reopening the pre task shows the
+  // saved transcript + the same feedback instead of the recording UI.
+  useEffect(() => {
+    const saved = getAttempt(LEVEL_TEST_TASK_ID)
+    if (saved && (saved.outcome === 'passed' || saved.outcome === 'failed')) {
+      setTranscript(saved.transcript)
+      setResult(saved.result)
+      setOutcome(saved.outcome)
+      setStep('feedback')
+    }
+  }, [])
+
   const stopTimer = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current)
@@ -273,8 +286,10 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
       return
     }
 
+    const finalOutcome: Outcome = mapped.passed ? 'passed' : 'failed'
     setResult(mapped)
-    setOutcome(mapped.passed ? 'passed' : 'failed')
+    setOutcome(finalOutcome)
+    saveAttempt(LEVEL_TEST_TASK_ID, { transcript, result: mapped, outcome: finalOutcome })
   }
 
   const retry = () => {
@@ -419,6 +434,14 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
           ) : (
             /* Feedback */
             <div className="mx-auto max-w-md">
+              {!loading && transcript && (outcome === 'passed' || outcome === 'failed') && (
+                <div className="mb-4 rounded-2xl border border-[#ece7fb] bg-[#faf9ff] p-4" dir="ltr">
+                  <p className="mb-1 text-right text-[12px] font-bold text-[#a39ec0]" dir="rtl">
+                    النص المُسجّل
+                  </p>
+                  <p className="text-[15px] leading-relaxed text-[#3a3550]">{transcript}</p>
+                </div>
+              )}
               {loading ? (
                 <p className="py-10 text-center text-sm font-semibold text-[#7a7596]">
                   جارٍ تقييم إجابتك…
