@@ -4,6 +4,7 @@ import { isPremium } from '../lib/premium'
 import { reportFunctionError } from '../lib/functionError'
 import { invokeFeedback, normalizeFeedback } from '../lib/grading'
 import { LEVEL_TEST_TASK_ID, getAttempt, saveAttempt } from '../lib/progress'
+import { canRecordAudio, recorderOptions, transcribeAudio } from '../lib/transcribe'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { toArabicDigits } from '../lib/theme'
 import FeedbackView from './FeedbackView'
@@ -19,27 +20,6 @@ const TEST_SECONDS = 60
 
 type Step = 'speak' | 'feedback'
 type Outcome = 'passed' | 'failed' | 'rejected'
-
-// Minimal typing for the browser SpeechRecognition API (not in lib.dom yet).
-type SpeechRecognitionLike = {
-  lang: string
-  continuous: boolean
-  interimResults: boolean
-  start: () => void
-  stop: () => void
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
-  onerror: ((e: { error?: string }) => void) | null
-  onend: (() => void) | null
-}
-
-function getRecognition(): SpeechRecognitionLike | null {
-  const w = window as unknown as {
-    SpeechRecognition?: new () => SpeechRecognitionLike
-    webkitSpeechRecognition?: new () => SpeechRecognitionLike
-  }
-  const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition
-  return Ctor ? new Ctor() : null
-}
 
 /** Rough complete-sentence count from a (often unpunctuated) transcript. */
 function countSentences(text: string): number {
@@ -151,10 +131,13 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
   // Recording
   const [supported, setSupported] = useState(true)
   const [recording, setRecording] = useState(false)
+  const [transcribing, setTranscribing] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [secondsLeft, setSecondsLeft] = useState(TEST_SECONDS)
   const [recError, setRecError] = useState<string | null>(null)
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<number | null>(null)
 
   // Feedback
@@ -164,9 +147,14 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
   const [rejectMsg, setRejectMsg] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!getRecognition()) setSupported(false)
+    if (!canRecordAudio()) setSupported(false)
     return () => {
-      recognitionRef.current?.stop()
+      try {
+        recorderRef.current?.stop()
+      } catch {
+        /* recorder already inactive */
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop())
       if (timerRef.current) clearInterval(timerRef.current)
     }
   }, [])
@@ -191,44 +179,53 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
   }
 
   const stopRecording = () => {
-    recognitionRef.current?.stop()
+    try {
+      recorderRef.current?.stop()
+    } catch {
+      /* recorder already inactive */
+    }
     setRecording(false)
     stopTimer()
   }
 
-  const startRecording = () => {
+  // Record the answer, then send the audio to the `whisper` Edge Function and
+  // use the returned transcript (replaces the browser Web Speech API).
+  const startRecording = async () => {
     setRecError(null)
     setResult(null)
     setOutcome(null)
     setRejectMsg(null)
-    const rec = getRecognition()
-    if (!rec) {
+    if (!canRecordAudio()) {
       setSupported(false)
       return
     }
-    rec.lang = 'en-US'
-    rec.continuous = true
-    rec.interimResults = true
-    // e.results is cumulative: every event carries all final + interim
-    // segments from the start. Rebuild the transcript from it each time —
-    // appending to a persistent accumulator re-adds each finalized segment on
-    // every event and duplicates the speech.
-    rec.onresult = (e) => {
-      let text = ''
-      for (let i = 0; i < e.results.length; i++) {
-        const res = e.results[i] as ArrayLike<{ transcript: string }>
-        text += (res[0]?.transcript ?? '') + ' '
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch {
+      setRecError('لم يتم السماح باستخدام الميكروفون')
+      return
+    }
+    streamRef.current = stream
+    chunksRef.current = []
+    const rec = new MediaRecorder(stream, recorderOptions())
+    rec.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunksRef.current.push(e.data)
+    }
+    rec.onstop = async () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+      const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' })
+      if (blob.size === 0) return
+      setTranscribing(true)
+      const res = await transcribeAudio(blob)
+      setTranscribing(false)
+      if (!res.ok) {
+        setRecError(`تعذّر تحويل الصوت إلى نص، حاول مرة أخرى — ${res.detail}`)
+        return
       }
-      setTranscript(text.replace(/\s+/g, ' ').trim())
+      setTranscript(res.transcript)
     }
-    rec.onerror = (ev) => {
-      setRecError(
-        ev.error === 'not-allowed' ? 'لم يتم السماح باستخدام الميكروفون' : 'تعذّر التسجيل، حاول مرة أخرى',
-      )
-      stopRecording()
-    }
-    rec.onend = () => setRecording(false)
-    recognitionRef.current = rec
+    recorderRef.current = rec
     rec.start()
     setRecording(true)
     setSecondsLeft(TEST_SECONDS)
@@ -365,7 +362,8 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
                   {/* Countdown ring with the mic in the centre */}
                   <button
                     onClick={recording ? stopRecording : startRecording}
-                    className="relative flex h-[140px] w-[140px] items-center justify-center"
+                    disabled={transcribing}
+                    className="relative flex h-[140px] w-[140px] items-center justify-center disabled:opacity-60"
                     aria-label={recording ? 'إيقاف التسجيل' : 'ابدأ التسجيل'}
                   >
                     <svg width="140" height="140" viewBox="0 0 120 120" className="absolute inset-0">
@@ -401,7 +399,11 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
                   </button>
 
                   <p className="mt-4 text-[13px] font-semibold text-[#7a7596]">
-                    {recording ? 'جارٍ التسجيل… اضغط للإيقاف' : 'اضغط لبدء التسجيل (دقيقة واحدة)'}
+                    {transcribing
+                      ? 'جارٍ تحويل الصوت إلى نص…'
+                      : recording
+                        ? 'جارٍ التسجيل… اضغط للإيقاف'
+                        : 'اضغط لبدء التسجيل (دقيقة واحدة)'}
                   </p>
                 </>
               )}

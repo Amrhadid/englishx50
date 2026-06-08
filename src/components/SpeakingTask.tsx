@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { BRAND_GRADIENT, toArabicDigits } from '../lib/theme'
 import { gradeSpeaking } from '../lib/grading'
 import { challengeTaskId, getAttempt, saveAttempt } from '../lib/progress'
+import { canRecordAudio, recorderOptions, transcribeAudio } from '../lib/transcribe'
 import FeedbackView from './FeedbackView'
 import type { SpeakingResult } from '../types'
 
@@ -11,27 +12,6 @@ interface SpeakingTaskProps {
   challengeNumber?: number
   challengeId?: string
   student?: string
-}
-
-// Minimal typing for the browser SpeechRecognition API (not in lib.dom yet).
-type SpeechRecognitionLike = {
-  lang: string
-  continuous: boolean
-  interimResults: boolean
-  start: () => void
-  stop: () => void
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
-  onerror: ((e: { error?: string }) => void) | null
-  onend: (() => void) | null
-}
-
-function getRecognition(): SpeechRecognitionLike | null {
-  const w = window as unknown as {
-    SpeechRecognition?: new () => SpeechRecognitionLike
-    webkitSpeechRecognition?: new () => SpeechRecognitionLike
-  }
-  const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition
-  return Ctor ? new Ctor() : null
 }
 
 function MicIcon() {
@@ -46,16 +26,26 @@ function MicIcon() {
 export default function SpeakingTask({ question, challengeNumber, challengeId, student }: SpeakingTaskProps) {
   const [supported, setSupported] = useState(true)
   const [recording, setRecording] = useState(false)
+  const [transcribing, setTranscribing] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<SpeakingResult | null>(null)
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const chunksRef = useRef<Blob[]>([])
   const taskId = challengeTaskId(challengeId, challengeNumber)
 
   useEffect(() => {
-    if (!getRecognition()) setSupported(false)
-    return () => recognitionRef.current?.stop()
+    if (!canRecordAudio()) setSupported(false)
+    return () => {
+      try {
+        recorderRef.current?.stop()
+      } catch {
+        /* recorder already inactive */
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+    }
   }, [])
 
   // Restore a previously completed attempt: show the saved transcript + feedback
@@ -68,41 +58,52 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
     }
   }, [taskId])
 
-  const start = () => {
+  // Record the answer, then send the audio to the `whisper` Edge Function and
+  // use the returned transcript (replaces the browser Web Speech API).
+  const start = async () => {
     setError(null)
     setResult(null)
-    const rec = getRecognition()
-    if (!rec) {
+    if (!canRecordAudio()) {
       setSupported(false)
       return
     }
-    rec.lang = 'en-US'
-    rec.continuous = true
-    rec.interimResults = true
-    // e.results is cumulative: every event carries all final + interim
-    // segments from the start. Rebuild the transcript from it each time —
-    // appending to a persistent accumulator re-adds each finalized segment on
-    // every event and duplicates the speech.
-    rec.onresult = (e) => {
-      let text = ''
-      for (let i = 0; i < e.results.length; i++) {
-        const res = e.results[i] as ArrayLike<{ transcript: string }>
-        text += (res[0]?.transcript ?? '') + ' '
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch {
+      setError('لم يتم السماح باستخدام الميكروفون')
+      return
+    }
+    streamRef.current = stream
+    chunksRef.current = []
+    const rec = new MediaRecorder(stream, recorderOptions())
+    rec.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunksRef.current.push(e.data)
+    }
+    rec.onstop = async () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+      const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' })
+      if (blob.size === 0) return
+      setTranscribing(true)
+      const res = await transcribeAudio(blob)
+      setTranscribing(false)
+      if (!res.ok) {
+        setError(`تعذّر تحويل الصوت إلى نص، حاول مرة أخرى — ${res.detail}`)
+        return
       }
-      setTranscript(text.replace(/\s+/g, ' ').trim())
+      setTranscript(res.transcript)
     }
-    rec.onerror = (ev) => {
-      setError(ev.error === 'not-allowed' ? 'لم يتم السماح باستخدام الميكروفون' : 'تعذّر التسجيل، حاول مرة أخرى')
-      setRecording(false)
-    }
-    rec.onend = () => setRecording(false)
-    recognitionRef.current = rec
+    recorderRef.current = rec
     rec.start()
     setRecording(true)
   }
 
   const stop = () => {
-    recognitionRef.current?.stop()
+    try {
+      recorderRef.current?.stop()
+    } catch {
+      /* recorder already inactive */
+    }
     setRecording(false)
   }
 
@@ -167,7 +168,8 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
         <div className="mt-5 flex flex-col items-center">
           <button
             onClick={recording ? stop : start}
-            className={`flex h-20 w-20 items-center justify-center rounded-full text-white shadow-xl transition ${
+            disabled={transcribing}
+            className={`flex h-20 w-20 items-center justify-center rounded-full text-white shadow-xl transition disabled:opacity-60 ${
               recording ? 'animate-pulse bg-[#F25C8A]' : ''
             }`}
             style={recording ? undefined : { background: BRAND_GRADIENT }}
@@ -176,7 +178,11 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
             <MicIcon />
           </button>
           <p className="mt-3 text-[13px] font-semibold text-[#7a7596]">
-            {recording ? 'جارٍ التسجيل… اضغط للإيقاف' : 'اضغط لبدء التسجيل'}
+            {transcribing
+              ? 'جارٍ تحويل الصوت إلى نص…'
+              : recording
+                ? 'جارٍ التسجيل… اضغط للإيقاف'
+                : 'اضغط لبدء التسجيل'}
           </p>
         </div>
       )}
