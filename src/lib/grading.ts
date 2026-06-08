@@ -43,11 +43,13 @@ export type GradeOutcome =
   | { ok: true; result: SpeakingResult }
   | { ok: false; detail: string }
 
-// The deployed Edge Function has been referred to by two names across the
-// project's history. Try the documented name first, then fall back to the one
-// that actually has source/config in the repo, so a name mismatch (which shows
-// up as "Failed to send a request to the Edge Function") still works.
-const FUNCTION_NAMES = ['EnglishX50feedback', 'speaking-feedback'] as const
+// The feedback Edge Function is invoked by its SLUG (the URL path), not its
+// display name. In this project the function shows as "EnglishX50feedback" in
+// the dashboard but its real slug is "smart-action"
+// (…/functions/v1/smart-action) — invoking the display name hits a
+// non-existent endpoint and fails with "Failed to send a request to the Edge
+// Function". Try the real slug first, then known fallbacks.
+const FUNCTION_NAMES = ['smart-action', 'EnglishX50feedback', 'speaking-feedback'] as const
 
 /** Invoke the feedback function, falling back across known names. */
 export async function invokeFeedback(
