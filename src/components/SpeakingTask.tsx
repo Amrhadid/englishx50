@@ -107,6 +107,8 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
         return
       }
       setTranscript(res.transcript)
+      // Grade automatically — no extra click needed.
+      grade(res.transcript)
     }
     recorderRef.current = rec
     rec.start()
@@ -122,8 +124,8 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
     setRecording(false)
   }
 
-  const submit = async () => {
-    if (transcript.trim().length < 2) {
+  const grade = async (text: string) => {
+    if (text.trim().length < 2) {
       setError('سجّل إجابتك أولاً')
       return
     }
@@ -137,7 +139,13 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
     }
     setLoading(true)
     setError(null)
-    const outcome = await gradeSpeaking({ question, transcript, student, challengeId, challengeNumber })
+    const outcome = await gradeSpeaking({
+      question,
+      transcript: text,
+      student,
+      challengeId,
+      challengeNumber,
+    })
     setLoading(false)
     if (!outcome.ok) {
       setError(`تعذّر تقييم الإجابة، حاول مرة أخرى — ${outcome.detail}`)
@@ -145,7 +153,7 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
     }
     setResult(outcome.result)
     saveAttempt(taskId, {
-      transcript,
+      transcript: text,
       result: outcome.result,
       outcome: outcome.result.passed ? 'passed' : 'failed',
     })
@@ -231,24 +239,9 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
 
       {error && <p className="mt-3 text-center text-[13px] font-semibold text-[#C2410C]">{error}</p>}
 
-      {/* Actions */}
-      {transcript && !result && (
-        <div className="mt-5 flex gap-2.5">
-          <button
-            onClick={submit}
-            disabled={loading}
-            className="flex-1 rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg shadow-[#A964F0]/30 transition hover:-translate-y-0.5 disabled:opacity-60"
-            style={{ background: BRAND_GRADIENT }}
-          >
-            {loading ? 'جارٍ التقييم…' : 'احصل على التقييم'}
-          </button>
-          <button
-            onClick={reset}
-            className="rounded-2xl border border-[#ece7fb] px-5 py-3.5 text-sm font-bold text-[#7a7596] hover:bg-[#f4f3f7]"
-          >
-            إعادة
-          </button>
-        </div>
+      {/* Grading runs automatically after transcription */}
+      {loading && !result && (
+        <p className="mt-5 text-center text-sm font-semibold text-[#7a7596]">جارٍ التقييم…</p>
       )}
 
       {/* Feedback */}

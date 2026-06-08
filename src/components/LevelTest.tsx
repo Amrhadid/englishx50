@@ -243,6 +243,8 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
         return
       }
       setTranscript(res.transcript)
+      // Grade automatically — no extra click needed.
+      getFeedback(res.transcript)
     }
     recorderRef.current = rec
     rec.start()
@@ -261,7 +263,7 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     }, 1000)
   }
 
-  const getFeedback = async () => {
+  const getFeedback = async (text: string) => {
     if (!canTry) {
       setRecError('لقد استخدمت محاولتيك لهذه المهمة')
       return
@@ -278,7 +280,7 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
 
     const { data, error } = await invokeFeedback({
       question: 'Introduce yourself in English',
-      transcript,
+      transcript: text,
       mode: 'level_test',
     })
 
@@ -294,7 +296,7 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     const mapped = normalizeFeedback(data)
 
     // Client-side rejection rules.
-    const sentences = countSentences(transcript)
+    const sentences = countSentences(text)
     if (sentences < 4) {
       setRejectMsg('يجب أن تتكلم على الأقل 4 جمل كاملة، حاول مرة أخرى')
       setOutcome('rejected')
@@ -309,7 +311,7 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     const finalOutcome: Outcome = mapped.passed ? 'passed' : 'failed'
     setResult(mapped)
     setOutcome(finalOutcome)
-    saveAttempt(LEVEL_TEST_TASK_ID, { transcript, result: mapped, outcome: finalOutcome })
+    saveAttempt(LEVEL_TEST_TASK_ID, { transcript: text, result: mapped, outcome: finalOutcome })
     if (!isAdmin) setTrialsUsed(incrementTrials(LEVEL_TEST_TASK_ID))
   }
 
@@ -450,16 +452,6 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
                 <p className="mt-3 text-center text-[13px] font-semibold" style={{ color: CORAL }}>
                   {recError}
                 </p>
-              )}
-
-              {transcript && !recording && canTry && (
-                <button
-                  onClick={getFeedback}
-                  className="mt-5 w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5"
-                  style={{ backgroundColor: TEAL }}
-                >
-                  احصل على التقييم
-                </button>
               )}
 
               {!canTry && (
