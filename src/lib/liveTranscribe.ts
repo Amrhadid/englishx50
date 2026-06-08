@@ -45,12 +45,15 @@ class RealtimeTranscriber {
   private committed = ''
   private partial = ''
   failed = false
+  private liveNotified = false
   private stream: MediaStream
   private onTranscript: (text: string) => void
+  private onLive: () => void
 
-  constructor(stream: MediaStream, onTranscript: (text: string) => void) {
+  constructor(stream: MediaStream, onTranscript: (text: string) => void, onLive: () => void) {
     this.stream = stream
     this.onTranscript = onTranscript
+    this.onLive = onLive
   }
 
   get text(): string {
@@ -120,9 +123,17 @@ class RealtimeTranscriber {
     }
     const type = ev.type ?? ''
     if (type.endsWith('input_audio_transcription.delta')) {
+      if (!this.liveNotified) {
+        this.liveNotified = true
+        this.onLive()
+      }
       this.partial += ev.delta ?? ''
       this.onTranscript(this.text)
     } else if (type.endsWith('input_audio_transcription.completed')) {
+      if (!this.liveNotified) {
+        this.liveNotified = true
+        this.onLive()
+      }
       this.committed = `${this.committed} ${ev.transcript ?? this.partial}`.trim()
       this.partial = ''
       this.onTranscript(this.text)
@@ -184,9 +195,11 @@ export class LiveSession {
   private chunks: Blob[] = []
   private live = ''
   private onPartial: (text: string) => void
+  private onLive: () => void
 
-  constructor(onPartial: (text: string) => void) {
-    this.onPartial = onPartial
+  constructor(opts: { onPartial: (text: string) => void; onLive?: () => void }) {
+    this.onPartial = opts.onPartial
+    this.onLive = opts.onLive ?? (() => {})
   }
 
   async start(): Promise<void> {
@@ -206,10 +219,14 @@ export class LiveSession {
 
     // Live realtime transcription — connect in the background so recording
     // starts instantly; the batch fallback covers it if realtime never connects.
-    this.rt = new RealtimeTranscriber(this.stream, (t) => {
-      this.live = t
-      this.onPartial(t)
-    })
+    this.rt = new RealtimeTranscriber(
+      this.stream,
+      (t) => {
+        this.live = t
+        this.onPartial(t)
+      },
+      () => this.onLive(),
+    )
     this.rt.start().catch(() => {
       if (this.rt) this.rt.failed = true
     })

@@ -35,6 +35,7 @@ function MicIcon() {
 export default function SpeakingTask({ question, challengeNumber, challengeId, student }: SpeakingTaskProps) {
   const [supported, setSupported] = useState(true)
   const [recording, setRecording] = useState(false)
+  const [live, setLive] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [loading, setLoading] = useState(false)
@@ -73,7 +74,8 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
       setSupported(false)
       return
     }
-    const session = new LiveSession((t) => setTranscript(t))
+    setLive(false)
+    const session = new LiveSession({ onPartial: (t) => setTranscript(t), onLive: () => setLive(true) })
     sessionRef.current = session
     setTranscript('')
     try {
@@ -91,6 +93,7 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
     if (!session) return
     sessionRef.current = null
     setRecording(false)
+    setLive(false)
     setTranscribing(true)
     const text = await session.stop()
     setTranscribing(false)
@@ -194,6 +197,12 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
                 ? 'جارٍ التسجيل… اضغط للإيقاف'
                 : 'اضغط لبدء التسجيل'}
           </p>
+          {recording && live && (
+            <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-[#FEE2E2] px-2.5 py-0.5 text-[11px] font-bold text-[#DC2626]">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-[#DC2626]" />
+              مباشر
+            </span>
+          )}
           {!isAdmin && (
             <p className="mt-1 text-[12px] font-semibold text-[#a39ec0]">
               المحاولات المتبقية: {toArabicDigits(Math.max(0, MAX_TRIALS - trialsUsed))}
