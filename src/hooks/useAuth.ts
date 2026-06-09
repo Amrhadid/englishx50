@@ -21,6 +21,13 @@ export function useAuth() {
 
   const signOut = async () => {
     if (supabase) await supabase.auth.signOut()
+    // Clear the activity identity so it doesn't carry over to the next account
+    // signing in on this browser.
+    try {
+      localStorage.removeItem('x50_user')
+    } catch {
+      /* ignore */
+    }
     setUser(null)
   }
 

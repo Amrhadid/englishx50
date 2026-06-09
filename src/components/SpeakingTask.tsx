@@ -43,11 +43,13 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<SpeakingResult | null>(null)
   const sessionRef = useRef<LiveSession | null>(null)
-  const taskId = challengeTaskId(challengeId, challengeNumber)
 
   // Every user gets MAX_TRIALS grading attempts per task; the admin is unlimited.
+  // Saved attempts/trials are scoped to the account so they never leak between
+  // accounts on the same browser.
   const { user } = useAuth()
   const isAdmin = isAdminEmail(user?.email)
+  const taskId = challengeTaskId(user?.id, challengeId, challengeNumber)
   const [trialsUsed, setTrialsUsed] = useState(() => getTrials(taskId))
   const canTry = isAdmin || trialsUsed < MAX_TRIALS
 

@@ -44,6 +44,18 @@ export function useOnboarding() {
     refetch()
   }, [refetch])
 
+  // Keep the activity identity in sync with the signed-in account (matches the
+  // code's used_by so the admin Students view attributes activity correctly).
+  useEffect(() => {
+    if (student?.name) {
+      try {
+        localStorage.setItem('x50_user', `${student.name} - ${student.job ?? ''}`.trim())
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [student])
+
   const needsOnboarding = !!user && !loading && student === null
   const needsCode = !!user && !loading && student !== null && !student.code
   const daysLeft = student?.code_redeemed_at

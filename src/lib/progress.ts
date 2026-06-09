@@ -44,13 +44,26 @@ export function incrementTrials(taskId: string | null): number {
   return next
 }
 
-/** Stable id for the level test (pre task). */
-export const LEVEL_TEST_TASK_ID = 'level_test'
+// Keys are scoped to the signed-in account so saved attempts/trials never leak
+// between accounts sharing the same browser (localStorage is per-device).
+function scope(userId: string | null | undefined): string {
+  return userId ?? 'anon'
+}
 
-/** Stable id for a challenge speaking task (prefers the row id, falls back to number). */
-export function challengeTaskId(challengeId?: string, challengeNumber?: number): string | null {
-  if (challengeId) return `challenge_${challengeId}`
-  if (challengeNumber != null) return `challenge_${challengeNumber}`
+/** Stable, per-user id for the level test (pre task). */
+export function levelTestTaskId(userId: string | null | undefined): string {
+  return `${scope(userId)}:level_test`
+}
+
+/** Per-user id for a challenge speaking task (prefers the row id, falls back to number). */
+export function challengeTaskId(
+  userId: string | null | undefined,
+  challengeId?: string,
+  challengeNumber?: number,
+): string | null {
+  const s = scope(userId)
+  if (challengeId) return `${s}:challenge_${challengeId}`
+  if (challengeNumber != null) return `${s}:challenge_${challengeNumber}`
   return null
 }
 

@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { reportFunctionError } from '../lib/functionError'
 import { invokeFeedback, normalizeFeedback } from '../lib/grading'
 import {
-  LEVEL_TEST_TASK_ID,
+  levelTestTaskId,
   getAttempt,
   saveAttempt,
   getTrials,
@@ -152,9 +152,11 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
   const [rejectMsg, setRejectMsg] = useState<string | null>(null)
 
   // Every user gets MAX_TRIALS grading attempts; the admin is unlimited.
+  // Scoped to the account so attempts/trials never leak between accounts.
   const { user } = useAuth()
   const isAdmin = isAdminEmail(user?.email)
-  const [trialsUsed, setTrialsUsed] = useState(() => getTrials(LEVEL_TEST_TASK_ID))
+  const taskId = levelTestTaskId(user?.id)
+  const [trialsUsed, setTrialsUsed] = useState(() => getTrials(taskId))
   const canTry = isAdmin || trialsUsed < MAX_TRIALS
 
   useEffect(() => {
@@ -168,7 +170,7 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
   // Restore a previously completed attempt: reopening the pre task shows the
   // saved transcript + the same feedback instead of the recording UI.
   useEffect(() => {
-    const saved = getAttempt(LEVEL_TEST_TASK_ID)
+    const saved = getAttempt(taskId)
     if (saved && (saved.outcome === 'passed' || saved.outcome === 'failed')) {
       setTranscript(saved.transcript)
       setResult(saved.result)
@@ -289,8 +291,8 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     const finalOutcome: Outcome = mapped.passed ? 'passed' : 'failed'
     setResult(mapped)
     setOutcome(finalOutcome)
-    saveAttempt(LEVEL_TEST_TASK_ID, { transcript: text, result: mapped, outcome: finalOutcome })
-    if (!isAdmin) setTrialsUsed(incrementTrials(LEVEL_TEST_TASK_ID))
+    saveAttempt(taskId, { transcript: text, result: mapped, outcome: finalOutcome })
+    if (!isAdmin) setTrialsUsed(incrementTrials(taskId))
   }
 
   const retry = () => {

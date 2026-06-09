@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
 import { toArabicDigits } from '../lib/theme'
-import { normalizeFeedback } from '../lib/grading'
 import { challengeTaskId, getAttempt } from '../lib/progress'
+import { useAuth } from '../hooks/useAuth'
 import FeedbackView from './FeedbackView'
 import type { Challenge, SpeakingResult } from '../types'
 
@@ -20,56 +19,21 @@ function CloseIcon() {
 }
 
 export default function FeedbackModal({ challenge, onClose }: FeedbackModalProps) {
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [result, setResult] = useState<SpeakingResult | null>(null)
   const [transcript, setTranscript] = useState('')
 
   useEffect(() => {
-    let active = true
-
-    // Primary source: the attempt this browser saved when the student completed
-    // the speaking task — shows the exact same feedback they received.
-    const saved = getAttempt(challengeTaskId(challenge.id, challenge.number))
+    // Show only THIS account's saved attempt for this task (scoped per user, so
+    // feedback never leaks between accounts on the same browser).
+    const saved = getAttempt(challengeTaskId(user?.id, challenge.id, challenge.number))
     if (saved) {
       setResult(saved.result)
       setTranscript(saved.transcript)
-      setLoading(false)
-      return
     }
-
-    // Fallback: look up the latest stored submission for this challenge.
-    let student: string | null = null
-    try {
-      student = localStorage.getItem('x50_user')
-    } catch {
-      student = null
-    }
-    if (!supabase || !student) {
-      setLoading(false)
-      return
-    }
-
-    supabase
-      .from('x50_submissions')
-      .select('*')
-      .eq('student', student)
-      .eq('challenge_number', challenge.number)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .then(({ data }) => {
-        if (!active) return
-        const row = (data ?? [])[0] as Record<string, unknown> | undefined
-        if (row) {
-          setResult(normalizeFeedback(row))
-          if (typeof row.transcript === 'string') setTranscript(row.transcript)
-        }
-        setLoading(false)
-      })
-
-    return () => {
-      active = false
-    }
-  }, [challenge.id, challenge.number])
+    setLoading(false)
+  }, [user?.id, challenge.id, challenge.number])
 
   return (
     <div
