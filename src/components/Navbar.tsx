@@ -58,6 +58,14 @@ export default function Navbar({ onStart }: NavbarProps) {
           </button>
 
           {hasWindow && <DaysLeftBadge daysLeft={daysLeft} />}
+          {hasWindow && daysLeft <= 0 && (
+            <button
+              onClick={onStart}
+              className="rounded-full bg-[#993C1D] px-4 py-2.5 text-sm font-extrabold text-white transition hover:brightness-110"
+            >
+              تجديد الاشتراك
+            </button>
+          )}
 
           {user ? (
             <div className="flex items-center gap-2">
