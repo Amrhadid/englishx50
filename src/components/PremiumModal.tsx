@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { BRAND_GRADIENT } from '../lib/theme'
 import { supabase } from '../lib/supabase'
-import { setPremium, markPremiumActivated } from '../lib/premium'
+import { redeemCode } from '../lib/redeem'
+import { useAuth } from '../hooks/useAuth'
+import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import type { Code } from '../types'
 
 interface PremiumModalProps {
@@ -89,7 +91,17 @@ function YesNoSelector({
 }
 
 export default function PremiumModal({ onClose }: PremiumModalProps) {
+  const { user } = useAuth()
+  const { refetch } = useOnboardingContext()
   const [view, setView] = useState<'features' | 'join' | 'redeem'>('features')
+
+  const signInWithGoogle = () => {
+    if (!supabase) return
+    supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    })
+  }
 
   // Code redemption
   const [code, setCode] = useState('')
@@ -136,6 +148,12 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
   }
 
   const submitCode = async () => {
+    // Redemption is tied to a Google account (durable across devices, not
+    // shareable), so a code can only be activated while signed in.
+    if (!user) {
+      setCodeMsg({ ok: false, text: 'سجّل الدخول بحساب Google أولاً لتفعيل الكود' })
+      return
+    }
     const value = code.trim()
     if (!value) {
       setCodeMsg({ ok: false, text: 'أدخل كود الاشتراك أولاً' })
@@ -171,8 +189,12 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
     setView('redeem')
   }
 
-  // Finalize: store the user's name/job, mark the code used, and unlock premium.
+  // Finalize: bind the code to the signed-in account (DB) and unlock premium.
   const confirmActivation = async () => {
+    if (!user) {
+      setCodeMsg({ ok: false, text: 'سجّل الدخول بحساب Google أولاً' })
+      return
+    }
     if (!redeemName.trim() || !redeemJob.trim()) {
       setCodeMsg({ ok: false, text: 'من فضلك أكمل الاسم والوظيفة' })
       return
@@ -181,36 +203,42 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
       setCodeMsg({ ok: false, text: 'يجب الموافقة على الشروط والأحكام للمتابعة' })
       return
     }
-    if (!supabase || !validatedCode) {
+    if (!validatedCode) {
       setCodeMsg({ ok: false, text: 'تعذّر التفعيل الآن، حاول لاحقاً' })
       return
     }
     setVerifying(true)
     setCodeMsg(null)
 
-    const identity = `${redeemName.trim()} - ${redeemJob.trim()}`
-    // Mark used only if still unused (guards against a race on the same code).
-    const { data, error } = await supabase
-      .from('x50_codes')
-      .update({ used_at: new Date().toISOString(), used_by: identity })
-      .eq('id', validatedCode.id)
-      .is('used_at', null)
-      .select()
+    const result = await redeemCode({
+      userId: user.id,
+      code: validatedCode.code,
+      name: redeemName.trim(),
+      job: redeemJob.trim(),
+    })
 
-    if (error || !data || data.length === 0) {
+    if (!result.ok) {
       setVerifying(false)
-      setCodeMsg({ ok: false, text: 'هذا الكود مستخدم بالفعل، حاول بكود آخر' })
+      setCodeMsg({
+        ok: false,
+        text:
+          result.reason === 'used'
+            ? 'هذا الكود مستخدم بالفعل، حاول بكود آخر'
+            : result.reason === 'invalid'
+              ? 'كود غير صحيح'
+              : 'تعذّر التفعيل الآن، حاول لاحقاً',
+      })
       return
     }
 
+    // Mirror the identity for activity logging (Students view groups by it).
     try {
-      localStorage.setItem(USER_KEY, identity)
+      localStorage.setItem(USER_KEY, `${redeemName.trim()} - ${redeemJob.trim()}`)
     } catch {
       /* ignore storage errors */
     }
 
-    setPremium(true)
-    markPremiumActivated()
+    await refetch()
     setVerifying(false)
     setActivated(true)
   }
@@ -368,35 +396,52 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
                 <span className="h-px flex-1 bg-[#efeafc]" />
               </div>
 
-              {/* Code entry */}
-              <div className="flex gap-2">
-                <input
-                  value={code}
-                  onChange={(e) => {
-                    setCode(e.target.value)
-                    setCodeMsg(null)
-                  }}
-                  onKeyDown={(e) => e.key === 'Enter' && submitCode()}
-                  placeholder="أدخل كود الاشتراك هنا..."
-                  className="flex-1 rounded-2xl border border-[#ece7fb] bg-[#faf9ff] px-4 py-3 text-[13px] text-right outline-none transition focus:border-[#7C6FF0] focus:bg-white"
-                />
-                <button
-                  onClick={submitCode}
-                  disabled={verifying}
-                  className="shrink-0 rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-lg shadow-[#A964F0]/30 transition hover:-translate-y-0.5 disabled:opacity-60"
-                  style={{ background: BRAND_GRADIENT }}
-                >
-                  {verifying ? '...' : 'افتح'}
-                </button>
-              </div>
-              {codeMsg && (
-                <p
-                  className={`mt-2 text-center text-[12px] font-semibold ${
-                    codeMsg.ok ? 'text-[#0C7C62]' : 'text-[#C2410C]'
-                  }`}
-                >
-                  {codeMsg.text}
-                </p>
+              {/* Code entry — requires sign-in (premium binds to the account) */}
+              {user ? (
+                <>
+                  <div className="flex gap-2">
+                    <input
+                      value={code}
+                      onChange={(e) => {
+                        setCode(e.target.value)
+                        setCodeMsg(null)
+                      }}
+                      onKeyDown={(e) => e.key === 'Enter' && submitCode()}
+                      placeholder="أدخل كود الاشتراك هنا..."
+                      className="flex-1 rounded-2xl border border-[#ece7fb] bg-[#faf9ff] px-4 py-3 text-[13px] text-right outline-none transition focus:border-[#7C6FF0] focus:bg-white"
+                    />
+                    <button
+                      onClick={submitCode}
+                      disabled={verifying}
+                      className="shrink-0 rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-lg shadow-[#A964F0]/30 transition hover:-translate-y-0.5 disabled:opacity-60"
+                      style={{ background: BRAND_GRADIENT }}
+                    >
+                      {verifying ? '...' : 'افتح'}
+                    </button>
+                  </div>
+                  {codeMsg && (
+                    <p
+                      className={`mt-2 text-center text-[12px] font-semibold ${
+                        codeMsg.ok ? 'text-[#0C7C62]' : 'text-[#C2410C]'
+                      }`}
+                    >
+                      {codeMsg.text}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={signInWithGoogle}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#e7e3ff] bg-white py-3 text-sm font-extrabold text-[#1b1730] transition hover:bg-[#f1edff]"
+                  >
+                    <span className="text-base">🔑</span>
+                    الدخول بـ Google لتفعيل الكود
+                  </button>
+                  <p className="mt-2 text-center text-[12px] text-[#a39ec0]">
+                    اشتراكك مرتبط بحسابك ويعمل على أي جهاز بعد تسجيل الدخول.
+                  </p>
+                </>
               )}
             </div>
           </>

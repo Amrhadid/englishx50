@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { isPremium } from '../lib/premium'
 import { PLACEHOLDER_REVIEWS, mergeWithPlaceholders, isPlaceholderChallenge } from '../lib/placeholders'
 import type { Challenge, Review } from '../types'
 import Navbar from '../components/Navbar'
@@ -13,11 +12,9 @@ import ComingSoonModal from '../components/ComingSoonModal'
 import FeedbackModal from '../components/FeedbackModal'
 import SpeakingModal from '../components/SpeakingModal'
 import LessonModal from '../components/LessonModal'
-import OnboardingModal from '../components/OnboardingModal'
 import Reviews from '../components/Reviews'
 import { OnboardingProvider } from '../context/OnboardingContext'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
-import { useAuth } from '../hooks/useAuth'
 
 export default function Landing() {
   return (
@@ -28,21 +25,19 @@ export default function Landing() {
 }
 
 function LandingInner() {
-  const { user } = useAuth()
-  const { needsOnboarding, needsCode, student, daysLeft } = useOnboardingContext()
+  const { premiumActive } = useOnboardingContext()
 
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
   const [showPremium, setShowPremium] = useState(false)
-  const [showOnboarding, setShowOnboarding] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<Challenge | null>(null)
   const [speakingFor, setSpeakingFor] = useState<Challenge | null>(null)
   const [lessonFor, setLessonFor] = useState<Challenge | null>(null)
   const [comingSoonFor, setComingSoonFor] = useState<Challenge | null>(null)
 
-  // A visitor is premium if they unlocked in this browser or their signed-in
-  // account already redeemed a code.
-  const premium = isPremium() || (!!student?.code && daysLeft > 0)
+  // Premium is DB-driven and tied to the signed-in account (redeemed code within
+  // its 100-day window).
+  const premium = premiumActive
 
   useEffect(() => {
     let active = true
@@ -75,14 +70,9 @@ function LandingInner() {
   }, [])
 
   // Gate for locked actions (clicking a challenge or the level test) and the
-  // "ابدأ التحدي" CTAs. The popup only opens on an explicit click — never
-  // automatically on page load. Signed-in users who still need to fill their
-  // info / redeem a code get the onboarding popup; everyone else gets the
-  // premium-features popup (which also has code entry + subscribe).
-  const requireAccess = () => {
-    if (user && (needsOnboarding || needsCode)) setShowOnboarding(true)
-    else setShowPremium(true)
-  }
+  // "ابدأ التحدي" CTAs. Opens the premium popup, which handles Google sign-in +
+  // account-bound code activation. Only ever opens on an explicit click.
+  const requireAccess = () => setShowPremium(true)
   const start = requireAccess
 
   // Single gate for every challenge action:
@@ -109,7 +99,6 @@ function LandingInner() {
 
   return (
       <div className="min-h-screen bg-white">
-        <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} />
         <Navbar onStart={start} />
       <Hero onStart={start} />
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { isPremium } from '../lib/premium'
+import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { toArabicDigits } from '../lib/theme'
 import type { Challenge } from '../types'
 
@@ -42,8 +42,8 @@ function CloseIcon() {
 }
 
 export default function LessonModal({ challenge, onClose }: LessonModalProps) {
-  const premium = isPremium()
-  const uid = premium ? (challenge.video_url ?? '').trim() : ''
+  const { premiumActive } = useOnboardingContext()
+  const uid = premiumActive ? (challenge.video_url ?? '').trim() : ''
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const rowIdRef = useRef<string | null>(null)
   const maxPctRef = useRef(0)
@@ -128,7 +128,7 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
               allowFullScreen
             />
           </div>
-        ) : !premium ? (
+        ) : !premiumActive ? (
           <div className="rounded-2xl bg-[#f1edff] p-8 text-center">
             <p className="mb-2 text-3xl">🔒</p>
             <p className="text-sm font-bold text-[#473BBE]">هذا الدرس متاح للمشتركين فقط</p>

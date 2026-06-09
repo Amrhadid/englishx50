@@ -6,6 +6,7 @@ export interface OnboardingContextValue {
   needsOnboarding: boolean
   needsCode: boolean
   daysLeft: number
+  premiumActive: boolean
   student: ReturnType<typeof useOnboarding>['student']
   refetch: () => Promise<void>
   loading: boolean

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { isPremium } from '../lib/premium'
 import { reportFunctionError } from '../lib/functionError'
 import { invokeFeedback, normalizeFeedback } from '../lib/grading'
 import {
@@ -43,14 +42,12 @@ function countSentences(text: string): number {
 
 export default function LevelTest({ onUpgrade }: { onUpgrade?: () => void }) {
   const [open, setOpen] = useState(false)
-  const { student, daysLeft } = useOnboardingContext()
+  const { premiumActive } = useOnboardingContext()
 
-  // The level test (Pre task) is premium-only. A visitor counts as premium if
-  // they unlocked in this browser (isPremium) OR they're a signed-in user whose
-  // account already has a redeemed code — otherwise returning premium users on
-  // a fresh browser would wrongly see the upgrade popup. Non-premium visitors
-  // still see the card, but tapping it opens the upgrade popup instead.
-  const premium = isPremium() || (!!student?.code && daysLeft > 0)
+  // The level test (Pre task) is premium-only. Premium is DB-driven: the
+  // signed-in account has a redeemed code within its 100-day window. Non-premium
+  // visitors still see the card, but tapping it opens the upgrade popup.
+  const premium = premiumActive
 
   const handleStart = () => {
     if (premium) setOpen(true)

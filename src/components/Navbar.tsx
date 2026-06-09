@@ -4,7 +4,6 @@ import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import DaysLeftBadge from './DaysLeftBadge'
 import { supabase } from '../lib/supabase'
 import { isAdminEmail } from '../lib/admin'
-import { getPremiumDaysLeft } from '../lib/premium'
 
 interface NavbarProps {
   onStart: () => void
@@ -12,13 +11,11 @@ interface NavbarProps {
 
 export default function Navbar({ onStart }: NavbarProps) {
   const { user, signOut } = useAuth()
-  const { needsOnboarding, needsCode, daysLeft, student } = useOnboardingContext()
+  const { daysLeft, student } = useOnboardingContext()
 
-  // Show the days-left badge to anyone with a premium window (including after it
-  // expires, so it reads "انتهى اشتراكك"). Not gated on isPremium(), which
-  // auto-locks at day 100.
-  const premiumDays = getPremiumDaysLeft()
-  const hasWindow = premiumDays != null || (!!student?.code && !needsOnboarding && !needsCode)
+  // Show the days-left badge to a signed-in account that redeemed a code
+  // (including after expiry, so it reads "انتهى اشتراكك"). DB-driven.
+  const hasWindow = !!student?.code
 
   const signInWithGoogle = () => {
     if (!supabase) return
@@ -60,7 +57,7 @@ export default function Navbar({ onStart }: NavbarProps) {
             ابدأ التحدي
           </button>
 
-          {hasWindow && <DaysLeftBadge daysLeft={premiumDays ?? daysLeft} />}
+          {hasWindow && <DaysLeftBadge daysLeft={daysLeft} />}
 
           {user ? (
             <div className="flex items-center gap-2">

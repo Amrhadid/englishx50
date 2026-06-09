@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from './useAuth'
 import { supabase } from '../lib/supabase'
-import { setPremium, markPremiumActivated } from '../lib/premium'
 import type { Student } from '../types'
 
 const PROGRAM_DAYS = 100
@@ -45,24 +44,17 @@ export function useOnboarding() {
     refetch()
   }, [refetch])
 
-  // Keep the client-side premium flag in sync for returning users: a signed-in
-  // account that already redeemed a code is premium even on a fresh browser
-  // where the flag was never set. Only ever sets it true — never clears an
-  // anonymous unlock (a code redeemed without signing in).
-  useEffect(() => {
-    if (student?.code) {
-      setPremium(true)
-      // Anchor the 100-day window to the account's redemption date so expiry is
-      // enforced consistently (isPremium auto-locks at day 100).
-      if (student.code_redeemed_at) markPremiumActivated(new Date(student.code_redeemed_at))
-    }
-  }, [student])
-
   const needsOnboarding = !!user && !loading && student === null
   const needsCode = !!user && !loading && student !== null && !student.code
   const daysLeft = student?.code_redeemed_at
     ? PROGRAM_DAYS - daysSince(student.code_redeemed_at)
     : 0
 
-  return { needsOnboarding, needsCode, daysLeft, student, refetch, loading }
+  // Premium is now DB-driven and tied to the signed-in account: active only
+  // while a redeemed code's 100-day window is still open. Durable across
+  // devices / cache clears (re-evaluated from the DB on sign-in) and not
+  // shareable (a used code can't be redeemed by another account).
+  const premiumActive = !!student?.code && daysLeft > 0
+
+  return { needsOnboarding, needsCode, daysLeft, premiumActive, student, refetch, loading }
 }
