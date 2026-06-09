@@ -11,6 +11,7 @@ interface ChallengesProps {
   onWatch: (challenge: Challenge) => void
   onSource: (challenge: Challenge) => void
   onUpgrade: () => void
+  lockLabelFor?: (challenge: Challenge) => string | null
 }
 
 function PlayIcon() {
@@ -83,6 +84,7 @@ function ChallengeRow({
   challenge,
   index,
   id,
+  lockLabel,
   onSelect,
   onFeedback,
   onSpeak,
@@ -92,6 +94,7 @@ function ChallengeRow({
   challenge: Challenge
   index: number
   id?: string
+  lockLabel?: string | null
   onSelect: () => void
   onFeedback: () => void
   onSpeak: () => void
@@ -140,6 +143,11 @@ function ChallengeRow({
           <h3 className="text-[22px] font-black leading-tight text-[#1b1730]">
             {challenge.title || `التحدي ${toArabicDigits(challenge.number)}`}
           </h3>
+          {lockLabel && (
+            <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-[#FEEFD2] px-3 py-1 text-[12px] font-bold text-[#A66A09]">
+              {lockLabel}
+            </span>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-2.5">
@@ -176,6 +184,7 @@ export default function Challenges({
   onWatch,
   onSource,
   onUpgrade,
+  lockLabelFor,
 }: ChallengesProps) {
   return (
     <section id="challenges">
@@ -240,6 +249,7 @@ export default function Challenges({
               challenge={c}
               index={i}
               id={i === 0 ? 'challenge-1' : undefined}
+              lockLabel={lockLabelFor?.(c)}
               onSelect={() => onSelect(c)}
               onFeedback={() => onFeedback(c)}
               onSpeak={() => onSpeak(c)}

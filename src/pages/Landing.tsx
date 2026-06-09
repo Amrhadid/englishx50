@@ -18,6 +18,9 @@ import LessonModal from '../components/LessonModal'
 import Reviews from '../components/Reviews'
 import { OnboardingProvider } from '../context/OnboardingContext'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
+import { useAuth } from '../hooks/useAuth'
+import { isAdminEmail } from '../lib/admin'
+import { toArabicDigits } from '../lib/theme'
 
 export default function Landing() {
   return (
@@ -29,6 +32,8 @@ export default function Landing() {
 
 function LandingInner() {
   const { premiumActive, progress } = useOnboardingContext()
+  const { user } = useAuth()
+  const isAdmin = isAdminEmail(user?.email)
 
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
@@ -93,12 +98,27 @@ function LandingInner() {
   //  - premium, not-yet-added challenge → "Next Week" coming-soon popup
   //  - premium, real challenge          → run the action (watch/source/speak/…)
   const gateChallenge = (c: Challenge, run: () => void) => {
+    // Admin previews everything: no premium gate, no cooldown.
+    if (isAdmin) {
+      if (isPlaceholderChallenge(c)) return setComingSoonFor(c)
+      return run()
+    }
     if (!premium) return requireAccess()
     if (isPlaceholderChallenge(c)) return setComingSoonFor(c)
     // Sequential 5-day cooldown: must finish the previous challenge + wait.
     const lock = challengeLockState(c, realNumbers, progress)
     if (lock.locked) return setLockedFor({ challenge: c, lock })
     run()
+  }
+
+  // Label shown on a locked challenge card (premium, non-admin users only).
+  const lockLabelFor = (c: Challenge): string | null => {
+    if (isAdmin || !premium || isPlaceholderChallenge(c)) return null
+    const lock = challengeLockState(c, realNumbers, progress)
+    if (!lock.locked) return null
+    return lock.reason === 'cooldown'
+      ? `🔒 متاح بعد ${toArabicDigits(lock.daysLeft)} يوم`
+      : '🔒 أكمل التحدي السابق'
   }
 
   // Always render the full set of slots: real challenges by number, locked
@@ -137,6 +157,7 @@ function LandingInner() {
           )
         }
         onUpgrade={() => requireAccess()}
+        lockLabelFor={lockLabelFor}
       />
       <Countdown onStart={start} />
       <Reviews reviews={displayedReviews} />
