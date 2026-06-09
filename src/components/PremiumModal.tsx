@@ -20,6 +20,20 @@ const FEATURES = [
   { emoji: '🏆', title: 'متابعة حتى النهاية', desc: 'التزام للنهاية = نتيجة مضمونة إن شاء الله' },
 ]
 
+const TERMS = [
+  'بالتسجيل في EnglishX50، أنت توافق على الالتزام بالتحديات الـ50 يومًا كاملة.',
+  'الكود الخاص بك صالح لمدة 100 يوم من تاريخ تفعيله ولا يمكن نقله لشخص آخر.',
+  'المحتوى التعليمي (الفيديوهات والتحديات) مخصص للاستخدام الشخصي فقط ولا يجوز مشاركته.',
+  'يتم حفظ تسجيلاتك الصوتية لتحليلها بالذكاء الاصطناعي وتقديم التغذية الراجعة لك.',
+  'لا يوجد استرداد للمبلغ بعد تفعيل الكود.',
+  'يحق للإدارة إلغاء حسابك في حال ثبت إساءة استخدام المنصة.',
+  'التقدم في التحديات يعتمد على أدائك الفعلي — لا يمكن تخطي تحدٍّ دون إكماله.',
+  'بيانات حسابك (الاسم، الهاتف، الجامعة) تُستخدم فقط لأغراض المنصة ولا تُشارك مع أطراف خارجية.',
+  'EnglishX50 غير مسؤولة عن أي انقطاع في الخدمة بسبب ظروف خارجة عن إرادتها.',
+  'تحتفظ الإدارة بحق تعديل هذه الشروط في أي وقت مع إشعار المستخدمين مسبقًا.',
+  'بعد انتهاء الـ100 يوم لا يوجد أي استثناء أو تمديد تحت أي ظرف كان.',
+]
+
 type YesNo = 'yes' | 'no' | null
 
 function CloseIcon() {
@@ -75,12 +89,19 @@ function YesNoSelector({
 }
 
 export default function PremiumModal({ onClose }: PremiumModalProps) {
-  const [view, setView] = useState<'features' | 'join'>('features')
+  const [view, setView] = useState<'features' | 'join' | 'redeem'>('features')
 
   // Code redemption
   const [code, setCode] = useState('')
   const [verifying, setVerifying] = useState(false)
   const [codeMsg, setCodeMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [validatedCode, setValidatedCode] = useState<Code | null>(null)
+
+  // Activation form (after a valid code)
+  const [redeemName, setRedeemName] = useState('')
+  const [redeemJob, setRedeemJob] = useState('')
+  const [agreed, setAgreed] = useState(false)
+  const [activated, setActivated] = useState(false)
 
   // Join form
   const [name, setName] = useState('')
@@ -143,21 +164,54 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
       return
     }
 
-    let usedBy: string | null = null
-    try {
-      usedBy = localStorage.getItem(USER_KEY)
-    } catch {
-      usedBy = null
+    // Valid code — collect the user's details and agreement before activating.
+    setVerifying(false)
+    setCodeMsg(null)
+    setValidatedCode(found)
+    setView('redeem')
+  }
+
+  // Finalize: store the user's name/job, mark the code used, and unlock premium.
+  const confirmActivation = async () => {
+    if (!redeemName.trim() || !redeemJob.trim()) {
+      setCodeMsg({ ok: false, text: 'من فضلك أكمل الاسم والوظيفة' })
+      return
+    }
+    if (!agreed) {
+      setCodeMsg({ ok: false, text: 'يجب الموافقة على الشروط والأحكام للمتابعة' })
+      return
+    }
+    if (!supabase || !validatedCode) {
+      setCodeMsg({ ok: false, text: 'تعذّر التفعيل الآن، حاول لاحقاً' })
+      return
+    }
+    setVerifying(true)
+    setCodeMsg(null)
+
+    const identity = `${redeemName.trim()} - ${redeemJob.trim()}`
+    // Mark used only if still unused (guards against a race on the same code).
+    const { data, error } = await supabase
+      .from('x50_codes')
+      .update({ used_at: new Date().toISOString(), used_by: identity })
+      .eq('id', validatedCode.id)
+      .is('used_at', null)
+      .select()
+
+    if (error || !data || data.length === 0) {
+      setVerifying(false)
+      setCodeMsg({ ok: false, text: 'هذا الكود مستخدم بالفعل، حاول بكود آخر' })
+      return
     }
 
-    await supabase
-      .from('x50_codes')
-      .update({ used_at: new Date().toISOString(), used_by: usedBy })
-      .eq('id', found.id)
+    try {
+      localStorage.setItem(USER_KEY, identity)
+    } catch {
+      /* ignore storage errors */
+    }
 
     setPremium(true)
     setVerifying(false)
-    setCodeMsg({ ok: true, text: 'تم تفعيل حسابك ✓ يمكنك الآن فتح الفيديوهات. بالتوفيق!' })
+    setActivated(true)
   }
 
   return (
@@ -181,7 +235,7 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
           >
             <CloseIcon />
           </button>
-          {view === 'join' && (
+          {(view === 'join' || (view === 'redeem' && !activated)) && (
             <button
               onClick={() => setView('features')}
               aria-label="رجوع"
@@ -191,19 +245,95 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
             </button>
           )}
           <span className="relative mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 text-3xl backdrop-blur">
-            {view === 'features' ? '✨' : '📝'}
+            {activated ? '🎉' : view === 'features' ? '✨' : view === 'join' ? '📝' : '🔑'}
           </span>
           <h2 className="relative text-[22px] font-black text-white">
-            {view === 'features' ? 'مميزات تحدي ٥٠ يوم' : 'أكمل بياناتك للانضمام'}
+            {activated
+              ? 'تم تفعيل حسابك'
+              : view === 'features'
+                ? 'مميزات تحدي ٥٠ يوم'
+                : view === 'join'
+                  ? 'أكمل بياناتك للانضمام'
+                  : 'تفعيل حسابك'}
           </h2>
           <p className="relative mt-1 text-[13px] font-semibold text-white/90">
-            {view === 'features'
-              ? 'كل اللي تحتاجه عشان تتحدث الإنجليزية بثقة'
-              : 'بياناتك تساعدنا نخدمك بشكل أفضل'}
+            {activated
+              ? 'يمكنك الآن البدء في التحديات 🎯'
+              : view === 'features'
+                ? 'كل اللي تحتاجه عشان تتحدث الإنجليزية بثقة'
+                : view === 'join'
+                  ? 'بياناتك تساعدنا نخدمك بشكل أفضل'
+                  : 'أكمل بياناتك ووافق على الشروط لتفعيل الكود'}
           </p>
         </div>
 
-        {view === 'features' ? (
+        {activated ? (
+          <div className="px-6 py-8 text-center">
+            <p className="mb-2 text-5xl">✅</p>
+            <p className="mb-1 text-lg font-extrabold text-[#1b1730]">أهلاً {redeemName.trim()}!</p>
+            <p className="mb-6 text-[14px] text-[#7a7596]">
+              تم تفعيل اشتراكك بنجاح. كودك صالح لمدة ١٠٠ يوم من الآن. بالتوفيق! 💪
+            </p>
+            <button
+              onClick={onClose}
+              className="w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5"
+              style={{ background: BRAND_GRADIENT }}
+            >
+              ابدأ الآن ←
+            </button>
+          </div>
+        ) : view === 'redeem' ? (
+          <div className="px-5 py-5">
+            <input
+              value={redeemName}
+              onChange={(e) => setRedeemName(e.target.value)}
+              placeholder="الاسم"
+              className={input}
+              autoFocus
+            />
+            <input
+              value={redeemJob}
+              onChange={(e) => setRedeemJob(e.target.value)}
+              placeholder="الوظيفة"
+              className={input}
+            />
+
+            <p className="mb-2 mt-1 text-[13px] font-bold text-[#1b1730]">الشروط والأحكام</p>
+            <div className="mb-3 max-h-48 overflow-y-auto rounded-2xl border border-[#ece7fb] bg-[#faf9ff] p-3.5">
+              <ul className="space-y-2">
+                {TERMS.map((t, i) => (
+                  <li key={i} className="flex gap-2 text-[12.5px] leading-relaxed text-[#5b5670]">
+                    <span className="text-[#7C6FF0]">•</span>
+                    <span>{t}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <label className="mb-3 flex cursor-pointer items-start gap-2.5 text-[13px] font-semibold text-[#1b1730]">
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={(e) => setAgreed(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-[#7C6FF0]"
+              />
+              <span>قرأت ووافقت على جميع الشروط والأحكام أعلاه</span>
+            </label>
+
+            {codeMsg && !codeMsg.ok && (
+              <p className="mb-2 text-center text-[12px] font-semibold text-[#C2410C]">{codeMsg.text}</p>
+            )}
+
+            <button
+              onClick={confirmActivation}
+              disabled={verifying || !redeemName.trim() || !redeemJob.trim() || !agreed}
+              className="w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg shadow-[#A964F0]/30 transition hover:-translate-y-0.5 disabled:opacity-60"
+              style={{ background: BRAND_GRADIENT }}
+            >
+              {verifying ? 'جارٍ التفعيل…' : 'تفعيل حسابي'}
+            </button>
+          </div>
+        ) : view === 'features' ? (
           <>
             {/* Feature list */}
             <div className="space-y-2.5 px-5 py-5">
