@@ -7,7 +7,7 @@ import FeedbackView from '../components/FeedbackView'
 import { parseSubmission } from '../lib/grading'
 import { isAdminEmail } from '../lib/admin'
 
-type Tab = 'challenges' | 'reviews' | 'codes' | 'students'
+type Tab = 'challenges' | 'reviews' | 'codes' | 'students' | 'grading'
 
 type ChallengeForm = {
   number: string
@@ -108,7 +108,7 @@ export default function Admin() {
 
       <div className="mx-auto max-w-4xl px-5 py-6">
         <div className="mb-6 flex gap-2">
-          {(['challenges', 'reviews', 'codes', 'students'] as Tab[]).map((t) => (
+          {(['challenges', 'reviews', 'codes', 'students', 'grading'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -125,6 +125,7 @@ export default function Admin() {
         {tab === 'reviews' && <ReviewsAdmin />}
         {tab === 'codes' && <CodesAdmin />}
         {tab === 'students' && <StudentsAdmin />}
+        {tab === 'grading' && <GradingAdmin />}
       </div>
     </div>
   )
@@ -789,6 +790,104 @@ function StudentsAdmin() {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function GradingAdmin() {
+  const [gradingRules, setGradingRules] = useState('')
+  const [feedbackRules, setFeedbackRules] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+    supabase
+      .from('x50_settings')
+      .select('key,value')
+      .in('key', ['grading_rules', 'feedback_rules'])
+      .then(({ data }) => {
+        const map = new Map((data ?? []).map((r) => [r.key as string, r.value as string]))
+        setGradingRules(map.get('grading_rules') ?? '')
+        setFeedbackRules(map.get('feedback_rules') ?? '')
+        setLoading(false)
+      })
+  }, [])
+
+  const save = async () => {
+    if (!supabase) {
+      setMsg('Supabase is not configured.')
+      return
+    }
+    setBusy(true)
+    setMsg(null)
+    const now = new Date().toISOString()
+    const { error } = await supabase.from('x50_settings').upsert(
+      [
+        { key: 'grading_rules', value: gradingRules, updated_at: now },
+        { key: 'feedback_rules', value: feedbackRules, updated_at: now },
+      ],
+      { onConflict: 'key' },
+    )
+    setBusy(false)
+    setMsg(error ? `Error: ${error.message}` : 'Saved ✓ — new attempts will use these rules.')
+  }
+
+  const area =
+    'w-full min-h-[160px] rounded-xl border border-[#e8e0f0] px-3 py-2 text-sm leading-relaxed outline-none focus:border-[#534AB7]'
+
+  if (loading) return <p className="text-sm text-[#9a9aa2]">Loading…</p>
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <div className="rounded-2xl border border-[#f0ecf8] p-5">
+        <h3 className="mb-1 font-bold text-[#111]">AI grading rules</h3>
+        <p className="mb-3 text-xs text-[#9a9aa2]">
+          Extra instructions added to the AI scoring prompt. Use this to make grading stricter or
+          fairer — e.g. “Use the full 0–100 range; only give 70+ for genuinely strong, on-topic
+          answers; penalise short or repetitive responses.”
+        </p>
+        <textarea
+          value={gradingRules}
+          onChange={(e) => setGradingRules(e.target.value)}
+          placeholder="e.g. Be strict. Use the full 0-100 range. Below 50 for weak answers…"
+          className={area}
+        />
+      </div>
+
+      <div className="rounded-2xl border border-[#f0ecf8] p-5">
+        <h3 className="mb-1 font-bold text-[#111]">AI feedback guidelines</h3>
+        <p className="mb-3 text-xs text-[#9a9aa2]">
+          How the AI should write its feedback (tone, language, focus). e.g. “Give feedback in
+          Egyptian Arabic, be encouraging but specific, and always include 2 concrete next steps.”
+        </p>
+        <textarea
+          value={feedbackRules}
+          onChange={(e) => setFeedbackRules(e.target.value)}
+          placeholder="e.g. Feedback in simple Egyptian Arabic, warm but specific…"
+          className={area}
+        />
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={save}
+          disabled={busy}
+          className="rounded-xl bg-[#534AB7] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#46409c] disabled:opacity-60"
+        >
+          {busy ? 'Saving…' : 'Save rules'}
+        </button>
+        {msg && <p className="text-xs text-[#5b5670]">{msg}</p>}
+      </div>
+
+      <p className="text-xs text-[#9a9aa2]">
+        The grading Edge Function reads these rules server-side on every attempt, so changes take
+        effect immediately for new submissions.
+      </p>
     </div>
   )
 }

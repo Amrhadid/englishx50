@@ -32,7 +32,7 @@ You receive a TRANSCRIPT of a student's spoken answer (captured by speech-to-tex
 - mistakes: concrete grammar/vocabulary/word-order mistakes, each with the original "error" snippet and a "correction". Empty array if none.
 - vocabulary: 3-6 useful higher-level words/phrases they could have used, each with a short Arabic "meaning" and a short English "example".
 - strengths: 1-3 short specific positives in Arabic.
-- score: integer 0-100 for fluency, accuracy, and relevance.
+- score: integer 0-100 for fluency, accuracy, and relevance. Use the FULL range and differentiate honestly: 0-40 weak/very short/off-topic, 41-60 basic with clear errors, 61-75 decent, 76-89 strong, 90-100 excellent. Do NOT default to a middle score like ~70 for every answer; a mediocre or short answer must score low.
 - overall: 1-2 warm, motivating sentences in Arabic.
 
 Be fair and consistent. Never treat an off-topic answer, or one with fewer than 3 complete sentences, as a strong performance.`
@@ -91,6 +91,24 @@ function json(body: unknown, status = 200) {
   })
 }
 
+// Load admin-configured grading/feedback rules from x50_settings (service role
+// bypasses RLS). Returns empty strings if unavailable so grading still works.
+async function loadRules(): Promise<{ grading: string; feedback: string }> {
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return { grading: '', feedback: '' }
+  try {
+    const resp = await fetch(
+      `${SUPABASE_URL}/rest/v1/x50_settings?key=in.(grading_rules,feedback_rules)&select=key,value`,
+      { headers: { apikey: SERVICE_ROLE_KEY, authorization: `Bearer ${SERVICE_ROLE_KEY}` } },
+    )
+    if (!resp.ok) return { grading: '', feedback: '' }
+    const rows = (await resp.json()) as { key: string; value: string }[]
+    const map = new Map(rows.map((r) => [r.key, r.value]))
+    return { grading: (map.get('grading_rules') ?? '').trim(), feedback: (map.get('feedback_rules') ?? '').trim() }
+  } catch {
+    return { grading: '', feedback: '' }
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
@@ -112,6 +130,15 @@ Deno.serve(async (req) => {
   const question = (payload.question ?? '').trim()
   const transcript = (payload.transcript ?? '').trim()
   if (transcript.length < 2) return json({ error: 'Empty transcript' }, 400)
+
+  // --- Admin-configurable rules (set in the admin panel → Grading) ---
+  const rules = await loadRules()
+  const systemPrompt =
+    SYSTEM_PROMPT +
+    (rules.grading
+      ? `\n\nADMIN GRADING RULES (these take priority — follow strictly):\n${rules.grading}`
+      : '') +
+    (rules.feedback ? `\n\nADMIN FEEDBACK GUIDELINES:\n${rules.feedback}` : '')
 
   // --- Grade with Claude ---
   let feedback: {
@@ -135,7 +162,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 1024,
-        system: SYSTEM_PROMPT,
+        system: systemPrompt,
         messages: [
           {
             role: 'user',
