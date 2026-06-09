@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from './useAuth'
 import { supabase } from '../lib/supabase'
-import { setPremium } from '../lib/premium'
+import { setPremium, markPremiumActivated } from '../lib/premium'
 import type { Student } from '../types'
 
 const PROGRAM_DAYS = 100
@@ -50,7 +50,12 @@ export function useOnboarding() {
   // where the flag was never set. Only ever sets it true — never clears an
   // anonymous unlock (a code redeemed without signing in).
   useEffect(() => {
-    if (student?.code) setPremium(true)
+    if (student?.code) {
+      setPremium(true)
+      // Anchor the 100-day window to the account's redemption date so expiry is
+      // enforced consistently (isPremium auto-locks at day 100).
+      if (student.code_redeemed_at) markPremiumActivated(new Date(student.code_redeemed_at))
+    }
   }, [student])
 
   const needsOnboarding = !!user && !loading && student === null

@@ -8,7 +8,10 @@ const PROGRAM_DAYS = 100
 
 export function isPremium(): boolean {
   try {
-    return localStorage.getItem(KEY) === 'true'
+    if (localStorage.getItem(KEY) !== 'true') return false
+    // Auto-lock once the 100-day window is over.
+    const left = getPremiumDaysLeft()
+    return left === null ? true : left > 0
   } catch {
     return false
   }

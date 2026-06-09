@@ -29,7 +29,7 @@ export default function Landing() {
 
 function LandingInner() {
   const { user } = useAuth()
-  const { needsOnboarding, needsCode, student } = useOnboardingContext()
+  const { needsOnboarding, needsCode, student, daysLeft } = useOnboardingContext()
 
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
@@ -42,7 +42,7 @@ function LandingInner() {
 
   // A visitor is premium if they unlocked in this browser or their signed-in
   // account already redeemed a code.
-  const premium = isPremium() || !!student?.code
+  const premium = isPremium() || (!!student?.code && daysLeft > 0)
 
   useEffect(() => {
     let active = true
