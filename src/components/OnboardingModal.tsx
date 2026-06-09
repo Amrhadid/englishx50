@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { supabase } from '../lib/supabase'
-import { setPremium } from '../lib/premium'
+import { setPremium, markPremiumActivated } from '../lib/premium'
 import { CloseIcon } from './icons'
 import type { Code } from '../types'
 
@@ -130,6 +130,7 @@ export default function OnboardingModal({
       .eq('user_id', user.id)
 
     setPremium(true)
+    markPremiumActivated()
     await refetch()
     setActivating(false)
     setSuccess(true)

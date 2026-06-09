@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { BRAND_GRADIENT } from '../lib/theme'
 import { supabase } from '../lib/supabase'
-import { setPremium } from '../lib/premium'
+import { setPremium, markPremiumActivated } from '../lib/premium'
 import type { Code } from '../types'
 
 interface PremiumModalProps {
@@ -210,6 +210,7 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
     }
 
     setPremium(true)
+    markPremiumActivated()
     setVerifying(false)
     setActivated(true)
   }

@@ -4,6 +4,7 @@ import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import DaysLeftBadge from './DaysLeftBadge'
 import { supabase } from '../lib/supabase'
 import { isAdminEmail } from '../lib/admin'
+import { isPremium, getPremiumDaysLeft } from '../lib/premium'
 
 interface NavbarProps {
   onStart: () => void
@@ -12,6 +13,10 @@ interface NavbarProps {
 export default function Navbar({ onStart }: NavbarProps) {
   const { user, signOut } = useAuth()
   const { needsOnboarding, needsCode, daysLeft } = useOnboardingContext()
+
+  // Show the days-left badge to any premium user (code-box or signed-in).
+  const premium = isPremium()
+  const premiumDays = getPremiumDaysLeft()
 
   const signInWithGoogle = () => {
     if (!supabase) return
@@ -53,6 +58,10 @@ export default function Navbar({ onStart }: NavbarProps) {
             ابدأ التحدي
           </button>
 
+          {premium && (premiumDays != null || (!needsOnboarding && !needsCode)) && (
+            <DaysLeftBadge daysLeft={premiumDays ?? daysLeft} />
+          )}
+
           {user ? (
             <div className="flex items-center gap-2">
               {isAdminEmail(user.email) && (
@@ -63,7 +72,6 @@ export default function Navbar({ onStart }: NavbarProps) {
                   Admin
                 </Link>
               )}
-              {!needsOnboarding && !needsCode && <DaysLeftBadge daysLeft={daysLeft} />}
               {user.user_metadata.avatar_url && (
                 <img
                   src={user.user_metadata.avatar_url}
