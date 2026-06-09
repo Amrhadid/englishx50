@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { PLACEHOLDER_REVIEWS, mergeWithPlaceholders, isPlaceholderChallenge } from '../lib/placeholders'
+import { challengeVideos } from '../lib/challenge'
 import type { Challenge, Review } from '../types'
 import Navbar from '../components/Navbar'
 import Hero from '../components/Hero'
@@ -110,7 +111,11 @@ function LandingInner() {
         onSelect={() => requireAccess()}
         onFeedback={(c) => gateChallenge(c, () => setFeedbackFor(c))}
         onSpeak={(c) => gateChallenge(c, () => setSpeakingFor(c))}
-        onWatch={(c) => gateChallenge(c, () => (c.video_url ? setLessonFor(c) : setComingSoonFor(c)))}
+        onWatch={(c) =>
+          gateChallenge(c, () =>
+            challengeVideos(c).length ? setLessonFor(c) : setComingSoonFor(c),
+          )
+        }
         onSource={(c) =>
           gateChallenge(c, () =>
             c.pdf_url ? window.open(c.pdf_url, '_blank', 'noopener') : setComingSoonFor(c),

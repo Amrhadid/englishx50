@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
+import { challengeVideos } from '../lib/challenge'
 import { toArabicDigits } from '../lib/theme'
 import type { Challenge } from '../types'
 
@@ -43,7 +44,9 @@ function CloseIcon() {
 
 export default function LessonModal({ challenge, onClose }: LessonModalProps) {
   const { premiumActive } = useOnboardingContext()
-  const uid = premiumActive ? (challenge.video_url ?? '').trim() : ''
+  const videos = premiumActive ? challengeVideos(challenge) : []
+  const [selected, setSelected] = useState(0)
+  const uid = videos[selected]?.uid ?? ''
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const rowIdRef = useRef<string | null>(null)
   const maxPctRef = useRef(0)
@@ -51,6 +54,8 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
 
   useEffect(() => {
     if (!uid) return
+    maxPctRef.current = 0
+    rowIdRef.current = null
     let player: any = null
 
     const recordOpen = async () => {
@@ -118,16 +123,38 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
         <h2 className="mb-3 pr-12 text-lg font-extrabold text-[#1b1730]">{challenge.title}</h2>
 
         {uid ? (
-          <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
-            <iframe
-              ref={iframeRef}
-              src={`https://iframe.cloudflarestream.com/${uid}?autoplay=true&preload=auto`}
-              title={challenge.title}
-              className="absolute inset-0 h-full w-full"
-              allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-              allowFullScreen
-            />
-          </div>
+          <>
+            <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
+              <iframe
+                ref={iframeRef}
+                src={`https://iframe.cloudflarestream.com/${uid}?autoplay=true&preload=auto`}
+                title={challenge.title}
+                className="absolute inset-0 h-full w-full"
+                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                allowFullScreen
+              />
+            </div>
+            {videos.length > 1 && (
+              <div className="mt-3 flex flex-col gap-2">
+                {videos.map((v, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setSelected(i)}
+                    className={`flex items-center gap-2.5 rounded-2xl border p-3 text-right text-[13px] font-bold transition ${
+                      i === selected
+                        ? 'border-[#7C6FF0] bg-[#f1edff] text-[#534AB7]'
+                        : 'border-[#ece7fb] bg-white text-[#1b1730] hover:border-[#c4b8ff]'
+                    }`}
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#EEEDFE] text-[12px] font-extrabold text-[#534AB7]">
+                      {toArabicDigits(i + 1)}
+                    </span>
+                    <span>{v.title || `فيديو ${toArabicDigits(i + 1)}`}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         ) : !premiumActive ? (
           <div className="rounded-2xl bg-[#f1edff] p-8 text-center">
             <p className="mb-2 text-3xl">🔒</p>

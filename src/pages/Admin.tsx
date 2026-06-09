@@ -13,18 +13,18 @@ type Tab = 'challenges' | 'reviews' | 'codes' | 'students' | 'grading'
 type ChallengeForm = {
   number: string
   title: string
-  video_url: string
   pdf_url: string
-  speaking_task: string
+  videos: { title: string; uid: string }[]
+  speaking_tasks: string[]
   is_locked: boolean
 }
 
 const EMPTY_FORM: ChallengeForm = {
   number: '',
   title: '',
-  video_url: '',
   pdf_url: '',
-  speaking_task: '',
+  videos: [{ title: '', uid: '' }],
+  speaking_tasks: [''],
   is_locked: false,
 }
 
@@ -165,12 +165,19 @@ function ChallengesAdmin() {
     }
     setBusy(true)
     setMsg(null)
+    const videos = form.videos
+      .map((v) => ({ title: v.title.trim(), uid: v.uid.trim() }))
+      .filter((v) => v.uid)
+    const speaking_tasks = form.speaking_tasks.map((t) => t.trim()).filter(Boolean)
     const payload = {
       number: Number(form.number),
       title: form.title,
-      video_url: form.video_url || null,
       pdf_url: form.pdf_url || null,
-      speaking_task: form.speaking_task || null,
+      videos,
+      speaking_tasks,
+      // Keep the legacy single columns in sync with the first entry.
+      video_url: videos[0]?.uid || null,
+      speaking_task: speaking_tasks[0] || null,
       is_locked: form.is_locked,
     }
     const { error } = editingId
@@ -188,12 +195,20 @@ function ChallengesAdmin() {
 
   const edit = (c: Challenge) => {
     setEditingId(c.id)
+    const videos =
+      Array.isArray(c.videos) && c.videos.length
+        ? c.videos.map((v) => ({ title: v.title ?? '', uid: v.uid ?? '' }))
+        : [{ title: '', uid: c.video_url ?? '' }]
+    const speaking_tasks =
+      Array.isArray(c.speaking_tasks) && c.speaking_tasks.length
+        ? c.speaking_tasks.slice()
+        : [c.speaking_task ?? '']
     setForm({
       number: String(c.number),
       title: c.title,
-      video_url: c.video_url ?? '',
       pdf_url: c.pdf_url ?? '',
-      speaking_task: c.speaking_task ?? '',
+      videos: videos.length ? videos : [{ title: '', uid: '' }],
+      speaking_tasks: speaking_tasks.length ? speaking_tasks : [''],
       is_locked: c.is_locked,
     })
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -229,24 +244,98 @@ function ChallengesAdmin() {
           className={field}
         />
         <input
-          placeholder="Cloudflare Stream video ID (e.g. 6058ab7c...)"
-          value={form.video_url}
-          onChange={(e) => setForm({ ...form, video_url: e.target.value })}
-          className={field}
-        />
-        <input
           placeholder="Source link / PDF URL (https://...)"
           value={form.pdf_url}
           onChange={(e) => setForm({ ...form, pdf_url: e.target.value })}
           className={field}
         />
-        <textarea
-          placeholder="Speaking task"
-          value={form.speaking_task}
-          onChange={(e) => setForm({ ...form, speaking_task: e.target.value })}
-          rows={3}
-          className={field}
-        />
+
+        {/* Videos (multiple) */}
+        <div className="rounded-xl border border-[#f0ecf8] p-3">
+          <p className="mb-2 text-xs font-bold text-[#5b5670]">Lesson videos</p>
+          <div className="space-y-2">
+            {form.videos.map((v, i) => (
+              <div key={i} className="flex gap-2">
+                <input
+                  placeholder="Title (optional)"
+                  value={v.title}
+                  onChange={(e) => {
+                    const videos = form.videos.slice()
+                    videos[i] = { ...videos[i], title: e.target.value }
+                    setForm({ ...form, videos })
+                  }}
+                  className={`${field} w-1/3`}
+                />
+                <input
+                  placeholder="Cloudflare Stream video ID"
+                  value={v.uid}
+                  onChange={(e) => {
+                    const videos = form.videos.slice()
+                    videos[i] = { ...videos[i], uid: e.target.value }
+                    setForm({ ...form, videos })
+                  }}
+                  className={`${field} flex-1`}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const videos = form.videos.filter((_, j) => j !== i)
+                    setForm({ ...form, videos: videos.length ? videos : [{ title: '', uid: '' }] })
+                  }}
+                  className="shrink-0 rounded-lg bg-[#FEE2E2] px-3 text-sm font-bold text-[#DC2626]"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, videos: [...form.videos, { title: '', uid: '' }] })}
+            className="mt-2 rounded-lg bg-[#EEEDFE] px-3 py-1.5 text-xs font-bold text-[#534AB7]"
+          >
+            + Add video
+          </button>
+        </div>
+
+        {/* Speaking tasks (multiple) */}
+        <div className="rounded-xl border border-[#f0ecf8] p-3">
+          <p className="mb-2 text-xs font-bold text-[#5b5670]">Speaking tasks</p>
+          <div className="space-y-2">
+            {form.speaking_tasks.map((t, i) => (
+              <div key={i} className="flex gap-2">
+                <textarea
+                  placeholder={`Speaking prompt ${i + 1}`}
+                  value={t}
+                  onChange={(e) => {
+                    const speaking_tasks = form.speaking_tasks.slice()
+                    speaking_tasks[i] = e.target.value
+                    setForm({ ...form, speaking_tasks })
+                  }}
+                  rows={2}
+                  className={`${field} flex-1`}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const speaking_tasks = form.speaking_tasks.filter((_, j) => j !== i)
+                    setForm({ ...form, speaking_tasks: speaking_tasks.length ? speaking_tasks : [''] })
+                  }}
+                  className="shrink-0 rounded-lg bg-[#FEE2E2] px-3 text-sm font-bold text-[#DC2626]"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, speaking_tasks: [...form.speaking_tasks, ''] })}
+            className="mt-2 rounded-lg bg-[#EEEDFE] px-3 py-1.5 text-xs font-bold text-[#534AB7]"
+          >
+            + Add speaking task
+          </button>
+        </div>
         <label className="flex items-center gap-2 text-sm text-[#5b5670]">
           <input
             type="checkbox"

@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
 import { toArabicDigits } from '../lib/theme'
 import { challengeTaskId, getAttempt } from '../lib/progress'
+import type { SavedAttempt } from '../lib/progress'
+import { challengeSpeakingTasks } from '../lib/challenge'
 import { useAuth } from '../hooks/useAuth'
 import FeedbackView from './FeedbackView'
-import type { Challenge, SpeakingResult } from '../types'
+import type { Challenge } from '../types'
 
 interface FeedbackModalProps {
   challenge: Challenge
@@ -20,20 +22,17 @@ function CloseIcon() {
 
 export default function FeedbackModal({ challenge, onClose }: FeedbackModalProps) {
   const { user } = useAuth()
-  const [loading, setLoading] = useState(true)
-  const [result, setResult] = useState<SpeakingResult | null>(null)
-  const [transcript, setTranscript] = useState('')
 
-  useEffect(() => {
-    // Show only THIS account's saved attempt for this task (scoped per user, so
-    // feedback never leaks between accounts on the same browser).
-    const saved = getAttempt(challengeTaskId(user?.id, challenge.id, challenge.number))
-    if (saved) {
-      setResult(saved.result)
-      setTranscript(saved.transcript)
-    }
-    setLoading(false)
-  }, [user?.id, challenge.id, challenge.number])
+  // One saved attempt per speaking task (scoped to this account), so all of the
+  // challenge's tasks are reviewable here.
+  const attempts = useMemo(() => {
+    const tasks = challengeSpeakingTasks(challenge)
+    const count = Math.max(tasks.length, 1)
+    return Array.from({ length: count }, (_, i) => ({
+      prompt: tasks[i] ?? '',
+      attempt: getAttempt(challengeTaskId(user?.id, challenge.id, challenge.number, i)) as SavedAttempt | null,
+    })).filter((x) => x.attempt)
+  }, [user?.id, challenge])
 
   return (
     <div
@@ -57,27 +56,35 @@ export default function FeedbackModal({ challenge, onClose }: FeedbackModalProps
           تقييم التحدي {toArabicDigits(challenge.number)} 📊
         </h2>
 
-        {loading ? (
-          <p className="py-8 text-center text-sm text-[#7a7596]">جارٍ التحميل…</p>
-        ) : result ? (
-          <>
-            {transcript && (
-              <div className="mb-4 rounded-2xl border border-[#ece7fb] bg-[#faf9ff] p-4" dir="ltr">
-                <p className="mb-1 text-right text-[12px] font-bold text-[#a39ec0]" dir="rtl">
-                  النص المُسجّل
-                </p>
-                <p className="text-[15px] leading-relaxed text-[#3a3550]">{transcript}</p>
-              </div>
-            )}
-            <FeedbackView result={result} />
-          </>
-        ) : (
+        {attempts.length === 0 ? (
           <div className="py-6 text-center">
             <p className="mb-2 text-3xl">🗒️</p>
             <p className="text-sm font-semibold text-[#3a3550]">لا يوجد تقييم بعد</p>
             <p className="mt-1 text-[13px] text-[#a39ec0]">
               أكمل مهمة التحدّث أولاً للحصول على تقييم وملاحظات.
             </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {attempts.map(({ prompt, attempt }, i) => (
+              <div key={i}>
+                {attempts.length > 1 && (
+                  <p className="mb-2 text-[13px] font-extrabold text-[#534AB7]">
+                    مهمة {toArabicDigits(i + 1)}
+                    {prompt ? <span className="font-semibold text-[#7a7596]"> — {prompt}</span> : null}
+                  </p>
+                )}
+                {attempt!.transcript && (
+                  <div className="mb-3 rounded-2xl border border-[#ece7fb] bg-[#faf9ff] p-4" dir="ltr">
+                    <p className="mb-1 text-right text-[12px] font-bold text-[#a39ec0]" dir="rtl">
+                      النص المُسجّل
+                    </p>
+                    <p className="text-[15px] leading-relaxed text-[#3a3550]">{attempt!.transcript}</p>
+                  </div>
+                )}
+                <FeedbackView result={attempt!.result} />
+              </div>
+            ))}
           </div>
         )}
       </div>

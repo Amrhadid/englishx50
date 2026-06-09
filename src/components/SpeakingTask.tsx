@@ -22,6 +22,8 @@ interface SpeakingTaskProps {
   challengeNumber?: number
   challengeId?: string
   student?: string
+  /** Index of this speaking task within the challenge (for per-task storage). */
+  taskIndex?: number
 }
 
 function MicIcon() {
@@ -33,7 +35,13 @@ function MicIcon() {
   )
 }
 
-export default function SpeakingTask({ question, challengeNumber, challengeId, student }: SpeakingTaskProps) {
+export default function SpeakingTask({
+  question,
+  challengeNumber,
+  challengeId,
+  student,
+  taskIndex = 0,
+}: SpeakingTaskProps) {
   const [supported, setSupported] = useState(true)
   const [recording, setRecording] = useState(false)
   const [live, setLive] = useState(false)
@@ -49,7 +57,7 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
   // accounts on the same browser.
   const { user } = useAuth()
   const isAdmin = isAdminEmail(user?.email)
-  const taskId = challengeTaskId(user?.id, challengeId, challengeNumber)
+  const taskId = challengeTaskId(user?.id, challengeId, challengeNumber, taskIndex)
   const [trialsUsed, setTrialsUsed] = useState(() => getTrials(taskId))
   const canTry = isAdmin || trialsUsed < MAX_TRIALS
 

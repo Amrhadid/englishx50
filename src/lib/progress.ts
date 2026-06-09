@@ -55,15 +55,21 @@ export function levelTestTaskId(userId: string | null | undefined): string {
   return `${scope(userId)}:level_test`
 }
 
-/** Per-user id for a challenge speaking task (prefers the row id, falls back to number). */
+/**
+ * Per-user id for a challenge speaking task (prefers the row id, falls back to
+ * number). `taskIndex` distinguishes multiple speaking tasks within one
+ * challenge so each has its own saved attempt / trials.
+ */
 export function challengeTaskId(
   userId: string | null | undefined,
   challengeId?: string,
   challengeNumber?: number,
+  taskIndex = 0,
 ): string | null {
   const s = scope(userId)
-  if (challengeId) return `${s}:challenge_${challengeId}`
-  if (challengeNumber != null) return `${s}:challenge_${challengeNumber}`
+  const suffix = taskIndex > 0 ? `#${taskIndex}` : ''
+  if (challengeId) return `${s}:challenge_${challengeId}${suffix}`
+  if (challengeNumber != null) return `${s}:challenge_${challengeNumber}${suffix}`
   return null
 }
 
