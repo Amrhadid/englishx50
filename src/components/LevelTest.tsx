@@ -43,11 +43,13 @@ function countSentences(text: string): number {
 export default function LevelTest({ onUpgrade }: { onUpgrade?: () => void }) {
   const [open, setOpen] = useState(false)
   const { premiumActive } = useOnboardingContext()
+  const { user } = useAuth()
 
   // The level test (Pre task) is premium-only. Premium is DB-driven: the
-  // signed-in account has a redeemed code within its 100-day window. Non-premium
-  // visitors still see the card, but tapping it opens the upgrade popup.
-  const premium = premiumActive
+  // signed-in account has a redeemed code within its 100-day window. The admin
+  // is exempt (can preview). Non-premium visitors still see the card, but
+  // tapping it opens the upgrade popup.
+  const premium = premiumActive || isAdminEmail(user?.email)
 
   const handleStart = () => {
     if (premium) setOpen(true)
