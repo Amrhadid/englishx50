@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
+import { useAuth } from '../hooks/useAuth'
 import { challengeVideos } from '../lib/challenge'
+import { markVideoWatched, recordCompletionIfDone } from '../lib/completion'
 import { toArabicDigits } from '../lib/theme'
 import type { Challenge } from '../types'
 
@@ -43,7 +45,8 @@ function CloseIcon() {
 }
 
 export default function LessonModal({ challenge, onClose }: LessonModalProps) {
-  const { premiumActive } = useOnboardingContext()
+  const { premiumActive, refetch } = useOnboardingContext()
+  const { user } = useAuth()
   const videos = premiumActive ? challengeVideos(challenge) : []
   const [selected, setSelected] = useState(0)
   const uid = videos[selected]?.uid ?? ''
@@ -72,6 +75,13 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
       const rounded = Math.min(100, Math.round(pct))
       if (rounded <= maxPctRef.current) return
       maxPctRef.current = rounded
+      // Count the video as watched near the end, then check challenge completion.
+      if (rounded >= 90 && user) {
+        markVideoWatched(user.id, challenge.id, uid)
+        recordCompletionIfDone(user.id, challenge).then((done) => {
+          if (done) refetch()
+        })
+      }
       if (!supabase || !rowIdRef.current) return
       await supabase
         .from('x50_video_views')

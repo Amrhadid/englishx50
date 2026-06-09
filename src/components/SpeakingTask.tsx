@@ -24,6 +24,8 @@ interface SpeakingTaskProps {
   student?: string
   /** Index of this speaking task within the challenge (for per-task storage). */
   taskIndex?: number
+  /** Called after a successful grade (used to re-check challenge completion). */
+  onSubmitted?: () => void
 }
 
 function MicIcon() {
@@ -41,6 +43,7 @@ export default function SpeakingTask({
   challengeId,
   student,
   taskIndex = 0,
+  onSubmitted,
 }: SpeakingTaskProps) {
   const [supported, setSupported] = useState(true)
   const [recording, setRecording] = useState(false)
@@ -151,6 +154,7 @@ export default function SpeakingTask({
       outcome: outcome.result.passed ? 'passed' : 'failed',
     })
     if (!isAdmin) setTrialsUsed(incrementTrials(taskId))
+    onSubmitted?.()
   }
 
   const reset = () => {

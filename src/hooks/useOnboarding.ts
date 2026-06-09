@@ -22,21 +22,33 @@ function daysSince(iso: string | null): number {
 export function useOnboarding() {
   const { user } = useAuth()
   const [student, setStudent] = useState<Student | null>(null)
+  const [progress, setProgress] = useState<Record<number, string>>({})
   const [loading, setLoading] = useState(true)
 
   const refetch = useCallback(async () => {
     if (!supabase || !user) {
       setStudent(null)
+      setProgress({})
       setLoading(false)
       return
     }
     setLoading(true)
-    const { data } = await supabase
-      .from('x50_students')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle()
+    const [{ data }, { data: prog }] = await Promise.all([
+      supabase.from('x50_students').select('*').eq('user_id', user.id).maybeSingle(),
+      supabase
+        .from('x50_challenge_progress')
+        .select('challenge_number, completed_at')
+        .eq('user_id', user.id),
+    ])
     setStudent((data as Student | null) ?? null)
+    setProgress(
+      Object.fromEntries(
+        ((prog as { challenge_number: number; completed_at: string }[] | null) ?? []).map((r) => [
+          r.challenge_number,
+          r.completed_at,
+        ]),
+      ),
+    )
     setLoading(false)
   }, [user])
 
@@ -68,5 +80,5 @@ export function useOnboarding() {
   // shareable (a used code can't be redeemed by another account).
   const premiumActive = !!student?.code && daysLeft > 0
 
-  return { needsOnboarding, needsCode, daysLeft, premiumActive, student, refetch, loading }
+  return { needsOnboarding, needsCode, daysLeft, premiumActive, student, progress, refetch, loading }
 }

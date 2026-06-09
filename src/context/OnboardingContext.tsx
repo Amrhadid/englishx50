@@ -8,6 +8,7 @@ export interface OnboardingContextValue {
   daysLeft: number
   premiumActive: boolean
   student: ReturnType<typeof useOnboarding>['student']
+  progress: Record<number, string>
   refetch: () => Promise<void>
   loading: boolean
 }

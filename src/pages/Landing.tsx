@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { PLACEHOLDER_REVIEWS, mergeWithPlaceholders, isPlaceholderChallenge } from '../lib/placeholders'
 import { challengeVideos } from '../lib/challenge'
+import { challengeLockState, type LockState } from '../lib/completion'
+import ChallengeLockedModal from '../components/ChallengeLockedModal'
 import type { Challenge, Review } from '../types'
 import Navbar from '../components/Navbar'
 import Hero from '../components/Hero'
@@ -26,7 +28,7 @@ export default function Landing() {
 }
 
 function LandingInner() {
-  const { premiumActive } = useOnboardingContext()
+  const { premiumActive, progress } = useOnboardingContext()
 
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
@@ -35,6 +37,16 @@ function LandingInner() {
   const [speakingFor, setSpeakingFor] = useState<Challenge | null>(null)
   const [lessonFor, setLessonFor] = useState<Challenge | null>(null)
   const [comingSoonFor, setComingSoonFor] = useState<Challenge | null>(null)
+  const [lockedFor, setLockedFor] = useState<{
+    challenge: Challenge
+    lock: Extract<LockState, { locked: true }>
+  } | null>(null)
+
+  // Real (added) challenge numbers in order — used for the sequential cooldown.
+  const realNumbers = useMemo(
+    () => challenges.map((c) => c.number).sort((a, b) => a - b),
+    [challenges],
+  )
 
   // Premium is DB-driven and tied to the signed-in account (redeemed code within
   // its 100-day window).
@@ -83,6 +95,9 @@ function LandingInner() {
   const gateChallenge = (c: Challenge, run: () => void) => {
     if (!premium) return requireAccess()
     if (isPlaceholderChallenge(c)) return setComingSoonFor(c)
+    // Sequential 5-day cooldown: must finish the previous challenge + wait.
+    const lock = challengeLockState(c, realNumbers, progress)
+    if (lock.locked) return setLockedFor({ challenge: c, lock })
     run()
   }
 
@@ -146,6 +161,13 @@ function LandingInner() {
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
       {comingSoonFor && (
         <ComingSoonModal challenge={comingSoonFor} onClose={() => setComingSoonFor(null)} />
+      )}
+      {lockedFor && (
+        <ChallengeLockedModal
+          challenge={lockedFor.challenge}
+          lock={lockedFor.lock}
+          onClose={() => setLockedFor(null)}
+        />
       )}
       {feedbackFor && (
         <FeedbackModal challenge={feedbackFor} onClose={() => setFeedbackFor(null)} />

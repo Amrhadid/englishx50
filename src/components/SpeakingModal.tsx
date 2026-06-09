@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import SpeakingTask from './SpeakingTask'
 import { challengeSpeakingTasks } from '../lib/challenge'
+import { recordCompletionIfDone } from '../lib/completion'
+import { useAuth } from '../hooks/useAuth'
+import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { toArabicDigits } from '../lib/theme'
 import type { Challenge } from '../types'
 
@@ -26,11 +29,21 @@ function BackIcon() {
 }
 
 export default function SpeakingModal({ challenge, onClose }: SpeakingModalProps) {
+  const { user } = useAuth()
+  const { refetch } = useOnboardingContext()
+
   let student: string | undefined
   try {
     student = localStorage.getItem('x50_user') ?? undefined
   } catch {
     student = undefined
+  }
+
+  const onSubmitted = () => {
+    if (!user) return
+    recordCompletionIfDone(user.id, challenge).then((done) => {
+      if (done) refetch()
+    })
   }
 
   const tasks = challengeSpeakingTasks(challenge)
@@ -97,6 +110,7 @@ export default function SpeakingModal({ challenge, onClose }: SpeakingModalProps
             challengeId={challenge.id}
             student={student}
             taskIndex={selected}
+            onSubmitted={onSubmitted}
           />
         )}
       </div>
