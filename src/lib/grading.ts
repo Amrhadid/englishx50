@@ -8,6 +8,7 @@ interface GradeParams {
   student?: string
   challengeId?: string
   challengeNumber?: number
+  audioKey?: string | null
 }
 
 /** Coerce a value that may be an array, a JSON string, or null into an array. */
@@ -155,6 +156,7 @@ export async function gradeSpeaking(params: GradeParams): Promise<GradeOutcome> 
       strengths_json: JSON.stringify(result.strengths ?? []),
       weaknesses_json: JSON.stringify(result.weaknesses ?? []),
       corrected_sentences_json: JSON.stringify(result.corrected_sentences ?? []),
+      audio_key: params.audioKey ?? null,
     })
     .then(
       () => {},

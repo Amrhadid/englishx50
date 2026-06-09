@@ -192,7 +192,7 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     if (!session) return
     sessionRef.current = null
     setTranscribing(true)
-    const text = await session.stop()
+    const { transcript: text } = await session.stop()
     setTranscribing(false)
     setTranscript(text)
     // Grade automatically — no extra click needed.

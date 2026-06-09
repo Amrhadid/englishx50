@@ -232,7 +232,7 @@ export class LiveSession {
     })
   }
 
-  async stop(): Promise<string> {
+  async stop(): Promise<{ transcript: string; audio: Blob }> {
     const blobPromise = new Promise<Blob>((resolve) => {
       const rec = this.recorder
       if (!rec || rec.state === 'inactive') {
@@ -256,14 +256,19 @@ export class LiveSession {
     const rtFailed = this.rt?.failed ?? true
 
     this.stream?.getTracks().forEach((t) => t.stop())
+    const audio = await blobPromise
 
     // Prefer the realtime transcript; fall back to batch Whisper otherwise.
-    if (!rtFailed && rtText.trim().length >= 2) return rtText.trim()
-
-    const blob = await blobPromise
-    if (blob.size === 0) return rtText.trim()
-    const res = await transcribeAudio(blob)
-    return res.ok && res.transcript.trim().length >= 2 ? res.transcript.trim() : rtText.trim()
+    let transcript = !rtFailed && rtText.trim().length >= 2 ? rtText.trim() : ''
+    if (!transcript) {
+      if (audio.size > 0) {
+        const res = await transcribeAudio(audio)
+        transcript = res.ok && res.transcript.trim().length >= 2 ? res.transcript.trim() : rtText.trim()
+      } else {
+        transcript = rtText.trim()
+      }
+    }
+    return { transcript, audio }
   }
 
   cancel(): void {

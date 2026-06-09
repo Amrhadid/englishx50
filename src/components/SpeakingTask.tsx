@@ -11,6 +11,7 @@ import {
   MAX_TRIALS,
 } from '../lib/progress'
 import { LiveSession, canLiveTranscribe } from '../lib/liveTranscribe'
+import { uploadAudio } from '../lib/audio'
 import { isAdminEmail } from '../lib/admin'
 import { useAuth } from '../hooks/useAuth'
 import FeedbackView from './FeedbackView'
@@ -95,14 +96,17 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
     setRecording(false)
     setLive(false)
     setTranscribing(true)
-    const text = await session.stop()
+    const { transcript: text, audio } = await session.stop()
     setTranscribing(false)
     setTranscript(text)
-    if (text.trim().length >= 2) grade(text)
-    else setError('لم نلتقط صوتاً واضحاً، حاول مرة أخرى')
+    if (text.trim().length >= 2) {
+      // Store the recording (R2) so the admin can play it; grade in parallel.
+      const audioKey = await uploadAudio(audio)
+      grade(text, audioKey)
+    } else setError('لم نلتقط صوتاً واضحاً، حاول مرة أخرى')
   }
 
-  const grade = async (text: string) => {
+  const grade = async (text: string, audioKey: string | null = null) => {
     if (text.trim().length < 2) {
       setError('سجّل إجابتك أولاً')
       return
@@ -123,6 +127,7 @@ export default function SpeakingTask({ question, challengeNumber, challengeId, s
       student,
       challengeId,
       challengeNumber,
+      audioKey,
     })
     setLoading(false)
     if (!outcome.ok) {

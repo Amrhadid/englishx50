@@ -5,6 +5,7 @@ import type { Challenge, Review, Code } from '../types'
 import { TrashIcon } from '../components/icons'
 import FeedbackView from '../components/FeedbackView'
 import { parseSubmission } from '../lib/grading'
+import { audioUrl } from '../lib/audio'
 import { isAdminEmail } from '../lib/admin'
 
 type Tab = 'challenges' | 'reviews' | 'codes' | 'students' | 'grading'
@@ -645,6 +646,7 @@ interface Submission {
   score: number | null
   passed: boolean | null
   feedback: string | null
+  audio_key: string | null
   created_at: string
 }
 
@@ -780,6 +782,17 @@ function StudentsAdmin() {
                             <p className="mb-2 rounded-lg bg-[#faf9ff] p-2 text-[13px] text-[#3a3550]" dir="ltr">
                               “{s.transcript}”
                             </p>
+                          )}
+                          {s.audio_key && (
+                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                              <audio controls preload="none" src={audioUrl(s.audio_key)} className="h-9 w-full max-w-xs" />
+                              <a
+                                href={audioUrl(s.audio_key, { download: true })}
+                                className="rounded-lg bg-[#EEEDFE] px-3 py-1.5 text-xs font-bold text-[#534AB7]"
+                              >
+                                ⬇ Download
+                              </a>
+                            </div>
                           )}
                           {s.feedback && (
                             <details>
