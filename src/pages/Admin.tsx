@@ -667,7 +667,16 @@ function StudentsAdmin() {
     Promise.all([
       supabase.from('x50_video_views').select('*').order('opened_at', { ascending: false }),
       supabase.from('x50_submissions').select('*').order('created_at', { ascending: false }),
-    ]).then(([views, subs]) => {
+      // Premium users = those who redeemed a code; used_by matches the activity
+      // `student` identity (both come from the x50_user value).
+      supabase.from('x50_codes').select('used_by').not('used_at', 'is', null),
+    ]).then(([views, subs, codes]) => {
+      const premium = new Set(
+        ((codes.data as { used_by: string | null }[]) ?? [])
+          .map((c) => c.used_by)
+          .filter((v): v is string => !!v),
+      )
+
       const map = new Map<string, StudentRow>()
       const keyOf = (s: string | null) => s || 'زائر غير معرّف'
       const get = (s: string | null) => {
@@ -677,7 +686,9 @@ function StudentsAdmin() {
       }
       ;((views.data as VideoView[]) ?? []).forEach((v) => get(v.student).views.push(v))
       ;((subs.data as Submission[]) ?? []).forEach((s) => get(s.student).subs.push(s))
-      setStudents(Array.from(map.values()))
+
+      // Show only premium students (whose identity redeemed a code).
+      setStudents(Array.from(map.values()).filter((st) => premium.has(st.name)))
       setLoading(false)
     })
   }, [])
@@ -687,7 +698,7 @@ function StudentsAdmin() {
 
   if (loading) return <p className="text-sm text-[#9a9aa2]">Loading…</p>
   if (students.length === 0)
-    return <p className="text-sm text-[#9a9aa2]">No student activity yet.</p>
+    return <p className="text-sm text-[#9a9aa2]">No premium students yet.</p>
 
   return (
     <div className="space-y-3">
