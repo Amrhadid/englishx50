@@ -8,6 +8,9 @@ import {
   saveAttempt,
   getTrials,
   incrementTrials,
+  setStoredTrials,
+  serverTaskKey,
+  fetchServerTrials,
   MAX_TRIALS,
 } from '../lib/progress'
 import { LiveSession, canLiveTranscribe } from '../lib/liveTranscribe'
@@ -80,6 +83,24 @@ export default function SpeakingTask({
     return () => sessionRef.current?.cancel()
   }, [])
 
+  // The attempt limit is enforced server-side (x50_trials) — clearing the
+  // browser no longer resets it. Pull the authoritative count so the UI
+  // matches what the server will allow.
+  useEffect(() => {
+    if (isAdmin || !user) return
+    let active = true
+    fetchServerTrials(serverTaskKey(challengeId, challengeNumber, taskIndex), user.id).then(
+      (server) => {
+        if (!active || server == null) return
+        setStoredTrials(taskId, Math.max(server, getTrials(taskId)))
+        setTrials((t) => (t.taskId === taskId && server > t.used ? { taskId, used: server } : t))
+      },
+    )
+    return () => {
+      active = false
+    }
+  }, [taskId, isAdmin, user, challengeId, challengeNumber, taskIndex])
+
   // Live transcription (OpenAI Realtime) with a batch fallback; the transcript
   // streams in word-by-word while recording, then grades automatically on stop.
   const start = async () => {
@@ -141,10 +162,19 @@ export default function SpeakingTask({
       student,
       challengeId,
       challengeNumber,
+      taskIndex,
       audioKey,
     })
     setLoading(false)
     if (!outcome.ok) {
+      if (outcome.trialLimit) {
+        // The server's counter says this task is used up (regardless of what
+        // this browser's cache thinks).
+        setStoredTrials(taskId, MAX_TRIALS)
+        setTrials({ taskId, used: MAX_TRIALS })
+        setError('لقد استخدمت محاولتيك لهذه المهمة')
+        return
+      }
       setError(`تعذّر تقييم الإجابة، حاول مرة أخرى — ${outcome.detail}`)
       return
     }
@@ -154,7 +184,13 @@ export default function SpeakingTask({
       result: outcome.result,
       outcome: outcome.result.passed ? 'passed' : 'failed',
     })
-    if (!isAdmin) setTrials({ taskId, used: incrementTrials(taskId) })
+    if (!isAdmin) {
+      // Prefer the server's count; fall back to the local one if the function
+      // didn't report it (e.g. not redeployed yet).
+      const used = outcome.trialsUsed ?? incrementTrials(taskId)
+      if (outcome.trialsUsed != null) setStoredTrials(taskId, used)
+      setTrials({ taskId, used })
+    }
     onSubmitted?.()
   }
 

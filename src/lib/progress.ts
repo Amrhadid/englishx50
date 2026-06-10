@@ -4,6 +4,7 @@
 // Stored client-side (per browser); the server already keeps its own copy in
 // x50_submissions.
 
+import { supabase } from './supabase'
 import type { SpeakingResult } from '../types'
 
 export type TaskOutcome = 'passed' | 'failed' | 'rejected'
@@ -42,6 +43,45 @@ export function incrementTrials(taskId: string | null): number {
     /* ignore storage errors */
   }
   return next
+}
+
+/** Overwrite the locally cached trial count (used to mirror the server's). */
+export function setStoredTrials(taskId: string | null, used: number): void {
+  if (!taskId) return
+  try {
+    localStorage.setItem(TRIALS_PREFIX + taskId, String(used))
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
+/**
+ * Task key used by the SERVER-side trial counter (x50_trials). Unlike the
+ * local taskId it carries no user prefix — the account comes from the JWT.
+ * Must stay in sync with the fallback derivation in the feedback function.
+ */
+export function serverTaskKey(challengeId?: string, challengeNumber?: number, taskIndex = 0): string {
+  const suffix = taskIndex > 0 ? `#${taskIndex}` : ''
+  if (challengeId) return `challenge_${challengeId}${suffix}`
+  if (challengeNumber != null) return `challenge_${challengeNumber}${suffix}`
+  return 'speaking'
+}
+
+/**
+ * The authoritative attempts-used count from the DB (null when unavailable —
+ * e.g. signed out, no row yet, or the table hasn't been created).
+ */
+export async function fetchServerTrials(taskKey: string, userId: string): Promise<number | null> {
+  if (!supabase) return null
+  const { data, error } = await supabase
+    .from('x50_trials')
+    .select('used')
+    .eq('user_id', userId)
+    .eq('task_id', taskKey)
+    .maybeSingle()
+  if (error || !data) return null
+  const used = (data as { used: number }).used
+  return Number.isFinite(used) ? used : null
 }
 
 // Keys are scoped to the signed-in account so saved attempts/trials never leak

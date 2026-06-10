@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { reportFunctionError } from '../lib/functionError'
-import { invokeFeedback, normalizeFeedback } from '../lib/grading'
+import { invokeFeedback, normalizeFeedback, isTrialLimitError, trialsUsedFrom } from '../lib/grading'
 import {
   levelTestTaskId,
   getAttempt,
   saveAttempt,
   getTrials,
   incrementTrials,
+  setStoredTrials,
+  fetchServerTrials,
   MAX_TRIALS,
 } from '../lib/progress'
 import { LiveSession, canLiveTranscribe } from '../lib/liveTranscribe'
@@ -187,6 +189,22 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     }
   }, [])
 
+  // The attempt limit is enforced server-side (x50_trials) — clearing the
+  // browser no longer resets it. Pull the authoritative count so the UI
+  // matches what the server will allow.
+  useEffect(() => {
+    if (isAdmin || !user) return
+    let active = true
+    fetchServerTrials('level_test', user.id).then((server) => {
+      if (!active || server == null) return
+      setStoredTrials(taskId, Math.max(server, getTrials(taskId)))
+      setTrials((t) => (t.taskId === taskId && server > t.used ? { taskId, used: server } : t))
+    })
+    return () => {
+      active = false
+    }
+  }, [taskId, isAdmin, user])
+
   const stopTimer = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current)
@@ -270,11 +288,21 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
       question: 'Introduce yourself in English',
       transcript: text,
       mode: 'level_test',
+      taskKey: 'level_test',
     })
 
     setLoading(false)
 
     if (error || !data) {
+      if (await isTrialLimitError(error)) {
+        // The server's counter says the level test is used up (regardless of
+        // what this browser's cache thinks).
+        setStoredTrials(taskId, MAX_TRIALS)
+        setTrials({ taskId, used: MAX_TRIALS })
+        setRecError('لقد استخدمت محاولتيك لهذه المهمة')
+        setStep('speak')
+        return
+      }
       const detail = await reportFunctionError('level test', error)
       setRecError(`تعذّر تقييم الإجابة، حاول مرة أخرى — ${detail}`)
       setStep('speak')
@@ -282,6 +310,16 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     }
 
     const mapped = normalizeFeedback(data)
+
+    // Every graded answer consumes a server-side attempt (it costs an AI
+    // call), including ones the client-side rules below reject. Prefer the
+    // server's count; fall back to local when the function didn't report it.
+    if (!isAdmin) {
+      const serverUsed = trialsUsedFrom(data)
+      const used = serverUsed ?? incrementTrials(taskId)
+      if (serverUsed != null) setStoredTrials(taskId, used)
+      setTrials({ taskId, used })
+    }
 
     // Client-side rejection rules.
     const sentences = countSentences(text)
@@ -300,7 +338,6 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     setResult(mapped)
     setOutcome(finalOutcome)
     saveAttempt(taskId, { transcript: text, result: mapped, outcome: finalOutcome })
-    if (!isAdmin) setTrials({ taskId, used: incrementTrials(taskId) })
   }
 
   const retry = () => {

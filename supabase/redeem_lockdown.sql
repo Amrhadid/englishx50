@@ -292,3 +292,64 @@ create policy "x50_reviews_obj_delete"
     bucket_id = 'x50-reviews'
     and lower(coalesce(auth.jwt() ->> 'email', '')) = 'siramrhadid@gmail.com'
   );
+
+-- ---------------------------------------------------------------------------
+-- 13. Server-side speaking-trial enforcement. The 2-attempt limit per speaking
+--     task used to live only in localStorage (clearing the browser reset it).
+--     The grading Edge Function now consumes a trial here, atomically, before
+--     each AI grading call — see supabase/functions/EnglishX50feedback.
+--     task_id examples: 'level_test', 'challenge_<uuid>', 'challenge_<uuid>#1'.
+-- ---------------------------------------------------------------------------
+create table if not exists public.x50_trials (
+  user_id    uuid not null,
+  task_id    text not null,
+  used       integer not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, task_id)
+);
+
+-- Clients may only READ their own counts (to display attempts left); all
+-- writes happen via x50_consume_trial with the service role.
+revoke select, insert, update, delete on public.x50_trials from anon;
+revoke insert, update, delete on public.x50_trials from authenticated;
+grant select on public.x50_trials to authenticated;
+
+alter table public.x50_trials enable row level security;
+
+drop policy if exists "x50_trials_select_own" on public.x50_trials;
+
+create policy "x50_trials_select_own" on public.x50_trials
+  for select
+  using (
+    auth.uid() = user_id
+    or lower(coalesce(auth.jwt() ->> 'email', '')) = 'siramrhadid@gmail.com'
+  );
+
+-- Atomically use up one attempt. Returns the new used count, or -1 when the
+-- limit was already reached (nothing is consumed in that case).
+create or replace function public.x50_consume_trial(p_user uuid, p_task text, p_max integer default 2)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_used integer;
+begin
+  insert into public.x50_trials as t (user_id, task_id, used)
+  values (p_user, p_task, 1)
+  on conflict (user_id, task_id) do update
+    set used = t.used + 1, updated_at = now()
+    where t.used < p_max
+  returning t.used into v_used;
+
+  if v_used is null then
+    return -1;
+  end if;
+  return v_used;
+end;
+$$;
+
+-- Only the service role (Edge Functions) may consume trials.
+revoke all on function public.x50_consume_trial(uuid, text, integer) from public, anon, authenticated;
+grant execute on function public.x50_consume_trial(uuid, text, integer) to service_role;
