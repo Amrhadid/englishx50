@@ -65,6 +65,7 @@ export async function transcribeAudio(blob: Blob): Promise<TranscribeOutcome> {
       const form = new FormData()
       form.append('file', blob, `audio.${extOf(mime)}`)
       form.append('model', 'whisper-1')
+      form.append('language', 'en')
       const { data, error } = await supabase.functions.invoke(slug, { body: form })
       const t = extractTranscript(data)
       if (!error && t != null) return { ok: true, transcript: t.trim() }
@@ -77,7 +78,7 @@ export async function transcribeAudio(blob: Blob): Promise<TranscribeOutcome> {
     if (base64 != null) {
       try {
         const { data, error } = await supabase.functions.invoke(slug, {
-          body: { audio: base64, mime, model: 'whisper-1' },
+          body: { audio: base64, mime, model: 'whisper-1', language: 'en' },
         })
         const t = extractTranscript(data)
         if (!error && t != null) return { ok: true, transcript: t.trim() }

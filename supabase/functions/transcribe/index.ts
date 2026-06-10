@@ -79,6 +79,9 @@ Deno.serve(async (req) => {
     const form = new FormData()
     form.append('file', audio, `audio.${extOf(audio.type || 'audio/webm')}`)
     form.append('model', 'whisper-1')
+    // Students answer in English. Without this Whisper auto-detects the
+    // language and can transcribe (or translate) accented English as Arabic.
+    form.append('language', 'en')
 
     const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
