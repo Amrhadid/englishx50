@@ -151,13 +151,19 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
       const tick = () => {
         const dur = player?.duration
         const cur = player?.currentTime
-        if (!(dur > 0) || typeof cur !== 'number') return
+        if (!(dur > 0) || typeof cur !== 'number' || cur < 0) return
         const last = lastTimeRef.current
         lastTimeRef.current = cur
-        if (last === null || player?.paused) return
+        if (last === null) return
+        // Credit only normal forward playback. When paused/buffering the time
+        // doesn't advance (delta ~0); a seek jumps far (delta large) — both are
+        // ignored. We deliberately don't read player.paused: the Stream SDK's
+        // flag is unreliable right after autoplay and would freeze the bar.
         const delta = cur - last
         const rate = player?.playbackRate || 1
-        if (delta > 0 && delta <= POLL_SECONDS * rate * 1.5) {
+        // Cap absorbs a laggy/missed poll (~2 intervals) while still rejecting
+        // a real seek, which jumps much further than normal playback.
+        if (delta > 0.1 && delta <= POLL_SECONDS * rate * 2.2) {
           watchedSecondsRef.current += delta
           savePercent((watchedSecondsRef.current / dur) * 100)
         }
