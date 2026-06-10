@@ -1,5 +1,9 @@
 -- EnglishX50 — subscription codes table
 -- Run in Supabase: Dashboard → SQL Editor → New query → paste → Run.
+--
+-- ⚠️ The open RLS policies below are SUPERSEDED by redeem_lockdown.sql, which
+-- restricts codes to the admin account and moves redemption into a server-side
+-- RPC. Always run redeem_lockdown.sql AFTER this file.
 
 create table if not exists public.x50_codes (
   id         uuid primary key default gen_random_uuid(),

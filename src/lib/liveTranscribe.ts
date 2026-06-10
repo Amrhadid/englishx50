@@ -6,14 +6,25 @@
 // batch `transcribe` function — so the final transcript + grading never regress.
 
 import { recorderOptions, transcribeAudio } from './transcribe'
+import { supabase } from './supabase'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
-function relayUrl(): string | null {
+async function relayUrl(): Promise<string | null> {
   if (!SUPABASE_URL || !ANON_KEY) return null
   const base = SUPABASE_URL.replace(/^http/, 'ws')
-  return `${base}/functions/v1/realtime-transcribe?apikey=${ANON_KEY}`
+  // Browsers can't set WebSocket headers, so the user's access token rides
+  // along as a query param — the relay validates premium server-side with it.
+  let token = ''
+  try {
+    token = (await supabase?.auth.getSession())?.data.session?.access_token ?? ''
+  } catch {
+    /* no session — the relay will reject and the batch fallback covers it */
+  }
+  return `${base}/functions/v1/realtime-transcribe?apikey=${ANON_KEY}${
+    token ? `&token=${encodeURIComponent(token)}` : ''
+  }`
 }
 
 function floatToPCM16(input: Float32Array): ArrayBuffer {
@@ -61,7 +72,7 @@ class RealtimeTranscriber {
   }
 
   async start(): Promise<void> {
-    const url = relayUrl()
+    const url = await relayUrl()
     if (!url) {
       this.failed = true
       return
@@ -247,7 +258,7 @@ export class LiveSession {
       }
     })
 
-    let rtText = ''
+    let rtText: string
     try {
       rtText = (await this.rt?.stop()) ?? ''
     } catch {

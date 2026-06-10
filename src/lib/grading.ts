@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { reportFunctionError } from './functionError'
+import { serverTaskKey } from './progress'
 import type { SpeakingResult, Mistake, VocabItem } from '../types'
 
 interface GradeParams {
@@ -8,6 +9,7 @@ interface GradeParams {
   student?: string
   challengeId?: string
   challengeNumber?: number
+  taskIndex?: number
   audioKey?: string | null
 }
 
@@ -41,8 +43,28 @@ export function parseSubmission(row: Record<string, unknown>): SpeakingResult {
 
 /** Result of a grading attempt — either feedback, or the reason it failed. */
 export type GradeOutcome =
-  | { ok: true; result: SpeakingResult }
-  | { ok: false; detail: string }
+  | { ok: true; result: SpeakingResult; trialsUsed?: number | null }
+  | { ok: false; detail: string; trialLimit?: boolean }
+
+/** True when the feedback function refused the call because the server-side
+ * attempt limit for this task is already used up (HTTP 403, code trial_limit). */
+export async function isTrialLimitError(error: unknown): Promise<boolean> {
+  const ctx = (error as { context?: Response } | null)?.context
+  if (!ctx || typeof ctx !== 'object' || !('status' in ctx)) return false
+  if (ctx.status !== 403) return false
+  try {
+    const body = (await ctx.clone().json()) as { code?: string }
+    return body?.code === 'trial_limit'
+  } catch {
+    return false
+  }
+}
+
+/** The server's attempts-used count, when the function response includes it. */
+export function trialsUsedFrom(data: unknown): number | null {
+  const v = (data as { trialsUsed?: unknown } | null)?.trialsUsed
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
 
 // The feedback Edge Function is invoked by its SLUG (the URL path), not its
 // display name. In this project the function shows as "EnglishX50feedback" in
@@ -131,13 +153,19 @@ export async function gradeSpeaking(params: GradeParams): Promise<GradeOutcome> 
   const { data, error } = await invokeFeedback({
     question: params.question,
     transcript: params.transcript,
+    // Server-side attempt counter key (account scope comes from the JWT).
+    taskKey: serverTaskKey(params.challengeId, params.challengeNumber, params.taskIndex ?? 0),
   })
   if (error || !data) {
+    if (await isTrialLimitError(error)) {
+      return { ok: false, detail: 'trial limit reached', trialLimit: true }
+    }
     const detail = await reportFunctionError('speaking task', error)
     return { ok: false, detail }
   }
 
   const result = normalizeFeedback(data)
+  const trialsUsed = trialsUsedFrom(data)
 
   // Persist (best-effort; anon insert allowed by RLS).
   supabase
@@ -163,5 +191,5 @@ export async function gradeSpeaking(params: GradeParams): Promise<GradeOutcome> 
       () => {},
     )
 
-  return { ok: true, result }
+  return { ok: true, result, trialsUsed }
 }

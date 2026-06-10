@@ -6,6 +6,11 @@
 //
 // Deploy (project already has ANTHROPIC_API_KEY set):
 //   supabase functions deploy EnglishX50feedback --no-verify-jwt
+//
+// Access: premium users (or the admin) only — see _shared/premium.ts. The JWT
+// arrives automatically via supabase-js functions.invoke().
+
+import { callerInfo, consumeTrial, MAX_TRIALS } from '../_shared/premium.ts'
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -113,6 +118,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
   if (!ANTHROPIC_API_KEY) return json({ error: 'ANTHROPIC_API_KEY not configured' }, 500)
+  const caller = await callerInfo(req)
+  if (!caller?.premium) {
+    return json({ error: 'Premium account required' }, 401)
+  }
 
   let payload: {
     question?: string
@@ -120,6 +129,8 @@ Deno.serve(async (req) => {
     student?: string
     challengeId?: string
     challengeNumber?: number
+    mode?: string
+    taskKey?: string
   }
   try {
     payload = await req.json()
@@ -130,6 +141,26 @@ Deno.serve(async (req) => {
   const question = (payload.question ?? '').trim()
   const transcript = (payload.transcript ?? '').trim()
   if (transcript.length < 2) return json({ error: 'Empty transcript' }, 400)
+
+  // --- Server-enforced attempt limit (the admin is unlimited) ---
+  // The counter lives in x50_trials, keyed per account + task, so clearing the
+  // browser no longer resets a student's attempts.
+  let trialsUsed: number | null = null
+  if (!caller.isAdmin) {
+    const taskKey =
+      (payload.taskKey ?? '').trim() ||
+      (payload.mode === 'level_test'
+        ? 'level_test'
+        : payload.challengeId
+          ? `challenge_${payload.challengeId}`
+          : payload.challengeNumber != null
+            ? `challenge_${payload.challengeNumber}`
+            : 'speaking')
+    trialsUsed = await consumeTrial(caller.userId, taskKey)
+    if (trialsUsed === -1) {
+      return json({ error: 'Trial limit reached', code: 'trial_limit', trialsUsed: MAX_TRIALS }, 403)
+    }
+  }
 
   // --- Admin-configurable rules (set in the admin panel → Grading) ---
   const rules = await loadRules()
@@ -221,5 +252,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return json({ passed, feedback })
+  return json({ passed, feedback, trialsUsed })
 })

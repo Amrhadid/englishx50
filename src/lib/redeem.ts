@@ -4,53 +4,50 @@ export type RedeemResult =
   | { ok: true; redeemedAt: string }
   | { ok: false; reason: 'invalid' | 'used' | 'error' }
 
+export type CodeStatus = 'valid' | 'used' | 'invalid' | 'error'
+
+/**
+ * Check a code's status without exposing the codes table to the client.
+ * Runs through the x50_check_code SECURITY DEFINER RPC (see
+ * supabase/redeem_lockdown.sql), so unused codes can't be listed via the API.
+ */
+export async function checkCode(code: string): Promise<CodeStatus> {
+  if (!supabase) return 'error'
+  const { data, error } = await supabase.rpc('x50_check_code', { p_code: code.trim() })
+  if (error) return 'error'
+  return data === 'valid' ? 'valid' : data === 'used' ? 'used' : 'invalid'
+}
+
 /**
  * Redeem a subscription code and bind it to the signed-in account.
  *
- * The code is marked used (single-use) and written onto the user's x50_students
- * row with code_redeemed_at — the durable, DB-side anchor for the 100-day
- * window. Because premium is keyed off the account's own row, a used code can't
- * grant access to any other account.
+ * Runs entirely server-side in ONE transaction (x50_redeem_code RPC): the code
+ * row is locked, marked used, and written onto the caller's x50_students row
+ * with code_redeemed_at — the durable, DB-side anchor for the 100-day window.
+ * A code can never be redeemed twice (concurrent attempts are serialised) and
+ * is never burned without premium being granted. Because premium is keyed off
+ * the account's own row, a used code can't grant access to any other account.
  */
 export async function redeemCode(opts: {
-  userId: string
   code: string
   name: string
   job: string
 }): Promise<RedeemResult> {
   if (!supabase) return { ok: false, reason: 'error' }
-  const value = opts.code.trim()
 
-  const { data, error } = await supabase.from('x50_codes').select('id, used_at').eq('code', value)
-  const found = ((data as { id: string; used_at: string | null }[] | null) ?? [])[0]
-  if (error || !found) return { ok: false, reason: 'invalid' }
-  if (found.used_at) return { ok: false, reason: 'used' }
+  const { data, error } = await supabase.rpc('x50_redeem_code', {
+    p_code: opts.code.trim(),
+    p_name: opts.name,
+    p_job: opts.job,
+  })
+  if (error || !data) return { ok: false, reason: 'error' }
 
-  const now = new Date().toISOString()
-
-  // Mark used only if still unused (guards against two people racing on a code).
-  const { data: upd, error: e2 } = await supabase
-    .from('x50_codes')
-    .update({ used_at: now, used_by: `${opts.name} - ${opts.job}` })
-    .eq('id', found.id)
-    .is('used_at', null)
-    .select()
-  if (e2 || !upd || upd.length === 0) return { ok: false, reason: 'used' }
-
-  // Bind to the user's student row (update if it exists, otherwise insert).
-  const existing = await supabase
-    .from('x50_students')
-    .select('id')
-    .eq('user_id', opts.userId)
-    .maybeSingle()
-
-  const payload = { name: opts.name, job: opts.job, code: value, code_redeemed_at: now }
-  const { error: e3 } = existing.data
-    ? await supabase.from('x50_students').update(payload).eq('user_id', opts.userId)
-    : // `phone` is included empty in case the column is NOT NULL (the original
-      // onboarding always set it).
-      await supabase.from('x50_students').insert({ user_id: opts.userId, phone: '', ...payload })
-
-  if (e3) return { ok: false, reason: 'error' }
-  return { ok: true, redeemedAt: now }
+  const res = data as { ok: boolean; reason?: string; redeemed_at?: string }
+  if (!res.ok) {
+    return {
+      ok: false,
+      reason: res.reason === 'used' ? 'used' : res.reason === 'invalid' ? 'invalid' : 'error',
+    }
+  }
+  return { ok: true, redeemedAt: res.redeemed_at ?? new Date().toISOString() }
 }

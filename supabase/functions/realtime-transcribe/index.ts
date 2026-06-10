@@ -8,15 +8,28 @@
 // Deploy:
 //   supabase functions deploy realtime-transcribe --no-verify-jwt
 // Secret required: OPENAI_API_KEY (already set in this project).
+//
+// Access: premium users (or the admin) only. Browsers can't set WebSocket
+// headers, so the client passes its Supabase access token as ?token=… (see
+// src/lib/liveTranscribe.ts) and it's validated here before connecting
+// upstream — otherwise anyone could open OpenAI Realtime sessions on this
+// project's API key.
+
+import { tokenHasPremium } from '../_shared/premium.ts'
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? ''
 const OAI_URL = 'wss://api.openai.com/v1/realtime?intent=transcription'
 
-Deno.serve((req) => {
+Deno.serve(async (req) => {
   if ((req.headers.get('upgrade') ?? '').toLowerCase() !== 'websocket') {
     return new Response('Expected WebSocket', { status: 426 })
   }
   if (!OPENAI_API_KEY) return new Response('OPENAI_API_KEY not configured', { status: 500 })
+
+  const token = new URL(req.url).searchParams.get('token') ?? ''
+  if (!(await tokenHasPremium(token))) {
+    return new Response('Premium account required', { status: 401 })
+  }
 
   const { socket: client, response } = Deno.upgradeWebSocket(req)
 

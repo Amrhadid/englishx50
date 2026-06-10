@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { BRAND_GRADIENT } from '../lib/theme'
 import { supabase } from '../lib/supabase'
-import { redeemCode } from '../lib/redeem'
+import { checkCode, redeemCode } from '../lib/redeem'
 import { useAuth } from '../hooks/useAuth'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
-import type { Code } from '../types'
 
 interface PremiumModalProps {
   onClose: () => void
@@ -107,7 +106,7 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
   const [code, setCode] = useState('')
   const [verifying, setVerifying] = useState(false)
   const [codeMsg, setCodeMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const [validatedCode, setValidatedCode] = useState<Code | null>(null)
+  const [validatedCode, setValidatedCode] = useState<string | null>(null)
 
   // Activation form (after a valid code)
   const [redeemName, setRedeemName] = useState('')
@@ -166,26 +165,26 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
     setVerifying(true)
     setCodeMsg(null)
 
-    const { data, error } = await supabase.from('x50_codes').select('*').eq('code', value)
-    const matches = (data as Code[] | null) ?? []
+    // Server-side check (the codes table itself is not readable by clients).
+    const status = await checkCode(value)
+    setVerifying(false)
 
-    if (error || matches.length === 0) {
-      setVerifying(false)
+    if (status === 'used') {
+      setCodeMsg({ ok: false, text: 'هذا الكود مستخدم بالفعل' })
+      return
+    }
+    if (status === 'error') {
+      setCodeMsg({ ok: false, text: 'تعذّر التحقق الآن، حاول لاحقاً' })
+      return
+    }
+    if (status === 'invalid') {
       setCodeMsg({ ok: false, text: 'كود غير صحيح، تأكد منه أو اشترك للحصول على كود' })
       return
     }
 
-    const found = matches[0]
-    if (found.used_at) {
-      setVerifying(false)
-      setCodeMsg({ ok: false, text: 'هذا الكود مستخدم بالفعل' })
-      return
-    }
-
     // Valid code — collect the user's details and agreement before activating.
-    setVerifying(false)
     setCodeMsg(null)
-    setValidatedCode(found)
+    setValidatedCode(value)
     setView('redeem')
   }
 
@@ -211,8 +210,7 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
     setCodeMsg(null)
 
     const result = await redeemCode({
-      userId: user.id,
-      code: validatedCode.code,
+      code: validatedCode,
       name: redeemName.trim(),
       job: redeemJob.trim(),
     })
