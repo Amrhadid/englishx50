@@ -288,7 +288,11 @@ export default function SpeakingTask({
       {/* Active analysis animation — covers voice-to-text + AI grading. */}
       {(transcribing || (loading && !result)) && (
         <AnalysisLoader
-          label={transcribing ? 'جارٍ تحويل الصوت إلى نص…' : 'جارٍ تحليل إجابتك بالذكاء الاصطناعي…'}
+          label={
+            transcribing
+              ? 'جارٍ تحويل الصوت إلى نص…'
+              : 'جاري تحليل اجابتك واكتشاف نقاط ضعفك وتقديم الاقتراحات المناسبة لمستواك'
+          }
         />
       )}
 

@@ -67,7 +67,9 @@ export default function AnalysisLoader({ label }: { label: string }) {
         ))}
       </div>
 
-      <p className="mt-3 text-[14px] font-bold text-[#1b1730]">{label}</p>
+      <p className="mt-3 max-w-sm text-center text-[14px] font-bold leading-relaxed text-[#1b1730]">
+        {label}
+      </p>
       <p className="mt-1 text-[12px] font-semibold text-[#a39ec0]">يستغرق التحليل عادةً أقل من دقيقة</p>
     </div>
   )
