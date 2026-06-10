@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { useAuth } from '../hooks/useAuth'
 import { challengeVideos } from '../lib/challenge'
-import { markVideoWatched, recordCompletionIfDone } from '../lib/completion'
+import { markVideoWatched, getWatchedVideos, recordCompletionIfDone } from '../lib/completion'
+import { isAdminEmail } from '../lib/admin'
 import { toArabicDigits } from '../lib/theme'
 import type { Challenge } from '../types'
 
@@ -47,9 +48,25 @@ function CloseIcon() {
 export default function LessonModal({ challenge, onClose }: LessonModalProps) {
   const { premiumActive, refetch } = useOnboardingContext()
   const { user } = useAuth()
+  const isAdmin = isAdminEmail(user?.email)
   const videos = premiumActive ? challengeVideos(challenge) : []
   const [selected, setSelected] = useState(0)
   const uid = videos[selected]?.uid ?? ''
+
+  // Videos unlock sequentially: part 2 stays locked until part 1 is watched
+  // (≥90% of real playback). Kept in state so finishing a video unlocks the
+  // next one live; the admin can preview everything.
+  const [watchedUids, setWatchedUids] = useState<string[]>(() =>
+    getWatchedVideos(user?.id, challenge.id),
+  )
+  useEffect(() => {
+    Promise.resolve().then(() => setWatchedUids(getWatchedVideos(user?.id, challenge.id)))
+  }, [user, challenge.id])
+  const videoUnlocked = (index: number): boolean => {
+    if (isAdmin || index <= 0) return true
+    const prevUid = videos[index - 1]?.uid
+    return !!prevUid && watchedUids.includes(prevUid)
+  }
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const rowIdRef = useRef<string | null>(null)
   const maxPctRef = useRef(0)
@@ -83,6 +100,8 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
       // Count the video as watched near the end, then check challenge completion.
       if (rounded >= 90 && user) {
         markVideoWatched(user.id, challenge.id, uid)
+        // Unlock the next part live.
+        setWatchedUids((prev) => (prev.includes(uid) ? prev : [...prev, uid]))
         recordCompletionIfDone(user.id, challenge).then((done) => {
           if (done) refetch()
         })
@@ -172,22 +191,39 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
             </div>
             {videos.length > 1 && (
               <div className="mt-3 flex flex-col gap-2">
-                {videos.map((v, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setSelected(i)}
-                    className={`flex items-center gap-2.5 rounded-2xl border p-3 text-right text-[13px] font-bold transition ${
-                      i === selected
-                        ? 'border-[#7C6FF0] bg-[#f1edff] text-[#534AB7]'
-                        : 'border-[#ece7fb] bg-white text-[#1b1730] hover:border-[#c4b8ff]'
-                    }`}
-                  >
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#EEEDFE] text-[12px] font-extrabold text-[#534AB7]">
-                      {toArabicDigits(i + 1)}
-                    </span>
-                    <span>{v.title || `فيديو ${toArabicDigits(i + 1)}`}</span>
-                  </button>
-                ))}
+                {videos.map((v, i) => {
+                  const unlocked = videoUnlocked(i)
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => unlocked && setSelected(i)}
+                      disabled={!unlocked}
+                      className={`flex items-center gap-2.5 rounded-2xl border p-3 text-right text-[13px] font-bold transition ${
+                        i === selected
+                          ? 'border-[#7C6FF0] bg-[#f1edff] text-[#534AB7]'
+                          : unlocked
+                            ? 'border-[#ece7fb] bg-white text-[#1b1730] hover:border-[#c4b8ff]'
+                            : 'cursor-not-allowed border-[#ece7fb] bg-[#faf9ff] text-[#a39ec0]'
+                      }`}
+                    >
+                      <span
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-extrabold ${
+                          unlocked ? 'bg-[#EEEDFE] text-[#534AB7]' : 'bg-[#f0eef6] text-[#a39ec0]'
+                        }`}
+                      >
+                        {unlocked ? toArabicDigits(i + 1) : '🔒'}
+                      </span>
+                      <span className="flex flex-col items-start">
+                        <span>{v.title || `فيديو ${toArabicDigits(i + 1)}`}</span>
+                        {!unlocked && (
+                          <span className="text-[11px] font-semibold text-[#a39ec0]">
+                            شاهد الفيديو السابق أولاً
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             )}
           </>
