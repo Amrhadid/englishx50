@@ -133,13 +133,17 @@ export default function SpeakingTask({
     setLive(false)
     setTranscribing(true)
     const { transcript: text, audio } = await session.stop()
-    setTranscribing(false)
     setTranscript(text)
     if (text.trim().length >= 2) {
-      // Store the recording (R2) so the admin can play it; grade in parallel.
+      // Store the recording (R2) so the admin can play it; keep the analysis
+      // loader up through the upload so it doesn't flash away.
       const audioKey = await uploadAudio(audio)
+      setTranscribing(false)
       grade(text, audioKey)
-    } else setError('لم نلتقط صوتاً واضحاً، حاول مرة أخرى')
+    } else {
+      setTranscribing(false)
+      setError('لم نلتقط صوتاً واضحاً، حاول مرة أخرى')
+    }
   }
 
   const grade = async (text: string, audioKey: string | null = null) => {

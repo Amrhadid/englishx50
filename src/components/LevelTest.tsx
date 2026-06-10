@@ -13,6 +13,7 @@ import {
   MAX_TRIALS,
 } from '../lib/progress'
 import { LiveSession, canLiveTranscribe } from '../lib/liveTranscribe'
+import { uploadAudio } from '../lib/audio'
 import { isAdminEmail } from '../lib/admin'
 import { useAuth } from '../hooks/useAuth'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
@@ -237,12 +238,18 @@ function LevelTestModal({
     if (!session) return
     sessionRef.current = null
     setTranscribing(true)
-    const { transcript: text } = await session.stop()
-    setTranscribing(false)
+    const { transcript: text, audio } = await session.stop()
     setTranscript(text)
     // Grade automatically — no extra click needed.
-    if (text.trim().length >= 2) getFeedback(text)
-    else setRecError('لم نلتقط صوتاً واضحاً، حاول مرة أخرى')
+    if (text.trim().length >= 2) {
+      // Store the recording (R2) so the admin can play it, like challenge tasks.
+      const audioKey = await uploadAudio(audio)
+      setTranscribing(false)
+      getFeedback(text, audioKey)
+    } else {
+      setTranscribing(false)
+      setRecError('لم نلتقط صوتاً واضحاً، حاول مرة أخرى')
+    }
   }
 
   // Live transcription (OpenAI Realtime) with a batch fallback; words stream in
@@ -286,7 +293,7 @@ function LevelTestModal({
     }, 1000)
   }
 
-  const getFeedback = async (text: string) => {
+  const getFeedback = async (text: string, audioKey: string | null = null) => {
     if (!canTry) {
       setRecError('لقد استخدمت محاولتيك لهذه المهمة')
       return
@@ -327,6 +334,38 @@ function LevelTestModal({
     }
 
     const mapped = normalizeFeedback(data)
+
+    // Persist the attempt (with the stored recording) to x50_submissions so
+    // the admin Students view can review and play it, like challenge tasks.
+    // Best-effort: a failed insert shouldn't break the user's feedback.
+    let student: string | null = null
+    try {
+      student = localStorage.getItem('x50_user')
+    } catch {
+      /* ignore */
+    }
+    supabase
+      .from('x50_submissions')
+      .insert({
+        challenge_id: null,
+        challenge_number: null,
+        student,
+        question: 'Level Test — Introduce yourself in English',
+        transcript: text,
+        score: mapped.score,
+        passed: mapped.passed,
+        feedback: mapped.feedback,
+        mistakes_json: JSON.stringify(mapped.mistakes ?? []),
+        vocabulary_json: JSON.stringify(mapped.vocabulary ?? []),
+        strengths_json: JSON.stringify(mapped.strengths ?? []),
+        weaknesses_json: JSON.stringify(mapped.weaknesses ?? []),
+        corrected_sentences_json: JSON.stringify(mapped.corrected_sentences ?? []),
+        audio_key: audioKey,
+      })
+      .then(
+        () => {},
+        () => {},
+      )
 
     // Every graded answer consumes a server-side attempt (it costs an AI
     // call), including ones the client-side rules below reject. Prefer the

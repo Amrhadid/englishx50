@@ -917,8 +917,12 @@ function StudentsAdmin() {
                         <div key={s.id} className="rounded-xl border border-[#f0ecf8] p-3">
                           <div className="mb-1 flex items-center justify-between">
                             <p className="text-xs font-bold text-[#534AB7]">
-                              {s.challenge_number != null ? `Challenge ${s.challenge_number}` : 'Speaking'} ·{' '}
-                              {fmt(s.created_at)}
+                              {s.challenge_number != null
+                                ? `Challenge ${s.challenge_number}`
+                                : s.question?.startsWith('Level Test')
+                                  ? 'Level test'
+                                  : 'Speaking'}{' '}
+                              · {fmt(s.created_at)}
                             </p>
                             <span
                               className={`rounded-full px-2.5 py-1 text-xs font-bold ${
