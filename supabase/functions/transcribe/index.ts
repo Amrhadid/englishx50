@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
   if (!OPENAI_API_KEY) return json({ error: 'OPENAI_API_KEY not configured' }, 500)
   if (!(await callerHasPremium(req))) {
-    return json({ error: 'Premium account required' }, 401)
+    return json({ error: 'Premium account required', code: 'not_premium' }, 401)
   }
 
   // --- Read the audio (multipart file or base64 JSON) ---

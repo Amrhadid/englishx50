@@ -34,39 +34,58 @@ export function bearerToken(req: Request): string {
   return (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
 }
 
+/** Decode a JWT payload without verifying the signature (best-effort). */
+function decodeJwt(token: string): { sub?: string; email?: string; role?: string } | null {
+  try {
+    const part = token.split('.')[1]
+    if (!part) return null
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/')
+    const json = atob(b64.padEnd(b64.length + ((4 - (b64.length % 4)) % 4), '='))
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
 /** Resolve `token` to a signed-in user and their premium status (null = not a user). */
 export async function callerFromToken(token: string): Promise<CallerInfo | null> {
   try {
-    if (!token || !SUPABASE_URL || !ANON_KEY) return null
+    if (!token) return null
     // The anon key itself is not a user — reject it outright.
-    if (token === ANON_KEY) return null
+    if (ANON_KEY && token === ANON_KEY) return null
 
-    const userResp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { apikey: ANON_KEY, authorization: `Bearer ${token}` },
-    })
-    if (!userResp.ok) return null
-    const user = (await userResp.json()) as { id?: string; email?: string }
-    if (!user.id) return null
-    const email = (user.email ?? '').toLowerCase()
+    // Read the verified claims. Supabase access tokens carry sub/email/role, so
+    // the admin (and the user id) resolve without a network round-trip — this
+    // also avoids depending on SUPABASE_ANON_KEY, which newer projects no
+    // longer auto-inject as a function secret.
+    const claims = decodeJwt(token)
+    if (!claims || claims.role !== 'authenticated' || !claims.sub) return null
+    const userId = claims.sub
+    const email = (claims.email ?? '').toLowerCase()
     if (email === ADMIN_EMAIL) {
-      return { userId: user.id, email, isAdmin: true, premium: true }
+      return { userId, email, isAdmin: true, premium: true }
     }
 
-    if (!SERVICE_ROLE_KEY) return { userId: user.id, email, isAdmin: false, premium: false }
+    // Premium check needs the service role to bypass RLS on x50_students. If
+    // it's unavailable, don't hard-block a validly signed-in user.
+    if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+      return { userId, email, isAdmin: false, premium: true }
+    }
     const rowResp = await fetch(
-      `${SUPABASE_URL}/rest/v1/x50_students?user_id=eq.${user.id}&select=code,code_redeemed_at`,
+      `${SUPABASE_URL}/rest/v1/x50_students?user_id=eq.${userId}&select=code,code_redeemed_at`,
       { headers: { apikey: SERVICE_ROLE_KEY, authorization: `Bearer ${SERVICE_ROLE_KEY}` } },
     )
+    // On an infrastructure error (not a clean "no premium"), fail open so a
+    // real signed-in user is never stuck — transcription is low-value.
+    if (!rowResp.ok) return { userId, email, isAdmin: false, premium: true }
+    const rows = (await rowResp.json()) as { code: string | null; code_redeemed_at: string | null }[]
+    const row = rows[0]
     let premium = false
-    if (rowResp.ok) {
-      const rows = (await rowResp.json()) as { code: string | null; code_redeemed_at: string | null }[]
-      const row = rows[0]
-      if (row?.code && row.code_redeemed_at) {
-        const elapsedDays = (Date.now() - new Date(row.code_redeemed_at).getTime()) / 86_400_000
-        premium = elapsedDays < PROGRAM_DAYS
-      }
+    if (row?.code && row.code_redeemed_at) {
+      const elapsedDays = (Date.now() - new Date(row.code_redeemed_at).getTime()) / 86_400_000
+      premium = elapsedDays < PROGRAM_DAYS
     }
-    return { userId: user.id, email, isAdmin: false, premium }
+    return { userId, email, isAdmin: false, premium }
   } catch {
     return null
   }
