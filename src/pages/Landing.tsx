@@ -156,6 +156,11 @@ function LandingInner() {
             c.pdf_url ? window.open(c.pdf_url, '_blank', 'noopener') : setComingSoonFor(c),
           )
         }
+        onFile={(c) =>
+          gateChallenge(c, () =>
+            c.file_url ? window.open(c.file_url, '_blank', 'noopener') : setComingSoonFor(c),
+          )
+        }
         onUpgrade={() => requireAccess()}
         lockLabelFor={lockLabelFor}
       />

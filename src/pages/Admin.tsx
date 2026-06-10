@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase, REVIEWS_BUCKET } from '../lib/supabase'
+import { supabase, REVIEWS_BUCKET, FILES_BUCKET } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import type { Challenge, Review, Code } from '../types'
 import { TrashIcon } from '../components/icons'
@@ -14,6 +14,7 @@ type ChallengeForm = {
   number: string
   title: string
   pdf_url: string
+  file_url: string
   videos: { title: string; uid: string }[]
   speaking_tasks: string[]
   is_locked: boolean
@@ -23,6 +24,7 @@ const EMPTY_FORM: ChallengeForm = {
   number: '',
   title: '',
   pdf_url: '',
+  file_url: '',
   videos: [{ title: '', uid: '' }],
   speaking_tasks: [''],
   is_locked: false,
@@ -137,6 +139,7 @@ function ChallengesAdmin() {
   const [form, setForm] = useState<ChallengeForm>(EMPTY_FORM)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [uploadingFile, setUploadingFile] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
 
   const load = async () => {
@@ -173,6 +176,7 @@ function ChallengesAdmin() {
       number: Number(form.number),
       title: form.title,
       pdf_url: form.pdf_url || null,
+      file_url: form.file_url || null,
       videos,
       speaking_tasks,
       // Keep the legacy single columns in sync with the first entry.
@@ -207,6 +211,7 @@ function ChallengesAdmin() {
       number: String(c.number),
       title: c.title,
       pdf_url: c.pdf_url ?? '',
+      file_url: c.file_url ?? '',
       videos: videos.length ? videos : [{ title: '', uid: '' }],
       speaking_tasks: speaking_tasks.length ? speaking_tasks : [''],
       is_locked: c.is_locked,
@@ -220,6 +225,29 @@ function ChallengesAdmin() {
     await supabase.from('x50_challenges').delete().eq('id', id)
     if (editingId === id) resetForm()
     load()
+  }
+
+  const uploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!supabase) {
+      setMsg('Supabase is not configured.')
+      return
+    }
+    setUploadingFile(true)
+    setMsg(null)
+    const path = `challenges/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`
+    const { error } = await supabase.storage
+      .from(FILES_BUCKET)
+      .upload(path, file, { contentType: file.type || 'application/pdf', upsert: false })
+    setUploadingFile(false)
+    if (error) {
+      setMsg(`Upload failed: ${error.message}`)
+      return
+    }
+    const { data: pub } = supabase.storage.from(FILES_BUCKET).getPublicUrl(path)
+    setForm((f) => ({ ...f, file_url: pub.publicUrl }))
   }
 
   const field = 'w-full rounded-xl border border-[#e8e0f0] px-3 py-2 text-sm outline-none focus:border-[#534AB7]'
@@ -249,6 +277,39 @@ function ChallengesAdmin() {
           onChange={(e) => setForm({ ...form, pdf_url: e.target.value })}
           className={field}
         />
+
+        {/* Challenge file (PDF) — shown behind the "ملف التحدي" button */}
+        <div className="rounded-xl border border-[#f0ecf8] p-3">
+          <p className="mb-2 text-xs font-bold text-[#5b5670]">Challenge file (PDF)</p>
+          {form.file_url ? (
+            <div className="flex items-center gap-2">
+              <a
+                href={form.file_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="min-w-0 flex-1 truncate text-sm font-semibold text-[#534AB7] hover:underline"
+              >
+                {decodeURIComponent(form.file_url.split('/').pop() ?? 'View file')}
+              </a>
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, file_url: '' })}
+                className="shrink-0 rounded-lg bg-[#FEE2E2] px-3 py-1.5 text-sm font-bold text-[#DC2626]"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={uploadFile}
+              disabled={uploadingFile}
+              className="block w-full text-sm text-[#5b5670] file:mr-3 file:rounded-xl file:border-0 file:bg-[#534AB7] file:px-4 file:py-2 file:text-sm file:font-bold file:text-white disabled:opacity-60"
+            />
+          )}
+          {uploadingFile && <p className="mt-2 text-xs text-[#534AB7]">Uploading…</p>}
+        </div>
 
         {/* Videos (multiple) */}
         <div className="rounded-xl border border-[#f0ecf8] p-3">

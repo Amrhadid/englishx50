@@ -35,11 +35,12 @@ export function themeFor(index: number): PastelTheme {
 /** Signature brand gradient used on primary CTAs and highlights. */
 export const BRAND_GRADIENT = 'linear-gradient(135deg, #7C6FF0 0%, #A964F0 45%, #F25C8A 100%)'
 
-/** Consistent colours for the three action types on every card. */
+/** Consistent colours for the action types on every card. */
 export const ACTION_THEMES = {
   source: { accent: '#7C6FF0', soft: '#EDEBFF', deep: '#473BBE' },
   speaking: { accent: '#23C4A0', soft: '#D8FAF0', deep: '#0C7C62' },
   feedback: { accent: '#F5B23C', soft: '#FEEFD2', deep: '#A66A09' },
+  file: { accent: '#37AEF0', soft: '#DAF1FE', deep: '#0B6FA8' },
 } as const
 
 const AR_DIGITS = '٠١٢٣٤٥٦٧٨٩'

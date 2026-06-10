@@ -9,6 +9,8 @@ export interface Challenge {
   title: string
   video_url: string | null
   pdf_url: string | null
+  /** Challenge PDF uploaded from the admin panel (Supabase storage URL). */
+  file_url?: string | null
   speaking_task: string | null
   /** Multiple lesson videos (managed in admin). Falls back to video_url. */
   videos?: ChallengeVideo[] | null

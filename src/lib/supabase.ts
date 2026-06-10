@@ -25,4 +25,5 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
   : null
 
 export const REVIEWS_BUCKET = 'x50-reviews'
+export const FILES_BUCKET = 'x50-files'
 export const WHATSAPP_URL = 'https://wa.me/201097965058'

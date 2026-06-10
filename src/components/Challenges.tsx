@@ -10,6 +10,7 @@ interface ChallengesProps {
   onSpeak: (challenge: Challenge) => void
   onWatch: (challenge: Challenge) => void
   onSource: (challenge: Challenge) => void
+  onFile: (challenge: Challenge) => void
   onUpgrade: () => void
   lockLabelFor?: (challenge: Challenge) => string | null
 }
@@ -55,6 +56,20 @@ function ChartBarIcon() {
   )
 }
 
+function FileIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-[15px] w-[15px]" aria-hidden="true">
+      <path
+        d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9l-6-6Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M13 3v6h6M9 13h6M9 17h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function LockIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
@@ -68,6 +83,7 @@ const ACTIONS = [
   { key: 'source', label: 'المصدر', icon: <LinkIcon />, theme: ACTION_THEMES.source },
   { key: 'speaking', label: 'تحدّث', icon: <MicIcon />, theme: ACTION_THEMES.speaking },
   { key: 'feedback', label: 'تقييم', icon: <ChartBarIcon />, theme: ACTION_THEMES.feedback },
+  { key: 'file', label: 'ملف التحدي', icon: <FileIcon />, theme: ACTION_THEMES.file },
 ] as const
 
 const STEPS = [
@@ -90,6 +106,7 @@ function ChallengeRow({
   onSpeak,
   onWatch,
   onSource,
+  onFile,
 }: {
   challenge: Challenge
   index: number
@@ -100,6 +117,7 @@ function ChallengeRow({
   onSpeak: () => void
   onWatch: () => void
   onSource: () => void
+  onFile: () => void
 }) {
   const theme = themeFor(index)
   const num = String(challenge.number).padStart(2, '0')
@@ -161,7 +179,9 @@ function ChallengeRow({
                     ? onSpeak
                     : a.key === 'source'
                       ? onSource
-                      : onSelect
+                      : a.key === 'file'
+                        ? onFile
+                        : onSelect
               }
               className="flex items-center gap-1.5 rounded-[30px] px-[18px] py-2.5 text-[13px] font-bold transition hover:brightness-95"
               style={{ backgroundColor: a.theme.soft, color: a.theme.deep }}
@@ -183,6 +203,7 @@ export default function Challenges({
   onSpeak,
   onWatch,
   onSource,
+  onFile,
   onUpgrade,
   lockLabelFor,
 }: ChallengesProps) {
@@ -255,6 +276,7 @@ export default function Challenges({
               onSpeak={() => onSpeak(c)}
               onWatch={() => onWatch(c)}
               onSource={() => onSource(c)}
+              onFile={() => onFile(c)}
             />
           ))}
         </div>
