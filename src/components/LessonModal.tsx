@@ -87,8 +87,10 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
     return !!prevUid && watchedUids.includes(prevUid)
   }
   const displayPct = (vUid: string): number => {
-    const raw = watchedUids.includes(vUid) ? 100 : (progressPct[vUid] ?? 0)
-    return Math.min(100, Math.round((raw / VIDEO_WATCHED_PCT) * 100))
+    // Only a genuinely-watched part reads 100%; otherwise cap at 99 so the bar
+    // never claims complete before the next part actually unlocks.
+    if (watchedUids.includes(vUid)) return 100
+    return Math.min(99, Math.round(((progressPct[vUid] ?? 0) / VIDEO_WATCHED_PCT) * 100))
   }
 
   // Resume the selected part where the student left off. Captured only when the
@@ -107,10 +109,9 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const rowIdRef = useRef<string | null>(null)
   const maxPctRef = useRef(0)
-  const watchedSecondsRef = useRef(0)
-  const lastTimeRef = useRef<number | null>(null)
   // Furthest position reached by genuine playback — the student may seek back
-  // anywhere up to here but cannot jump ahead of it.
+  // anywhere up to here but cannot jump ahead of it. Also the basis for the
+  // watched percent (skipping is blocked, so it's a true measure).
   const maxReachedRef = useRef(0)
   const pollRef = useRef<number | null>(null)
 
@@ -121,9 +122,7 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
     // of restarting the watched-seconds tally from zero.
     const startPos = watchedUids.includes(uid) ? 0 : getVideoPosition(user?.id, challenge.id, uid)
     maxPctRef.current = 0
-    watchedSecondsRef.current = startPos
     maxReachedRef.current = startPos
-    lastTimeRef.current = null
     rowIdRef.current = null
     let player: any = null
 
@@ -168,9 +167,11 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
       const Stream = (window as any).Stream
       if (!Stream || !iframeRef.current) return
       player = Stream(iframeRef.current)
-      // Count only real playback time: a seek (or buffered jump) moves
-      // currentTime far more than one poll interval and is discarded, so
-      // skipping ahead doesn't register as watching.
+      // Progress = the furthest position genuinely watched. Forward seeking is
+      // blocked (below), so this can't be gamed by skipping, and finishing the
+      // video reliably reaches ~100% — unlike summing playback deltas, which
+      // under-counts around buffering/missed polls and could stall below the
+      // unlock threshold even after watching the whole thing.
       const POLL_SECONDS = 3
       const tick = () => {
         const dur = player?.duration
@@ -178,21 +179,14 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
         if (!(dur > 0) || typeof cur !== 'number' || cur < 0) return
         // Remember where they are so the part resumes here next time.
         saveVideoPosition(user?.id, challenge.id, uid, cur)
-        const last = lastTimeRef.current
-        lastTimeRef.current = cur
-        if (last === null) return
-        // Credit only normal forward playback. When paused/buffering the time
-        // doesn't advance (delta ~0); a seek jumps far (delta large) — both are
-        // ignored. We deliberately don't read player.paused: the Stream SDK's
-        // flag is unreliable right after autoplay and would freeze the bar.
-        const delta = cur - last
         const rate = player?.playbackRate || 1
-        // Cap absorbs a laggy/missed poll (~2 intervals) while still rejecting
-        // a real seek, which jumps much further than normal playback.
-        if (delta > 0.1 && delta <= POLL_SECONDS * rate * 2.2) {
-          watchedSecondsRef.current += delta
-          savePercent((watchedSecondsRef.current / dur) * 100)
+        // Extend the watched frontier for contiguous playback (backstop in case
+        // timeupdate is sparse); forward seeks are snapped so cur can't run
+        // ahead of the frontier.
+        if (cur > maxReachedRef.current && cur <= maxReachedRef.current + POLL_SECONDS * rate * 2.2) {
+          maxReachedRef.current = cur
         }
+        savePercent((maxReachedRef.current / dur) * 100)
       }
       pollRef.current = window.setInterval(tick, POLL_SECONDS * 1000)
 
@@ -222,24 +216,16 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
           } catch {
             /* ignore */
           }
-          lastTimeRef.current = maxReachedRef.current
-          return
         }
-        // Restart delta tracking from the new position.
-        lastTimeRef.current = cur
       })
+      // Reaching the end marks the part fully watched even if the last frames
+      // weren't sampled by a poll.
       player.addEventListener?.('ended', () => {
         const dur = player?.duration
-        const cur = player?.currentTime
-        // Credit the tail played since the last poll — `ended` fires between
-        // polls with the player reporting paused, so tick() would skip it.
-        if (typeof cur === 'number' && lastTimeRef.current !== null) {
-          const delta = cur - lastTimeRef.current
-          const rate = player?.playbackRate || 1
-          if (delta > 0 && delta <= POLL_SECONDS * rate * 1.5) watchedSecondsRef.current += delta
-          lastTimeRef.current = cur
+        if (dur > 0) {
+          maxReachedRef.current = dur
+          savePercent(100)
         }
-        if (dur > 0) savePercent((watchedSecondsRef.current / dur) * 100)
       })
     }
     setup()
