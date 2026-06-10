@@ -108,6 +108,10 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
   }
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const rowIdRef = useRef<string | null>(null)
+  // Latest user id, read inside the player effect (whose closure captures the
+  // initial — often still null — value from this component's own useAuth).
+  const userIdRef = useRef<string | undefined>(user?.id)
+  userIdRef.current = user?.id
   const maxPctRef = useRef(0)
   // Furthest position reached by genuine playback — the student may seek back
   // anywhere up to here but cannot jump ahead of it. Also the basis for the
@@ -141,18 +145,21 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
       const rounded = Math.min(100, Math.round(pct))
       if (rounded <= maxPctRef.current) return
       maxPctRef.current = rounded
+      const uidNow = userIdRef.current
       // Live per-part progress bar (persisted across reopens).
-      saveVideoProgress(user?.id, challenge.id, uid, rounded)
+      saveVideoProgress(uidNow, challenge.id, uid, rounded)
       setProgressPct((prev) => ({ ...prev, [uid]: Math.max(prev[uid] ?? 0, rounded) }))
-      // Count the video as watched only when effectively all of it was played,
-      // then check challenge completion.
-      if (rounded >= VIDEO_WATCHED_PCT && user) {
-        markVideoWatched(user.id, challenge.id, uid)
-        // Unlock the next part live.
+      // Count the video as watched once effectively all of it was played, then
+      // unlock the next part. This must NOT depend on the effect-closure `user`,
+      // which is captured as null before this component's auth resolves.
+      if (rounded >= VIDEO_WATCHED_PCT) {
+        markVideoWatched(uidNow, challenge.id, uid)
         setWatchedUids((prev) => (prev.includes(uid) ? prev : [...prev, uid]))
-        recordCompletionIfDone(user.id, challenge).then((done) => {
-          if (done) refetch()
-        })
+        if (uidNow) {
+          recordCompletionIfDone(uidNow, challenge).then((done) => {
+            if (done) refetch()
+          })
+        }
       }
       if (!supabase || !rowIdRef.current) return
       await supabase
@@ -178,7 +185,7 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
         const cur = player?.currentTime
         if (!(dur > 0) || typeof cur !== 'number' || cur < 0) return
         // Remember where they are so the part resumes here next time.
-        saveVideoPosition(user?.id, challenge.id, uid, cur)
+        saveVideoPosition(userIdRef.current, challenge.id, uid, cur)
         const rate = player?.playbackRate || 1
         // Extend the watched frontier for contiguous playback (backstop in case
         // timeupdate is sparse); forward seeks are snapped so cur can't run
