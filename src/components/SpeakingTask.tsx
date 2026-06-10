@@ -145,7 +145,7 @@ export default function SpeakingTask({
     setRecording(false)
     setLive(false)
     setTranscribing(true)
-    const { transcript: text, audio } = await session.stop()
+    const { transcript: text, audio, error: sttError } = await session.stop()
     setTranscript(text)
     if (text.trim().length >= 2) {
       // Store the recording (R2) so the admin can play it; keep the analysis
@@ -155,7 +155,14 @@ export default function SpeakingTask({
       grade(text, audioKey)
     } else {
       setTranscribing(false)
-      setError('لم نلتقط صوتاً واضحاً، حاول مرة أخرى')
+      // Distinguish the failure so it's diagnosable from a screenshot.
+      setError(
+        audio.size === 0
+          ? 'لم يصل صوت من الميكروفون — تأكد من السماح بالميكروفون وحاول مرة أخرى'
+          : sttError
+            ? `تعذّر تحويل الصوت إلى نص، حاول مرة أخرى — ${sttError}`
+            : 'لم نلتقط صوتاً واضحاً، حاول مرة أخرى',
+      )
     }
   }
 

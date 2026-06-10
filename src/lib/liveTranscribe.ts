@@ -244,7 +244,7 @@ export class LiveSession {
     })
   }
 
-  async stop(): Promise<{ transcript: string; audio: Blob }> {
+  async stop(): Promise<{ transcript: string; audio: Blob; error?: string }> {
     const blobPromise = new Promise<Blob>((resolve) => {
       const rec = this.recorder
       if (!rec || rec.state === 'inactive') {
@@ -272,7 +272,10 @@ export class LiveSession {
     const audio = await withTimeout(blobPromise, 10_000, new Blob(this.chunks, { type: 'audio/webm' }))
 
     // Prefer the realtime transcript; fall back to batch Whisper otherwise.
+    // `error` carries the batch failure reason so the UI can show what
+    // actually went wrong instead of a generic "no clear voice".
     let transcript = !rtFailed && rtText.trim().length >= 2 ? rtText.trim() : ''
+    let error: string | undefined
     if (!transcript) {
       if (audio.size > 0) {
         const res = await withTimeout(
@@ -280,12 +283,17 @@ export class LiveSession {
           90_000,
           { ok: false as const, detail: 'timeout' },
         )
-        transcript = res.ok && res.transcript.trim().length >= 2 ? res.transcript.trim() : rtText.trim()
+        if (res.ok && res.transcript.trim().length >= 2) {
+          transcript = res.transcript.trim()
+        } else {
+          transcript = rtText.trim()
+          if (!res.ok) error = res.detail
+        }
       } else {
         transcript = rtText.trim()
       }
     }
-    return { transcript, audio }
+    return { transcript, audio, error }
   }
 
   cancel(): void {

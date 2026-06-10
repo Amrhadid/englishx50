@@ -252,7 +252,7 @@ function LevelTestModal({
     if (!session) return
     sessionRef.current = null
     setTranscribing(true)
-    const { transcript: text, audio } = await session.stop()
+    const { transcript: text, audio, error: sttError } = await session.stop()
     setTranscript(text)
     // Grade automatically — no extra click needed.
     if (text.trim().length >= 2) {
@@ -262,7 +262,14 @@ function LevelTestModal({
       getFeedback(text, audioKey)
     } else {
       setTranscribing(false)
-      setRecError('لم نلتقط صوتاً واضحاً، حاول مرة أخرى')
+      // Distinguish the failure so it's diagnosable from a screenshot.
+      setRecError(
+        audio.size === 0
+          ? 'لم يصل صوت من الميكروفون — تأكد من السماح بالميكروفون وحاول مرة أخرى'
+          : sttError
+            ? `تعذّر تحويل الصوت إلى نص، حاول مرة أخرى — ${sttError}`
+            : 'لم نلتقط صوتاً واضحاً، حاول مرة أخرى',
+      )
     }
   }
 
