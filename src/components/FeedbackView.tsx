@@ -70,10 +70,14 @@ export default function FeedbackView({
             </h3>
             {mistakes.map((m, i) => (
               <div key={i} className="rounded-2xl border border-[#efeafc] bg-white p-4 shadow-sm">
-                <p className="font-semibold line-through" style={{ color: CORAL }} dir="ltr">
+                <p
+                  className="rounded-xl border-2 p-3 font-semibold"
+                  style={{ borderColor: '#DC2626', backgroundColor: '#FEF2F2', color: '#DC2626' }}
+                  dir="ltr"
+                >
                   {m.original}
                 </p>
-                <p className="mt-1 font-bold" style={{ color: TEAL }} dir="ltr">
+                <p className="mt-2 font-bold" style={{ color: TEAL }} dir="ltr">
                   {m.correction}
                 </p>
                 {m.explanation && (
