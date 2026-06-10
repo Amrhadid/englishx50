@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { reportFunctionError } from './functionError'
 import { serverTaskKey } from './progress'
+import { withTimeout } from './async'
 import type { SpeakingResult, Mistake, VocabItem } from '../types'
 
 interface GradeParams {
@@ -81,7 +82,12 @@ export async function invokeFeedback(
   if (!supabase) return { data: null, error: new Error('Supabase not configured') }
   let bestError: unknown = null
   for (const name of FUNCTION_NAMES) {
-    const { data, error } = await supabase.functions.invoke(name, { body })
+    // Time-boxed: a hung call must surface as an error, not freeze the UI.
+    const { data, error } = await withTimeout(
+      supabase.functions.invoke(name, { body }),
+      120_000,
+      { data: null, error: new Error('timeout') },
+    )
     if (!error && data) return { data, error: null }
     // Prefer an HTTP error (carries a Response on .context) over a network/
     // fetch error, so the surfaced message is the most informative one.

@@ -6,6 +6,7 @@
 // batch `transcribe` function — so the final transcript + grading never regress.
 
 import { recorderOptions, transcribeAudio } from './transcribe'
+import { withTimeout } from './async'
 import { supabase } from './supabase'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
@@ -258,22 +259,27 @@ export class LiveSession {
       }
     })
 
-    let rtText: string
-    try {
-      rtText = (await this.rt?.stop()) ?? ''
-    } catch {
-      rtText = this.live
-    }
+    // Every step is time-boxed: a hung socket/recorder/function call must
+    // degrade to the best transcript we have, never freeze the UI forever.
+    const rtText = await withTimeout(
+      this.rt?.stop() ?? Promise.resolve(''),
+      10_000,
+      this.live,
+    )
     const rtFailed = this.rt?.failed ?? true
 
     this.stream?.getTracks().forEach((t) => t.stop())
-    const audio = await blobPromise
+    const audio = await withTimeout(blobPromise, 10_000, new Blob(this.chunks, { type: 'audio/webm' }))
 
     // Prefer the realtime transcript; fall back to batch Whisper otherwise.
     let transcript = !rtFailed && rtText.trim().length >= 2 ? rtText.trim() : ''
     if (!transcript) {
       if (audio.size > 0) {
-        const res = await transcribeAudio(audio)
+        const res = await withTimeout(
+          transcribeAudio(audio),
+          90_000,
+          { ok: false as const, detail: 'timeout' },
+        )
         transcript = res.ok && res.transcript.trim().length >= 2 ? res.transcript.trim() : rtText.trim()
       } else {
         transcript = rtText.trim()

@@ -223,6 +223,20 @@ function LevelTestModal({
     }
   }, [taskId, isAdmin, user])
 
+  // Hard watchdog: every pipeline step is individually time-boxed, but if the
+  // analysis somehow still exceeds 3 minutes, fail with a retry message
+  // instead of spinning at 99% forever.
+  useEffect(() => {
+    if (!(transcribing || loading)) return
+    const t = window.setTimeout(() => {
+      setTranscribing(false)
+      setLoading(false)
+      setStep('speak')
+      setRecError('استغرق التحليل وقتاً أطول من المعتاد، حاول مرة أخرى')
+    }, 180_000)
+    return () => clearTimeout(t)
+  }, [transcribing, loading])
+
   const stopTimer = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current)

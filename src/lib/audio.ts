@@ -1,6 +1,7 @@
 // Client helpers for the `audio` Edge Function (Cloudflare R2 storage).
 
 import { supabase } from './supabase'
+import { withTimeout } from './async'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -11,7 +12,13 @@ export async function uploadAudio(blob: Blob): Promise<string | null> {
   try {
     const form = new FormData()
     form.append('file', blob, 'answer.webm')
-    const { data, error } = await supabase.functions.invoke('audio', { body: form })
+    // Time-boxed: a hung upload must not block grading (the recording is a
+    // nice-to-have for the admin, not part of the student's flow).
+    const { data, error } = await withTimeout(
+      supabase.functions.invoke('audio', { body: form }),
+      45_000,
+      { data: null, error: new Error('timeout') },
+    )
     if (error || !data) return null
     return (data as { key?: string }).key ?? null
   } catch {

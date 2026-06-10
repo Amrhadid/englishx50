@@ -125,6 +125,19 @@ export default function SpeakingTask({
     setRecording(true)
   }
 
+  // Hard watchdog: every pipeline step is individually time-boxed, but if the
+  // analysis somehow still exceeds 3 minutes, fail with a retry message
+  // instead of spinning at 99% forever.
+  useEffect(() => {
+    if (!(transcribing || loading)) return
+    const t = window.setTimeout(() => {
+      setTranscribing(false)
+      setLoading(false)
+      setError('استغرق التحليل وقتاً أطول من المعتاد، حاول مرة أخرى')
+    }, 180_000)
+    return () => clearTimeout(t)
+  }, [transcribing, loading])
+
   const stop = async () => {
     const session = sessionRef.current
     if (!session) return
