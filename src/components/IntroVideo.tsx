@@ -38,6 +38,8 @@ export default function IntroVideo() {
   const playerRef = useRef<any>(null)
   const rowIdRef = useRef<string | null>(null)
   const maxPctRef = useRef(0)
+  const watchedSecondsRef = useRef(0)
+  const lastTimeRef = useRef<number | null>(null)
   const pollRef = useRef<number | null>(null)
 
   const recordOpen = async () => {
@@ -71,14 +73,25 @@ export default function IntroVideo() {
 
   const startPoll = () => {
     if (pollRef.current) return
+    // Count only real playback time: a seek moves currentTime far more than
+    // one poll interval and is discarded, so skipping ahead isn't "watched".
+    const POLL_SECONDS = 3
     pollRef.current = window.setInterval(() => {
       const p = playerRef.current
-      if (p?.getDuration) {
-        const dur = p.getDuration()
-        const cur = p.getCurrentTime?.() ?? 0
-        if (dur > 0) savePercent((cur / dur) * 100)
+      if (!p?.getDuration) return
+      const dur = p.getDuration()
+      const cur = p.getCurrentTime?.() ?? 0
+      if (!(dur > 0)) return
+      const last = lastTimeRef.current
+      lastTimeRef.current = cur
+      if (last === null) return
+      const delta = cur - last
+      const rate = p.getPlaybackRate?.() || 1
+      if (delta > 0 && delta <= POLL_SECONDS * rate * 1.5) {
+        watchedSecondsRef.current += delta
+        savePercent((watchedSecondsRef.current / dur) * 100)
       }
-    }, 3000)
+    }, POLL_SECONDS * 1000)
   }
 
   const start = async () => {
@@ -95,8 +108,15 @@ export default function IntroVideo() {
       events: {
         onStateChange: (e: any) => {
           if (e.data === 1) startPoll() // playing
-          else stopPoll()
-          if (e.data === 0) savePercent(100) // ended
+          else {
+            stopPoll()
+            // Restart delta tracking after pause/seek/buffer states.
+            lastTimeRef.current = null
+          }
+          if (e.data === 0) {
+            const dur = playerRef.current?.getDuration?.() ?? 0
+            if (dur > 0) savePercent((watchedSecondsRef.current / dur) * 100)
+          }
         },
       },
     })

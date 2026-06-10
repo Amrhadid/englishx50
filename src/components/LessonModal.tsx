@@ -53,11 +53,15 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const rowIdRef = useRef<string | null>(null)
   const maxPctRef = useRef(0)
+  const watchedSecondsRef = useRef(0)
+  const lastTimeRef = useRef<number | null>(null)
   const pollRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!uid) return
     maxPctRef.current = 0
+    watchedSecondsRef.current = 0
+    lastTimeRef.current = null
     rowIdRef.current = null
     let player: any = null
 
@@ -96,12 +100,33 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
       const Stream = (window as any).Stream
       if (!Stream || !iframeRef.current) return
       player = Stream(iframeRef.current)
-      pollRef.current = window.setInterval(() => {
+      // Count only real playback time: a seek (or buffered jump) moves
+      // currentTime far more than one poll interval and is discarded, so
+      // skipping ahead doesn't register as watching.
+      const POLL_SECONDS = 3
+      const tick = () => {
         const dur = player?.duration
         const cur = player?.currentTime
-        if (dur > 0) savePercent((cur / dur) * 100)
-      }, 3000)
-      player.addEventListener?.('ended', () => savePercent(100))
+        if (!(dur > 0) || typeof cur !== 'number') return
+        const last = lastTimeRef.current
+        lastTimeRef.current = cur
+        if (last === null || player?.paused) return
+        const delta = cur - last
+        const rate = player?.playbackRate || 1
+        if (delta > 0 && delta <= POLL_SECONDS * rate * 1.5) {
+          watchedSecondsRef.current += delta
+          savePercent((watchedSecondsRef.current / dur) * 100)
+        }
+      }
+      pollRef.current = window.setInterval(tick, POLL_SECONDS * 1000)
+      player.addEventListener?.('seeked', () => {
+        // Restart delta tracking from the new position.
+        lastTimeRef.current = player?.currentTime ?? null
+      })
+      player.addEventListener?.('ended', () => {
+        const dur = player?.duration
+        if (dur > 0) savePercent((watchedSecondsRef.current / dur) * 100)
+      })
     }
     setup()
 
