@@ -44,6 +44,42 @@ export function markVideoWatched(
   }
 }
 
+const PCT_PREFIX = 'x50_vidpct_'
+
+function pctKey(userId: string | null | undefined, challengeId: string): string {
+  return `${PCT_PREFIX}${userId ?? 'anon'}:${challengeId}`
+}
+
+/** Per-video watched percent (real playback) for this account+challenge. */
+export function getVideoProgress(
+  userId: string | null | undefined,
+  challengeId: string,
+): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(pctKey(userId, challengeId))
+    const obj = raw ? JSON.parse(raw) : {}
+    return obj && typeof obj === 'object' ? (obj as Record<string, number>) : {}
+  } catch {
+    return {}
+  }
+}
+
+/** Persist a video's watched percent (keeps the maximum seen). */
+export function saveVideoProgress(
+  userId: string | null | undefined,
+  challengeId: string,
+  uid: string,
+  pct: number,
+): void {
+  try {
+    const all = getVideoProgress(userId, challengeId)
+    all[uid] = Math.min(100, Math.max(all[uid] ?? 0, Math.round(pct)))
+    localStorage.setItem(pctKey(userId, challengeId), JSON.stringify(all))
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
 /** True once every video is watched and every speaking task has a saved attempt. */
 export function isChallengeComplete(userId: string | null | undefined, c: Challenge): boolean {
   const videos = challengeVideos(c)
