@@ -12,6 +12,7 @@ interface ChallengesProps {
   onSource: (challenge: Challenge) => void
   onFile: (challenge: Challenge) => void
   onUpgrade: () => void
+  onLevelTestComplete?: () => void
   lockLabelFor?: (challenge: Challenge) => string | null
 }
 
@@ -205,6 +206,7 @@ export default function Challenges({
   onSource,
   onFile,
   onUpgrade,
+  onLevelTestComplete,
   lockLabelFor,
 }: ChallengesProps) {
   return (
@@ -263,7 +265,7 @@ export default function Challenges({
       {/* Challenge cards — white */}
       <div className="bg-white">
         <div className="mx-auto flex max-w-3xl flex-col gap-3 px-5 py-14 sm:px-8">
-          <LevelTest onUpgrade={onUpgrade} />
+          <LevelTest onUpgrade={onUpgrade} onComplete={onLevelTestComplete} />
           {challenges.map((c, i) => (
             <ChallengeRow
               key={c.id}

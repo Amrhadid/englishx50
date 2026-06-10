@@ -3,7 +3,9 @@ import { supabase } from '../lib/supabase'
 import { PLACEHOLDER_REVIEWS, mergeWithPlaceholders, isPlaceholderChallenge } from '../lib/placeholders'
 import { challengeVideos } from '../lib/challenge'
 import { challengeLockState, type LockState } from '../lib/completion'
+import { levelTestTaskId, getAttempt, fetchServerTrials } from '../lib/progress'
 import ChallengeLockedModal from '../components/ChallengeLockedModal'
+import LevelTestRequiredModal from '../components/LevelTestRequiredModal'
 import type { Challenge, Review } from '../types'
 import Navbar from '../components/Navbar'
 import Hero from '../components/Hero'
@@ -46,6 +48,30 @@ function LandingInner() {
     challenge: Challenge
     lock: Extract<LockState, { locked: true }>
   } | null>(null)
+  const [showLevelTestRequired, setShowLevelTestRequired] = useState(false)
+
+  // The level test is the mandatory first step: challenges stay locked until
+  // the account has a graded attempt. Local saved attempt is checked first;
+  // the server-side trial counter (x50_trials) covers other devices / cleared
+  // caches — any consumed attempt counts so users who used their trials
+  // without passing aren't locked out forever.
+  const [levelTestDone, setLevelTestDone] = useState(false)
+  useEffect(() => {
+    let active = true
+    const check = async () => {
+      const saved = getAttempt(levelTestTaskId(user?.id))
+      if (saved && (saved.outcome === 'passed' || saved.outcome === 'failed')) return true
+      if (!user) return false
+      const used = await fetchServerTrials('level_test', user.id)
+      return used != null && used > 0
+    }
+    check().then((done) => {
+      if (active && done) setLevelTestDone(true)
+    })
+    return () => {
+      active = false
+    }
+  }, [user])
 
   // Real (added) challenge numbers in order — used for the sequential cooldown.
   const realNumbers = useMemo(
@@ -104,6 +130,8 @@ function LandingInner() {
       return run()
     }
     if (!premium) return requireAccess()
+    // Level test first — it's the mandatory entry point of the program.
+    if (!levelTestDone) return setShowLevelTestRequired(true)
     if (isPlaceholderChallenge(c)) return setComingSoonFor(c)
     // Sequential 5-day cooldown: must finish the previous challenge + wait.
     const lock = challengeLockState(c, realNumbers, progress)
@@ -114,6 +142,7 @@ function LandingInner() {
   // Label shown on a locked challenge card (premium, non-admin users only).
   const lockLabelFor = (c: Challenge): string | null => {
     if (isAdmin || !premium || isPlaceholderChallenge(c)) return null
+    if (!levelTestDone) return '🎤 أكمل اختبار المستوى أولاً'
     const lock = challengeLockState(c, realNumbers, progress)
     if (!lock.locked) return null
     return lock.reason === 'cooldown'
@@ -162,6 +191,7 @@ function LandingInner() {
           )
         }
         onUpgrade={() => requireAccess()}
+        onLevelTestComplete={() => setLevelTestDone(true)}
         lockLabelFor={lockLabelFor}
       />
       <Countdown onStart={start} />
@@ -185,6 +215,18 @@ function LandingInner() {
       </footer>
 
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
+      {showLevelTestRequired && (
+        <LevelTestRequiredModal
+          onClose={() => setShowLevelTestRequired(false)}
+          onStart={() => {
+            setShowLevelTestRequired(false)
+            // Defer so the modal is unmounted before scrolling.
+            setTimeout(() => {
+              document.getElementById('level-test')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }, 60)
+          }}
+        />
+      )}
       {comingSoonFor && (
         <ComingSoonModal challenge={comingSoonFor} onClose={() => setComingSoonFor(null)} />
       )}

@@ -42,7 +42,14 @@ function countSentences(text: string): number {
   return Math.max(byPunct.length, Math.round(words / 7))
 }
 
-export default function LevelTest({ onUpgrade }: { onUpgrade?: () => void }) {
+export default function LevelTest({
+  onUpgrade,
+  onComplete,
+}: {
+  onUpgrade?: () => void
+  /** Called when a level-test attempt is graded and saved (passed or failed). */
+  onComplete?: () => void
+}) {
   const [open, setOpen] = useState(false)
   const { premiumActive } = useOnboardingContext()
   const { user } = useAuth()
@@ -61,7 +68,10 @@ export default function LevelTest({ onUpgrade }: { onUpgrade?: () => void }) {
   return (
     <>
       {/* Card — matches the challenge card size/style, sits before Challenge 1 */}
-      <div className="group grid min-h-[180px] grid-cols-[120px_1fr] overflow-hidden rounded-[24px] border-[1.5px] border-[#ede8ff] bg-white transition duration-300 hover:border-[#c4b8ff] hover:shadow-[0_8px_32px_rgba(83,74,183,0.14)] sm:grid-cols-[280px_1fr]">
+      <div
+        id="level-test"
+        className="group grid min-h-[180px] grid-cols-[120px_1fr] overflow-hidden rounded-[24px] border-[1.5px] border-[#ede8ff] bg-white transition duration-300 hover:border-[#c4b8ff] hover:shadow-[0_8px_32px_rgba(83,74,183,0.14)] sm:grid-cols-[280px_1fr]"
+      >
         <button
           onClick={handleStart}
           className="relative overflow-hidden"
@@ -114,7 +124,7 @@ export default function LevelTest({ onUpgrade }: { onUpgrade?: () => void }) {
         </div>
       </div>
 
-      {open && <LevelTestModal onClose={() => setOpen(false)} />}
+      {open && <LevelTestModal onClose={() => setOpen(false)} onComplete={onComplete} />}
     </>
   )
 }
@@ -135,7 +145,13 @@ function LockBadge() {
   )
 }
 
-function LevelTestModal({ onClose }: { onClose: () => void }) {
+function LevelTestModal({
+  onClose,
+  onComplete,
+}: {
+  onClose: () => void
+  onComplete?: () => void
+}) {
   // Every user gets MAX_TRIALS grading attempts; the admin is unlimited.
   // Scoped to the account so attempts/trials never leak between accounts.
   const { user } = useAuth()
@@ -338,6 +354,7 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     setResult(mapped)
     setOutcome(finalOutcome)
     saveAttempt(taskId, { transcript: text, result: mapped, outcome: finalOutcome })
+    onComplete?.()
   }
 
   const retry = () => {
