@@ -32,6 +32,16 @@ body {
   animation: float-slow 7s ease-in-out infinite;
 }
 
+/* Bouncing equalizer bars for the analysis loader. */
+@keyframes equalize {
+  0%, 100% { height: 6px; }
+  50% { height: 24px; }
+}
+
+.animate-equalize {
+  animation: equalize 0.9s ease-in-out infinite;
+}
+
 /* Hide scrollbar but keep horizontal scrolling for the reviews carousel. */
 .no-scrollbar {
   -ms-overflow-style: none;

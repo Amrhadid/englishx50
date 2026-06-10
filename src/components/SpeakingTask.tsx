@@ -18,6 +18,7 @@ import { uploadAudio } from '../lib/audio'
 import { isAdminEmail } from '../lib/admin'
 import { useAuth } from '../hooks/useAuth'
 import FeedbackView from './FeedbackView'
+import AnalysisLoader from './AnalysisLoader'
 import type { SpeakingResult } from '../types'
 
 interface SpeakingTaskProps {
@@ -232,8 +233,9 @@ export default function SpeakingTask({
         </p>
       )}
 
-      {/* Recorder — hidden once a result is shown (retry brings it back). */}
-      {supported && !result && canTry && (
+      {/* Recorder — hidden once a result is shown (retry brings it back) and
+          while the recording is being transcribed/graded. */}
+      {supported && !result && canTry && !transcribing && !loading && (
         <div className="mt-5 flex flex-col items-center">
           <button
             onClick={recording ? stop : start}
@@ -279,9 +281,11 @@ export default function SpeakingTask({
 
       {error && <p className="mt-3 text-center text-[13px] font-semibold text-[#C2410C]">{error}</p>}
 
-      {/* Grading runs automatically after transcription */}
-      {loading && !result && (
-        <p className="mt-5 text-center text-sm font-semibold text-[#7a7596]">جارٍ التقييم…</p>
+      {/* Active analysis animation — covers voice-to-text + AI grading. */}
+      {(transcribing || (loading && !result)) && (
+        <AnalysisLoader
+          label={transcribing ? 'جارٍ تحويل الصوت إلى نص…' : 'جارٍ تحليل إجابتك بالذكاء الاصطناعي…'}
+        />
       )}
 
       {/* Feedback */}

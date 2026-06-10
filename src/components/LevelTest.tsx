@@ -18,6 +18,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { toArabicDigits } from '../lib/theme'
 import FeedbackView from './FeedbackView'
+import AnalysisLoader from './AnalysisLoader'
 import { MicIcon, CloseIcon } from './icons'
 import type { SpeakingResult } from '../types'
 
@@ -409,7 +410,12 @@ function LevelTestModal({
             </span>
           </div>
 
-          {step === 'speak' ? (
+          {transcribing || loading ? (
+            /* Active analysis animation — covers voice-to-text + AI grading. */
+            <AnalysisLoader
+              label={transcribing ? 'جارٍ تحويل الصوت إلى نص…' : 'جارٍ تحليل إجابتك بالذكاء الاصطناعي…'}
+            />
+          ) : step === 'speak' ? (
             /* Speaking task */
             <div className="mx-auto flex max-w-md flex-col items-center">
               <p className="mb-1 text-[13px] font-bold" style={{ color: PURPLE }}>
@@ -511,7 +517,7 @@ function LevelTestModal({
           ) : (
             /* Feedback */
             <div className="mx-auto max-w-md">
-              {!loading && transcript && (outcome === 'passed' || outcome === 'failed') && (
+              {transcript && (outcome === 'passed' || outcome === 'failed') && (
                 <div className="mb-4 rounded-2xl border border-[#ece7fb] bg-[#faf9ff] p-4" dir="ltr">
                   <p className="mb-1 text-right text-[12px] font-bold text-[#a39ec0]" dir="rtl">
                     النص المُسجّل
@@ -519,11 +525,7 @@ function LevelTestModal({
                   <p className="text-[15px] leading-relaxed text-[#3a3550]">{transcript}</p>
                 </div>
               )}
-              {loading ? (
-                <p className="py-10 text-center text-sm font-semibold text-[#7a7596]">
-                  جارٍ تقييم إجابتك…
-                </p>
-              ) : outcome === 'rejected' ? (
+              {outcome === 'rejected' ? (
                 <div className="py-6 text-center">
                   <p className="mb-3 text-4xl">🚫</p>
                   <p className="mb-5 text-[15px] font-bold leading-relaxed" style={{ color: CORAL }}>
