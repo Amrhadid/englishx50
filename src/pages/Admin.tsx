@@ -5,6 +5,7 @@ import type { Challenge, Review, Code } from '../types'
 import { TrashIcon } from '../components/icons'
 import FeedbackView from '../components/FeedbackView'
 import { parseSubmission } from '../lib/grading'
+import { challengeVideos } from '../lib/challenge'
 import { audioUrl } from '../lib/audio'
 import { isAdminEmail } from '../lib/admin'
 
@@ -807,17 +808,35 @@ interface NoteRow {
   updated_at: string | null
 }
 
-interface StudentRow {
-  name: string
-  views: VideoView[]
+interface VideoStat {
+  title: string
+  uid: string
+  percent: number
+}
+
+interface ChallengeGroup {
+  key: string
+  label: string
+  number: number | null
+  title: string
+  videos: VideoStat[]
   subs: Submission[]
   notes: NoteRow[]
 }
 
+interface StudentRow {
+  name: string
+  challenges: ChallengeGroup[]
+}
+
+const fmtDate = (s?: string | null) =>
+  s ? new Date(s).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
+
 function StudentsAdmin() {
   const [students, setStudents] = useState<StudentRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [open, setOpen] = useState<string | null>(null)
+  const [openStudent, setOpenStudent] = useState<string | null>(null)
+  const [openChallenge, setOpenChallenge] = useState<string | null>(null)
 
   useEffect(() => {
     if (!supabase) {
@@ -831,32 +850,85 @@ function StudentsAdmin() {
       // `student` identity (both come from the x50_user value).
       supabase.from('x50_codes').select('used_by').not('used_at', 'is', null),
       supabase.from('x50_notes').select('student, challenge_number, entries, updated_at'),
-    ]).then(([views, subs, codes, notes]) => {
+      supabase.from('x50_challenges').select('*').order('number', { ascending: true }),
+    ]).then(([views, subs, codes, notes, challengesRes]) => {
       const premium = new Set(
         ((codes.data as { used_by: string | null }[]) ?? [])
           .map((c) => c.used_by)
           .filter((v): v is string => !!v),
       )
+      const challenges = (challengesRes.data as Challenge[]) ?? []
 
-      const map = new Map<string, StudentRow>()
+      // Group every record under its student.
+      type Raw = { views: VideoView[]; subs: Submission[]; notes: NoteRow[] }
+      const raw = new Map<string, Raw>()
       const keyOf = (s: string | null) => s || 'زائر غير معرّف'
       const get = (s: string | null) => {
         const key = keyOf(s)
-        if (!map.has(key)) map.set(key, { name: key, views: [], subs: [], notes: [] })
-        return map.get(key)!
+        if (!raw.has(key)) raw.set(key, { views: [], subs: [], notes: [] })
+        return raw.get(key)!
       }
       ;((views.data as VideoView[]) ?? []).forEach((v) => get(v.student).views.push(v))
       ;((subs.data as Submission[]) ?? []).forEach((s) => get(s.student).subs.push(s))
       ;((notes.data as NoteRow[]) ?? []).forEach((n) => get(n.student).notes.push(n))
 
-      // Show only premium students (whose identity redeemed a code).
-      setStudents(Array.from(map.values()).filter((st) => premium.has(st.name)))
+      const result: StudentRow[] = []
+      for (const [name, r] of raw) {
+        if (!premium.has(name)) continue
+
+        // Furthest watched percent per video uid.
+        const maxByUid = new Map<string, number>()
+        for (const v of r.views) {
+          if (!v.video_id) continue
+          maxByUid.set(v.video_id, Math.max(maxByUid.get(v.video_id) ?? 0, v.watched_percent))
+        }
+        // Speaking / notes indexed by challenge number.
+        const subsByNum = new Map<number, Submission[]>()
+        const levelSubs: Submission[] = []
+        for (const s of r.subs) {
+          if (s.challenge_number == null) levelSubs.push(s)
+          else (subsByNum.get(s.challenge_number) ?? subsByNum.set(s.challenge_number, []).get(s.challenge_number)!).push(s)
+        }
+        const notesByNum = new Map<number, NoteRow[]>()
+        for (const n of r.notes) {
+          if (n.challenge_number == null) continue
+          ;(notesByNum.get(n.challenge_number) ?? notesByNum.set(n.challenge_number, []).get(n.challenge_number)!).push(n)
+        }
+
+        const groups: ChallengeGroup[] = []
+        if (levelSubs.length) {
+          groups.push({
+            key: `${name}::lt`,
+            label: 'Level test',
+            number: null,
+            title: '',
+            videos: [],
+            subs: levelSubs,
+            notes: [],
+          })
+        }
+        for (const c of challenges) {
+          groups.push({
+            key: `${name}::${c.number}`,
+            label: `Challenge ${c.number}`,
+            number: c.number,
+            title: c.title ?? '',
+            videos: challengeVideos(c).map((v, i) => ({
+              title: v.title || `Video ${i + 1}`,
+              uid: v.uid,
+              percent: maxByUid.get(v.uid) ?? 0,
+            })),
+            subs: subsByNum.get(c.number) ?? [],
+            notes: notesByNum.get(c.number) ?? [],
+          })
+        }
+        result.push({ name, challenges: groups })
+      }
+
+      setStudents(result.sort((a, b) => a.name.localeCompare(b.name)))
       setLoading(false)
     })
   }, [])
-
-  const fmt = (s?: string | null) =>
-    s ? new Date(s).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
 
   if (loading) return <p className="text-sm text-[#9a9aa2]">Loading…</p>
   if (students.length === 0)
@@ -865,153 +937,197 @@ function StudentsAdmin() {
   return (
     <div className="space-y-3">
       {students.map((st) => {
-        const maxPct = st.views.reduce((m, v) => Math.max(m, v.watched_percent), 0)
-        const isOpen = open === st.name
+        const sOpen = openStudent === st.name
         return (
           <div key={st.name} className="rounded-2xl border border-[#f0ecf8]">
             <button
-              onClick={() => setOpen(isOpen ? null : st.name)}
+              onClick={() => {
+                setOpenStudent(sOpen ? null : st.name)
+                setOpenChallenge(null)
+              }}
               className="flex w-full items-center justify-between gap-3 p-4 text-left"
             >
               <div>
                 <p className="font-bold text-[#111]">{st.name}</p>
                 <p className="text-xs text-[#9a9aa2]">
-                  {st.views.length} video view{st.views.length === 1 ? '' : 's'} · max {maxPct}% watched ·{' '}
-                  {st.subs.length} speaking task{st.subs.length === 1 ? '' : 's'}
+                  {st.challenges.filter((c) => c.number != null).length} challenge
+                  {st.challenges.filter((c) => c.number != null).length === 1 ? '' : 's'}
                 </p>
               </div>
-              <span className="text-[#534AB7]">{isOpen ? '▲' : '▼'}</span>
+              <span className="text-[#534AB7]">{sOpen ? '▲' : '▼'}</span>
             </button>
 
-            {isOpen && (
-              <div className="space-y-4 border-t border-[#f0ecf8] p-4">
-                {/* Video engagement */}
-                <div>
-                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#9a9aa2]">
-                    Video engagement
-                  </p>
-                  {st.views.length === 0 ? (
-                    <p className="text-sm text-[#9a9aa2]">No video opens recorded.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {st.views.map((v) => (
-                        <div key={v.id} className="flex items-center gap-3">
-                          <span className="w-44 shrink-0 text-xs text-[#5b5670]">
-                            Opened {fmt(v.opened_at)}
-                          </span>
-                          <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#EEEDFE]">
-                            <div
-                              className="h-full rounded-full bg-[#534AB7]"
-                              style={{ width: `${Math.min(100, v.watched_percent)}%` }}
-                            />
-                          </div>
-                          <span className="w-12 shrink-0 text-right text-xs font-bold text-[#534AB7]">
-                            {v.watched_percent}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Speaking tasks */}
-                <div>
-                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#9a9aa2]">
-                    Speaking tasks
-                  </p>
-                  {st.subs.length === 0 ? (
-                    <p className="text-sm text-[#9a9aa2]">No speaking submissions.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {st.subs.map((s) => (
-                        <div key={s.id} className="rounded-xl border border-[#f0ecf8] p-3">
-                          <div className="mb-1 flex items-center justify-between">
-                            <p className="text-xs font-bold text-[#534AB7]">
-                              {s.challenge_number != null
-                                ? `Challenge ${s.challenge_number}`
-                                : s.question?.startsWith('Level Test')
-                                  ? 'Level test'
-                                  : 'Speaking'}{' '}
-                              · {fmt(s.created_at)}
-                            </p>
-                            <span
-                              className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                                s.passed ? 'bg-[#E1F5EE] text-[#0C7C62]' : 'bg-[#FEE2E2] text-[#B91C1C]'
-                              }`}
-                            >
-                              {s.passed ? 'Passed' : 'Not passed'} · {s.score ?? 0}%
-                            </span>
-                          </div>
-                          {s.transcript && (
-                            <p className="mb-2 rounded-lg bg-[#faf9ff] p-2 text-[13px] text-[#3a3550]" dir="ltr">
-                              “{s.transcript}”
-                            </p>
-                          )}
-                          {s.audio_key && (
-                            <div className="mb-2 flex flex-wrap items-center gap-2">
-                              <audio controls preload="none" src={audioUrl(s.audio_key)} className="h-9 w-full max-w-xs" />
-                              <a
-                                href={audioUrl(s.audio_key, { download: true })}
-                                className="rounded-lg bg-[#EEEDFE] px-3 py-1.5 text-xs font-bold text-[#534AB7]"
-                              >
-                                ⬇ Download
-                              </a>
-                            </div>
-                          )}
-                          {s.feedback && (
-                            <details>
-                              <summary className="cursor-pointer text-xs font-bold text-[#534AB7]">
-                                View AI feedback
-                              </summary>
-                              <div className="mt-2">
-                                <FeedbackView result={parseSubmission(s as unknown as Record<string, unknown>)} />
-                              </div>
-                            </details>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Vocabulary notes */}
-                <div>
-                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#9a9aa2]">
-                    Vocabulary notes
-                  </p>
-                  {st.notes.length === 0 ? (
-                    <p className="text-sm text-[#9a9aa2]">No notes submitted.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {st.notes
-                        .slice()
-                        .sort((a, b) => (a.challenge_number ?? 0) - (b.challenge_number ?? 0))
-                        .map((n, i) => (
-                          <div key={i} className="rounded-xl border border-[#f0ecf8] p-3">
-                            <p className="mb-2 text-xs font-bold text-[#534AB7]">
-                              {n.challenge_number != null ? `Challenge ${n.challenge_number}` : 'Notes'} ·{' '}
-                              {(n.entries ?? []).length} words · {fmt(n.updated_at)}
-                            </p>
-                            <div className="flex flex-wrap gap-1.5" dir="ltr">
-                              {(n.entries ?? []).map((w, j) => (
-                                <span
-                                  key={j}
-                                  className="rounded-lg bg-[#f1edff] px-2.5 py-1 text-[13px] font-semibold text-[#473BBE]"
-                                >
-                                  {w}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </div>
+            {sOpen && (
+              <div className="space-y-2 border-t border-[#f0ecf8] p-3">
+                {st.challenges.map((cg) => (
+                  <ChallengePanel
+                    key={cg.key}
+                    group={cg}
+                    open={openChallenge === cg.key}
+                    onToggle={() =>
+                      setOpenChallenge(openChallenge === cg.key ? null : cg.key)
+                    }
+                  />
+                ))}
               </div>
             )}
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function ChallengePanel({
+  group,
+  open,
+  onToggle,
+}: {
+  group: ChallengeGroup
+  open: boolean
+  onToggle: () => void
+}) {
+  const noteWords = group.notes.reduce((m, n) => m + (n.entries ?? []).length, 0)
+  const avgWatched = group.videos.length
+    ? Math.round(group.videos.reduce((m, v) => m + v.percent, 0) / group.videos.length)
+    : null
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-[#f0ecf8]">
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-3 bg-[#faf9ff] px-3 py-2.5 text-left"
+      >
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold text-[#1b1730]">
+            {group.label}
+            {group.title ? <span className="font-semibold text-[#7a7596]"> · {group.title}</span> : null}
+          </p>
+          <p className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] font-semibold text-[#9a9aa2]">
+            {avgWatched != null && <span>🎬 {avgWatched}% watched</span>}
+            <span>🎤 {group.subs.length} speaking</span>
+            <span>📝 {noteWords} words</span>
+          </p>
+        </div>
+        <span className="shrink-0 text-[#534AB7]">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="space-y-4 border-t border-[#f0ecf8] p-3">
+          {/* Videos watched */}
+          {group.videos.length > 0 && (
+            <section>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#9a9aa2]">
+                Videos watched
+              </p>
+              <div className="space-y-2">
+                {group.videos.map((v, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <span className="w-28 shrink-0 truncate text-xs font-semibold text-[#5b5670]" dir="ltr">
+                      {v.title}
+                    </span>
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#EEEDFE]">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${Math.min(100, v.percent)}%`,
+                          backgroundColor: v.percent >= 98 ? '#23C4A0' : '#534AB7',
+                        }}
+                      />
+                    </div>
+                    <span className="w-10 shrink-0 text-right text-xs font-bold text-[#534AB7]">
+                      {v.percent}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Speaking tasks */}
+          <section>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#9a9aa2]">
+              Speaking task
+            </p>
+            {group.subs.length === 0 ? (
+              <p className="text-sm text-[#9a9aa2]">No speaking submission.</p>
+            ) : (
+              <div className="space-y-3">
+                {group.subs.map((s) => (
+                  <div key={s.id} className="rounded-xl border border-[#f0ecf8] p-3">
+                    <div className="mb-1 flex items-center justify-between">
+                      <p className="text-xs font-bold text-[#534AB7]">{fmtDate(s.created_at)}</p>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                          s.passed ? 'bg-[#E1F5EE] text-[#0C7C62]' : 'bg-[#FEE2E2] text-[#B91C1C]'
+                        }`}
+                      >
+                        {s.passed ? 'Passed' : 'Not passed'} · {s.score ?? 0}%
+                      </span>
+                    </div>
+                    {s.transcript && (
+                      <p className="mb-2 rounded-lg bg-[#faf9ff] p-2 text-[13px] text-[#3a3550]" dir="ltr">
+                        “{s.transcript}”
+                      </p>
+                    )}
+                    {s.audio_key && (
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <audio controls preload="none" src={audioUrl(s.audio_key)} className="h-9 w-full max-w-xs" />
+                        <a
+                          href={audioUrl(s.audio_key, { download: true })}
+                          className="rounded-lg bg-[#EEEDFE] px-3 py-1.5 text-xs font-bold text-[#534AB7]"
+                        >
+                          ⬇ Download
+                        </a>
+                      </div>
+                    )}
+                    {s.feedback && (
+                      <details>
+                        <summary className="cursor-pointer text-xs font-bold text-[#534AB7]">
+                          View AI feedback
+                        </summary>
+                        <div className="mt-2">
+                          <FeedbackView result={parseSubmission(s as unknown as Record<string, unknown>)} />
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Vocabulary notes */}
+          {group.number != null && (
+            <section>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#9a9aa2]">
+                Student notes
+              </p>
+              {noteWords === 0 ? (
+                <p className="text-sm text-[#9a9aa2]">No notes submitted.</p>
+              ) : (
+                group.notes.map((n, i) => (
+                  <div key={i} className="mb-2">
+                    <p className="mb-1 text-[11px] font-semibold text-[#9a9aa2]">
+                      {(n.entries ?? []).length} words · {fmtDate(n.updated_at)}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5" dir="ltr">
+                      {(n.entries ?? []).map((w, j) => (
+                        <span
+                          key={j}
+                          className="rounded-lg bg-[#f1edff] px-2.5 py-1 text-[13px] font-semibold text-[#473BBE]"
+                        >
+                          {w}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </section>
+          )}
+        </div>
+      )}
     </div>
   )
 }

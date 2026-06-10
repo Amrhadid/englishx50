@@ -15,10 +15,13 @@ export const COOLDOWN_DAYS = 5
 
 /**
  * Real-playback percent at which a lesson video counts as fully watched.
- * Effectively the whole video: the 2% slack only absorbs what the 3-second
- * poll can't credit around pauses and the final moments before `ended`.
+ * Forward seeking is blocked, so reaching this means nearly the whole video was
+ * actually played. Kept below 100 because players often report the final few
+ * percent unreliably (the watched percent can cap around 95%), so a stricter
+ * value would never unlock even after watching the whole thing. Reaching the
+ * actual end (`ended` / within a couple seconds of the end) also counts.
  */
-export const VIDEO_WATCHED_PCT = 98
+export const VIDEO_WATCHED_PCT = 90
 
 const VID_PREFIX = 'x50_vid_'
 

@@ -193,7 +193,14 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
         if (cur > maxReachedRef.current && cur <= maxReachedRef.current + POLL_SECONDS * rate * 2.2) {
           maxReachedRef.current = cur
         }
-        savePercent((maxReachedRef.current / dur) * 100)
+        // Reaching the last couple of seconds counts as fully watched even if
+        // the reported percent never quite hits the threshold.
+        if (dur - cur <= 2) {
+          maxReachedRef.current = dur
+          savePercent(100)
+        } else {
+          savePercent((maxReachedRef.current / dur) * 100)
+        }
       }
       pollRef.current = window.setInterval(tick, POLL_SECONDS * 1000)
 
