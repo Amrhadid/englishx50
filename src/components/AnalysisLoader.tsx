@@ -15,9 +15,10 @@ export default function AnalysisLoader({ label }: { label: string }) {
 
   useEffect(() => {
     const id = window.setInterval(() => {
-      // Fast at first, slowing as it approaches 99 — never claims done
-      // before the actual analysis finishes.
-      setPct((p) => Math.min(99, p + (99 - p) * 0.025 + 0.1))
+      // Quick to ~70%, then a slow crawl toward 99 — long analyses keep
+      // visibly moving mid-range instead of pinning at 99% and looking
+      // frozen, and it never claims done before the real result arrives.
+      setPct((p) => Math.min(99, p + (99 - p) * 0.004 + (p < 70 ? 0.3 : 0.01)))
     }, 100)
     return () => clearInterval(id)
   }, [])
