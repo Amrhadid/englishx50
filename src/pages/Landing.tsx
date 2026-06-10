@@ -113,11 +113,20 @@ function LandingInner() {
     }
   }, [])
 
-  // Gate for locked actions (clicking a challenge or the level test) and the
-  // "ابدأ التحدي" CTAs. Opens the premium popup, which handles Google sign-in +
-  // account-bound code activation. Only ever opens on an explicit click.
+  // Gate for locked actions (clicking a challenge or the level test). Opens
+  // the premium popup, which handles Google sign-in + account-bound code
+  // activation. Only ever opens on an explicit click.
   const requireAccess = () => setShowPremium(true)
-  const start = requireAccess
+
+  // "ابدأ التحدي" CTAs: premium accounts go straight to the challenges
+  // (the level test sits at the top); everyone else gets the upgrade popup.
+  const start = () => {
+    if (premium || isAdmin) {
+      document.getElementById('challenges')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
+    requireAccess()
+  }
 
   // Single gate for every challenge action:
   //  - free user            → upgrade / onboarding popup
