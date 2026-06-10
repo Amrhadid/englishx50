@@ -8,6 +8,8 @@ import {
   getWatchedVideos,
   getVideoProgress,
   saveVideoProgress,
+  getVideoPosition,
+  saveVideoPosition,
   recordCompletionIfDone,
   VIDEO_WATCHED_PCT,
 } from '../lib/completion'
@@ -88,6 +90,20 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
     const raw = watchedUids.includes(vUid) ? 100 : (progressPct[vUid] ?? 0)
     return Math.min(100, Math.round((raw / VIDEO_WATCHED_PCT) * 100))
   }
+
+  // Resume the selected part where the student left off. Captured only when the
+  // selected video changes (not during playback) so the iframe never reloads
+  // mid-watch. A finished part restarts from the beginning.
+  const [resume, setResume] = useState(() => ({
+    uid,
+    at: getVideoPosition(user?.id, challenge.id, uid),
+  }))
+  if (resume.uid !== uid) {
+    setResume({
+      uid,
+      at: watchedUids.includes(uid) ? 0 : getVideoPosition(user?.id, challenge.id, uid),
+    })
+  }
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const rowIdRef = useRef<string | null>(null)
   const maxPctRef = useRef(0)
@@ -97,8 +113,12 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
 
   useEffect(() => {
     if (!uid) return
+    // Resume accounting from the saved position (matches the iframe startTime),
+    // so continuing a half-watched part keeps the bar moving forward instead
+    // of restarting the watched-seconds tally from zero.
+    const startPos = watchedUids.includes(uid) ? 0 : getVideoPosition(user?.id, challenge.id, uid)
     maxPctRef.current = 0
-    watchedSecondsRef.current = 0
+    watchedSecondsRef.current = startPos
     lastTimeRef.current = null
     rowIdRef.current = null
     let player: any = null
@@ -152,6 +172,8 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
         const dur = player?.duration
         const cur = player?.currentTime
         if (!(dur > 0) || typeof cur !== 'number' || cur < 0) return
+        // Remember where they are so the part resumes here next time.
+        saveVideoPosition(user?.id, challenge.id, uid, cur)
         const last = lastTimeRef.current
         lastTimeRef.current = cur
         if (last === null) return
@@ -222,7 +244,9 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
             <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
               <iframe
                 ref={iframeRef}
-                src={`https://iframe.cloudflarestream.com/${uid}?autoplay=true&preload=auto`}
+                src={`https://iframe.cloudflarestream.com/${uid}?autoplay=true&preload=auto${
+                  resume.uid === uid && resume.at > 3 ? `&startTime=${Math.floor(resume.at)}s` : ''
+                }`}
                 title={challenge.title}
                 className="absolute inset-0 h-full w-full"
                 allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"

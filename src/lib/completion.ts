@@ -87,6 +87,46 @@ export function saveVideoProgress(
   }
 }
 
+const POS_PREFIX = 'x50_vidpos_'
+
+function posKey(userId: string | null | undefined, challengeId: string): string {
+  return `${POS_PREFIX}${userId ?? 'anon'}:${challengeId}`
+}
+
+/** Last playback position (seconds) for a video, so it resumes on reopen. */
+export function getVideoPosition(
+  userId: string | null | undefined,
+  challengeId: string,
+  uid: string,
+): number {
+  try {
+    const raw = localStorage.getItem(posKey(userId, challengeId))
+    const obj = raw ? JSON.parse(raw) : {}
+    const v = obj && typeof obj === 'object' ? obj[uid] : 0
+    return typeof v === 'number' && v > 0 ? v : 0
+  } catch {
+    return 0
+  }
+}
+
+/** Persist the last playback position (seconds) for a video. */
+export function saveVideoPosition(
+  userId: string | null | undefined,
+  challengeId: string,
+  uid: string,
+  seconds: number,
+): void {
+  try {
+    const raw = localStorage.getItem(posKey(userId, challengeId))
+    const obj = raw ? JSON.parse(raw) : {}
+    const all = obj && typeof obj === 'object' ? (obj as Record<string, number>) : {}
+    all[uid] = Math.floor(seconds)
+    localStorage.setItem(posKey(userId, challengeId), JSON.stringify(all))
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
 /** True once every video is watched and every speaking task has a saved attempt. */
 export function isChallengeComplete(userId: string | null | undefined, c: Challenge): boolean {
   const videos = challengeVideos(c)
