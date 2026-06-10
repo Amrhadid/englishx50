@@ -109,6 +109,9 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
   const maxPctRef = useRef(0)
   const watchedSecondsRef = useRef(0)
   const lastTimeRef = useRef<number | null>(null)
+  // Furthest position reached by genuine playback — the student may seek back
+  // anywhere up to here but cannot jump ahead of it.
+  const maxReachedRef = useRef(0)
   const pollRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -119,6 +122,7 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
     const startPos = watchedUids.includes(uid) ? 0 : getVideoPosition(user?.id, challenge.id, uid)
     maxPctRef.current = 0
     watchedSecondsRef.current = startPos
+    maxReachedRef.current = startPos
     lastTimeRef.current = null
     rowIdRef.current = null
     let player: any = null
@@ -191,9 +195,38 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
         }
       }
       pollRef.current = window.setInterval(tick, POLL_SECONDS * 1000)
+
+      // Forward-seek lock: a finished part (or admin) may scrub freely; for the
+      // rest, the student can rewind anywhere but can't jump past the furthest
+      // point they've genuinely watched.
+      const allowFreeSeek = isAdmin || watchedUids.includes(uid)
+      const SEEK_TOLERANCE = 1.2
+
+      // Advance the watched frontier during contiguous playback (timeupdate
+      // fires several times a second, so it stays tight against real seeks).
+      player.addEventListener?.('timeupdate', () => {
+        const cur = player?.currentTime
+        if (typeof cur !== 'number') return
+        if (cur > maxReachedRef.current && cur <= maxReachedRef.current + SEEK_TOLERANCE) {
+          maxReachedRef.current = cur
+        }
+      })
+
       player.addEventListener?.('seeked', () => {
+        const cur = player?.currentTime
+        if (typeof cur !== 'number') return
+        // Snap forward jumps back to the frontier; allow rewinds.
+        if (!allowFreeSeek && cur > maxReachedRef.current + SEEK_TOLERANCE) {
+          try {
+            player.currentTime = maxReachedRef.current
+          } catch {
+            /* ignore */
+          }
+          lastTimeRef.current = maxReachedRef.current
+          return
+        }
         // Restart delta tracking from the new position.
-        lastTimeRef.current = player?.currentTime ?? null
+        lastTimeRef.current = cur
       })
       player.addEventListener?.('ended', () => {
         const dur = player?.duration
