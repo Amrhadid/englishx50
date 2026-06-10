@@ -134,14 +134,27 @@ function LockBadge() {
 }
 
 function LevelTestModal({ onClose }: { onClose: () => void }) {
-  const [step, setStep] = useState<Step>('speak')
+  // Every user gets MAX_TRIALS grading attempts; the admin is unlimited.
+  // Scoped to the account so attempts/trials never leak between accounts.
+  const { user } = useAuth()
+  const isAdmin = isAdminEmail(user?.email)
+  const taskId = levelTestTaskId(user?.id)
+
+  // A previously completed attempt: reopening the pre task shows the saved
+  // transcript + the same feedback instead of the recording UI.
+  const completedAttempt = () => {
+    const saved = getAttempt(taskId)
+    return saved && (saved.outcome === 'passed' || saved.outcome === 'failed') ? saved : null
+  }
+
+  const [step, setStep] = useState<Step>(() => (completedAttempt() ? 'feedback' : 'speak'))
 
   // Recording
-  const [supported, setSupported] = useState(true)
+  const [supported, setSupported] = useState(() => canLiveTranscribe())
   const [recording, setRecording] = useState(false)
   const [live, setLive] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
-  const [transcript, setTranscript] = useState('')
+  const [transcript, setTranscript] = useState(() => completedAttempt()?.transcript ?? '')
   const [secondsLeft, setSecondsLeft] = useState(TEST_SECONDS)
   const [recError, setRecError] = useState<string | null>(null)
   const sessionRef = useRef<LiveSession | null>(null)
@@ -149,35 +162,28 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
 
   // Feedback
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<SpeakingResult | null>(null)
-  const [outcome, setOutcome] = useState<Outcome | null>(null)
+  const [result, setResult] = useState<SpeakingResult | null>(() => completedAttempt()?.result ?? null)
+  const [outcome, setOutcome] = useState<Outcome | null>(() => completedAttempt()?.outcome ?? null)
   const [rejectMsg, setRejectMsg] = useState<string | null>(null)
 
-  // Every user gets MAX_TRIALS grading attempts; the admin is unlimited.
-  // Scoped to the account so attempts/trials never leak between accounts.
-  const { user } = useAuth()
-  const isAdmin = isAdminEmail(user?.email)
-  const taskId = levelTestTaskId(user?.id)
-  const [trialsUsed, setTrialsUsed] = useState(() => getTrials(taskId))
+  const [trials, setTrials] = useState(() => ({ taskId, used: getTrials(taskId) }))
+  if (trials.taskId !== taskId) {
+    // The signed-in account resolved after mount (storage scope moved from
+    // "anon" to the account) — re-read the trials and saved attempt.
+    setTrials({ taskId, used: getTrials(taskId) })
+    const saved = completedAttempt()
+    setTranscript(saved?.transcript ?? '')
+    setResult(saved?.result ?? null)
+    setOutcome(saved?.outcome ?? null)
+    setStep(saved ? 'feedback' : 'speak')
+  }
+  const trialsUsed = trials.used
   const canTry = isAdmin || trialsUsed < MAX_TRIALS
 
   useEffect(() => {
-    if (!canLiveTranscribe()) setSupported(false)
     return () => {
       sessionRef.current?.cancel()
       if (timerRef.current) clearInterval(timerRef.current)
-    }
-  }, [])
-
-  // Restore a previously completed attempt: reopening the pre task shows the
-  // saved transcript + the same feedback instead of the recording UI.
-  useEffect(() => {
-    const saved = getAttempt(taskId)
-    if (saved && (saved.outcome === 'passed' || saved.outcome === 'failed')) {
-      setTranscript(saved.transcript)
-      setResult(saved.result)
-      setOutcome(saved.outcome)
-      setStep('feedback')
     }
   }, [])
 
@@ -294,7 +300,7 @@ function LevelTestModal({ onClose }: { onClose: () => void }) {
     setResult(mapped)
     setOutcome(finalOutcome)
     saveAttempt(taskId, { transcript: text, result: mapped, outcome: finalOutcome })
-    if (!isAdmin) setTrialsUsed(incrementTrials(taskId))
+    if (!isAdmin) setTrials({ taskId, used: incrementTrials(taskId) })
   }
 
   const retry = () => {

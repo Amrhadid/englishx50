@@ -10,6 +10,11 @@
 //   supabase functions deploy transcribe --no-verify-jwt
 // Secret required:
 //   supabase secrets set OPENAI_API_KEY=sk-...
+//
+// Access: premium users (or the admin) only — see _shared/premium.ts. The JWT
+// arrives automatically via supabase-js functions.invoke().
+
+import { callerHasPremium } from '../_shared/premium.ts'
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? ''
 
@@ -42,6 +47,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
   if (!OPENAI_API_KEY) return json({ error: 'OPENAI_API_KEY not configured' }, 500)
+  if (!(await callerHasPremium(req))) {
+    return json({ error: 'Premium account required' }, 401)
+  }
 
   // --- Read the audio (multipart file or base64 JSON) ---
   let audio: Blob

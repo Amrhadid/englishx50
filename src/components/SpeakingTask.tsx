@@ -45,39 +45,40 @@ export default function SpeakingTask({
   taskIndex = 0,
   onSubmitted,
 }: SpeakingTaskProps) {
-  const [supported, setSupported] = useState(true)
-  const [recording, setRecording] = useState(false)
-  const [live, setLive] = useState(false)
-  const [transcribing, setTranscribing] = useState(false)
-  const [transcript, setTranscript] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<SpeakingResult | null>(null)
-  const sessionRef = useRef<LiveSession | null>(null)
-
   // Every user gets MAX_TRIALS grading attempts per task; the admin is unlimited.
   // Saved attempts/trials are scoped to the account so they never leak between
   // accounts on the same browser.
   const { user } = useAuth()
   const isAdmin = isAdminEmail(user?.email)
   const taskId = challengeTaskId(user?.id, challengeId, challengeNumber, taskIndex)
-  const [trialsUsed, setTrialsUsed] = useState(() => getTrials(taskId))
+
+  const [supported, setSupported] = useState(() => canLiveTranscribe())
+  const [recording, setRecording] = useState(false)
+  const [live, setLive] = useState(false)
+  const [transcribing, setTranscribing] = useState(false)
+  // Restore a previously completed attempt: show the saved transcript + feedback
+  // instead of a fresh recording when this task is reopened.
+  const [transcript, setTranscript] = useState(() => getAttempt(taskId)?.transcript ?? '')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<SpeakingResult | null>(() => getAttempt(taskId)?.result ?? null)
+  const sessionRef = useRef<LiveSession | null>(null)
+
+  const [trials, setTrials] = useState(() => ({ taskId, used: getTrials(taskId) }))
+  if (trials.taskId !== taskId) {
+    // The signed-in account resolved after mount (storage scope moved from
+    // "anon" to the account) — re-read this task's trials and saved attempt.
+    setTrials({ taskId, used: getTrials(taskId) })
+    const saved = getAttempt(taskId)
+    setTranscript(saved?.transcript ?? '')
+    setResult(saved?.result ?? null)
+  }
+  const trialsUsed = trials.used
   const canTry = isAdmin || trialsUsed < MAX_TRIALS
 
   useEffect(() => {
-    if (!canLiveTranscribe()) setSupported(false)
     return () => sessionRef.current?.cancel()
   }, [])
-
-  // Restore a previously completed attempt: show the saved transcript + feedback
-  // instead of a fresh recording when this task is reopened.
-  useEffect(() => {
-    const saved = getAttempt(taskId)
-    if (saved) {
-      setTranscript(saved.transcript)
-      setResult(saved.result)
-    }
-  }, [taskId])
 
   // Live transcription (OpenAI Realtime) with a batch fallback; the transcript
   // streams in word-by-word while recording, then grades automatically on stop.
@@ -153,7 +154,7 @@ export default function SpeakingTask({
       result: outcome.result,
       outcome: outcome.result.passed ? 'passed' : 'failed',
     })
-    if (!isAdmin) setTrialsUsed(incrementTrials(taskId))
+    if (!isAdmin) setTrials({ taskId, used: incrementTrials(taskId) })
     onSubmitted?.()
   }
 

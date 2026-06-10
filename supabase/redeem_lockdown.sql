@@ -193,3 +193,102 @@ create policy "x50_cp_update" on public.x50_challenge_progress
   for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------------
+-- 7. x50_settings — was fully open: anyone with the anon key could REWRITE the
+--    AI grading rules (which are injected into the Claude system prompt!).
+--    Now admin-only via the API; the grading Edge Function keeps reading them
+--    with the service role.
+-- ---------------------------------------------------------------------------
+revoke select, insert, update, delete on public.x50_settings from anon;
+
+drop policy if exists "x50_settings_select" on public.x50_settings;
+drop policy if exists "x50_settings_insert" on public.x50_settings;
+drop policy if exists "x50_settings_update" on public.x50_settings;
+drop policy if exists "x50_settings_admin_all" on public.x50_settings;
+
+create policy "x50_settings_admin_all" on public.x50_settings
+  for all
+  using (lower(coalesce(auth.jwt() ->> 'email', '')) = 'siramrhadid@gmail.com')
+  with check (lower(coalesce(auth.jwt() ->> 'email', '')) = 'siramrhadid@gmail.com');
+
+-- ---------------------------------------------------------------------------
+-- 8. x50_submissions — transcripts, scores, and AI feedback of every student
+--    were publicly readable. Reads are now admin-only (only the admin panel
+--    reads this table); inserts stay open for client-side best-effort logging.
+-- ---------------------------------------------------------------------------
+drop policy if exists "x50_submissions_select" on public.x50_submissions;
+
+create policy "x50_submissions_select" on public.x50_submissions
+  for select
+  using (lower(coalesce(auth.jwt() ->> 'email', '')) = 'siramrhadid@gmail.com');
+
+-- ---------------------------------------------------------------------------
+-- 9. x50_video_views — student names + viewing activity were publicly
+--    readable. Reads are now admin-only; insert/update stay open (guests log
+--    intro-video views before signing in).
+-- ---------------------------------------------------------------------------
+drop policy if exists "x50_video_views_select" on public.x50_video_views;
+
+create policy "x50_video_views_select" on public.x50_video_views
+  for select
+  using (lower(coalesce(auth.jwt() ->> 'email', '')) = 'siramrhadid@gmail.com');
+
+-- ---------------------------------------------------------------------------
+-- 10. x50_challenges — anyone could add/edit/delete the site's challenges
+--     (defacement). Public read stays (the landing page needs it); writes are
+--     now admin-only.
+-- ---------------------------------------------------------------------------
+drop policy if exists "x50_challenges_insert" on public.x50_challenges;
+drop policy if exists "x50_challenges_update" on public.x50_challenges;
+drop policy if exists "x50_challenges_delete" on public.x50_challenges;
+
+create policy "x50_challenges_insert" on public.x50_challenges
+  for insert
+  with check (lower(coalesce(auth.jwt() ->> 'email', '')) = 'siramrhadid@gmail.com');
+
+create policy "x50_challenges_update" on public.x50_challenges
+  for update
+  using (lower(coalesce(auth.jwt() ->> 'email', '')) = 'siramrhadid@gmail.com')
+  with check (lower(coalesce(auth.jwt() ->> 'email', '')) = 'siramrhadid@gmail.com');
+
+create policy "x50_challenges_delete" on public.x50_challenges
+  for delete
+  using (lower(coalesce(auth.jwt() ->> 'email', '')) = 'siramrhadid@gmail.com');
+
+-- ---------------------------------------------------------------------------
+-- 11. x50_reviews — anyone could insert/delete the review screenshots shown on
+--     the landing page. Public read stays; writes are now admin-only.
+-- ---------------------------------------------------------------------------
+drop policy if exists "x50_reviews_insert" on public.x50_reviews;
+drop policy if exists "x50_reviews_delete" on public.x50_reviews;
+
+create policy "x50_reviews_insert" on public.x50_reviews
+  for insert
+  with check (lower(coalesce(auth.jwt() ->> 'email', '')) = 'siramrhadid@gmail.com');
+
+create policy "x50_reviews_delete" on public.x50_reviews
+  for delete
+  using (lower(coalesce(auth.jwt() ->> 'email', '')) = 'siramrhadid@gmail.com');
+
+-- ---------------------------------------------------------------------------
+-- 12. x50-reviews storage bucket — same hole as 11 for the image files
+--     themselves. Public read stays (the site shows them via public URLs);
+--     upload/delete are now admin-only.
+-- ---------------------------------------------------------------------------
+drop policy if exists "x50_reviews_obj_insert" on storage.objects;
+drop policy if exists "x50_reviews_obj_delete" on storage.objects;
+
+create policy "x50_reviews_obj_insert"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'x50-reviews'
+    and lower(coalesce(auth.jwt() ->> 'email', '')) = 'siramrhadid@gmail.com'
+  );
+
+create policy "x50_reviews_obj_delete"
+  on storage.objects for delete
+  using (
+    bucket_id = 'x50-reviews'
+    and lower(coalesce(auth.jwt() ->> 'email', '')) = 'siramrhadid@gmail.com'
+  );

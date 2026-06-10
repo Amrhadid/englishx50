@@ -42,12 +42,13 @@ export default function IntroVideo() {
 
   const recordOpen = async () => {
     if (!supabase) return
-    const { data } = await supabase
+    // Generate the id client-side: selecting rows back is admin-only under RLS,
+    // so an INSERT ... RETURNING would be rejected for visitors.
+    const id = crypto.randomUUID()
+    const { error } = await supabase
       .from('x50_video_views')
-      .insert({ student: studentId(), video_id: VIDEO_ID, watched_percent: 0 })
-      .select('id')
-      .single()
-    rowIdRef.current = (data as { id?: string } | null)?.id ?? null
+      .insert({ id, student: studentId(), video_id: VIDEO_ID, watched_percent: 0 })
+    rowIdRef.current = error ? null : id
   }
 
   const savePercent = async (pct: number) => {

@@ -6,6 +6,11 @@
 //
 // Deploy (project already has ANTHROPIC_API_KEY set):
 //   supabase functions deploy EnglishX50feedback --no-verify-jwt
+//
+// Access: premium users (or the admin) only — see _shared/premium.ts. The JWT
+// arrives automatically via supabase-js functions.invoke().
+
+import { callerHasPremium } from '../_shared/premium.ts'
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -113,6 +118,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
   if (!ANTHROPIC_API_KEY) return json({ error: 'ANTHROPIC_API_KEY not configured' }, 500)
+  if (!(await callerHasPremium(req))) {
+    return json({ error: 'Premium account required' }, 401)
+  }
 
   let payload: {
     question?: string

@@ -10,8 +10,13 @@
 // Deploy: supabase functions deploy audio --no-verify-jwt
 // Secrets (already set): CLOUDFLARE_R2_ENDPOINT, CLOUDFLARE_R2_BUCKET,
 //   CLOUDFLARE_R2_ACCESS_KEY_ID, CLOUDFLARE_R2_SECRET_ACCESS_KEY
+//
+// Access: uploads (POST) require a premium user (or the admin) — otherwise
+// anyone could fill the R2 bucket. GET stays open because the admin <audio>
+// element can't send headers; object keys are unguessable UUIDs.
 
 import { AwsClient } from 'https://esm.sh/aws4fetch@1.0.20'
+import { callerHasPremium } from '../_shared/premium.ts'
 
 const ENDPOINT = (Deno.env.get('CLOUDFLARE_R2_ENDPOINT') ?? '').replace(/\/$/, '')
 const BUCKET = Deno.env.get('CLOUDFLARE_R2_BUCKET') ?? ''
@@ -58,6 +63,9 @@ Deno.serve(async (req) => {
 
   // --- Upload ---
   if (req.method === 'POST') {
+    if (!(await callerHasPremium(req))) {
+      return json({ error: 'Premium account required' }, 401)
+    }
     try {
       const form = await req.formData()
       const file = form.get('file')
