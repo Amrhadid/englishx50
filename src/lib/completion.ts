@@ -127,6 +127,14 @@ export function saveVideoPosition(
   }
 }
 
+/** True once every lesson video of the challenge has been fully watched. */
+export function allVideosWatched(userId: string | null | undefined, c: Challenge): boolean {
+  const videos = challengeVideos(c)
+  if (videos.length === 0) return false
+  const watched = new Set(getWatchedVideos(userId, c.id))
+  return videos.every((v) => watched.has(v.uid))
+}
+
 /** True once every video is watched and every speaking task has a saved attempt. */
 export function isChallengeComplete(userId: string | null | undefined, c: Challenge): boolean {
   const videos = challengeVideos(c)

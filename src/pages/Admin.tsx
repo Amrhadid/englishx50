@@ -800,10 +800,18 @@ interface Submission {
   created_at: string
 }
 
+interface NoteRow {
+  student: string | null
+  challenge_number: number | null
+  entries: string[] | null
+  updated_at: string | null
+}
+
 interface StudentRow {
   name: string
   views: VideoView[]
   subs: Submission[]
+  notes: NoteRow[]
 }
 
 function StudentsAdmin() {
@@ -822,7 +830,8 @@ function StudentsAdmin() {
       // Premium users = those who redeemed a code; used_by matches the activity
       // `student` identity (both come from the x50_user value).
       supabase.from('x50_codes').select('used_by').not('used_at', 'is', null),
-    ]).then(([views, subs, codes]) => {
+      supabase.from('x50_notes').select('student, challenge_number, entries, updated_at'),
+    ]).then(([views, subs, codes, notes]) => {
       const premium = new Set(
         ((codes.data as { used_by: string | null }[]) ?? [])
           .map((c) => c.used_by)
@@ -833,11 +842,12 @@ function StudentsAdmin() {
       const keyOf = (s: string | null) => s || 'زائر غير معرّف'
       const get = (s: string | null) => {
         const key = keyOf(s)
-        if (!map.has(key)) map.set(key, { name: key, views: [], subs: [] })
+        if (!map.has(key)) map.set(key, { name: key, views: [], subs: [], notes: [] })
         return map.get(key)!
       }
       ;((views.data as VideoView[]) ?? []).forEach((v) => get(v.student).views.push(v))
       ;((subs.data as Submission[]) ?? []).forEach((s) => get(s.student).subs.push(s))
+      ;((notes.data as NoteRow[]) ?? []).forEach((n) => get(n.student).notes.push(n))
 
       // Show only premium students (whose identity redeemed a code).
       setStudents(Array.from(map.values()).filter((st) => premium.has(st.name)))
@@ -960,6 +970,40 @@ function StudentsAdmin() {
                           )}
                         </div>
                       ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Vocabulary notes */}
+                <div>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#9a9aa2]">
+                    Vocabulary notes
+                  </p>
+                  {st.notes.length === 0 ? (
+                    <p className="text-sm text-[#9a9aa2]">No notes submitted.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {st.notes
+                        .slice()
+                        .sort((a, b) => (a.challenge_number ?? 0) - (b.challenge_number ?? 0))
+                        .map((n, i) => (
+                          <div key={i} className="rounded-xl border border-[#f0ecf8] p-3">
+                            <p className="mb-2 text-xs font-bold text-[#534AB7]">
+                              {n.challenge_number != null ? `Challenge ${n.challenge_number}` : 'Notes'} ·{' '}
+                              {(n.entries ?? []).length} words · {fmt(n.updated_at)}
+                            </p>
+                            <div className="flex flex-wrap gap-1.5" dir="ltr">
+                              {(n.entries ?? []).map((w, j) => (
+                                <span
+                                  key={j}
+                                  className="rounded-lg bg-[#f1edff] px-2.5 py-1 text-[13px] font-semibold text-[#473BBE]"
+                                >
+                                  {w}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
                     </div>
                   )}
                 </div>

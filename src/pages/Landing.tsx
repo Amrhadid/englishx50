@@ -2,10 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { PLACEHOLDER_REVIEWS, mergeWithPlaceholders, isPlaceholderChallenge } from '../lib/placeholders'
 import { challengeVideos } from '../lib/challenge'
-import { challengeLockState, type LockState } from '../lib/completion'
+import { challengeLockState, allVideosWatched, type LockState } from '../lib/completion'
 import { levelTestTaskId, getAttempt, fetchServerTrials } from '../lib/progress'
+import { loadUserNotes, countNotes, REQUIRED_NOTES } from '../lib/notes'
 import ChallengeLockedModal from '../components/ChallengeLockedModal'
 import LevelTestRequiredModal from '../components/LevelTestRequiredModal'
+import SourceModal from '../components/SourceModal'
+import NotesModal from '../components/NotesModal'
+import NoticeModal from '../components/NoticeModal'
 import type { Challenge, Review } from '../types'
 import Navbar from '../components/Navbar'
 import Hero from '../components/Hero'
@@ -49,6 +53,29 @@ function LandingInner() {
     lock: Extract<LockState, { locked: true }>
   } | null>(null)
   const [showLevelTestRequired, setShowLevelTestRequired] = useState(false)
+  const [sourceFor, setSourceFor] = useState<Challenge | null>(null)
+  const [notesFor, setNotesFor] = useState<Challenge | null>(null)
+  const [notice, setNotice] = useState<{ title: string; message: string } | null>(null)
+
+  // Vocabulary notes per challenge (challenge_id → entries). A student must
+  // record at least REQUIRED_NOTES words before the session video / PDF /
+  // speaking task unlock. Loaded from the DB so it holds across devices.
+  const [notesByChallenge, setNotesByChallenge] = useState<Record<string, string[]>>({})
+  useEffect(() => {
+    if (!user) {
+      setNotesByChallenge({})
+      return
+    }
+    let active = true
+    loadUserNotes(user.id).then((map) => {
+      if (active) setNotesByChallenge(map)
+    })
+    return () => {
+      active = false
+    }
+  }, [user])
+  const notesDone = (c: Challenge): boolean =>
+    isAdmin || countNotes(notesByChallenge[c.id] ?? []) >= REQUIRED_NOTES
 
   // The level test is the mandatory first step: challenges stay locked until
   // the account has a graded attempt. Local saved attempt is checked first;
@@ -183,21 +210,35 @@ function LandingInner() {
         challenges={displayedChallenges}
         onSelect={() => requireAccess()}
         onFeedback={(c) => gateChallenge(c, () => setFeedbackFor(c))}
-        onSpeak={(c) => gateChallenge(c, () => setSpeakingFor(c))}
+        onSpeak={(c) =>
+          gateChallenge(c, () => {
+            // Speaking needs the notes done AND every lesson video watched.
+            if (!notesDone(c)) return setNotesFor(c)
+            if (!isAdmin && !allVideosWatched(user?.id, c)) {
+              return setNotice({
+                title: 'أكمل الدرس أولاً',
+                message: 'شاهد كل فيديوهات الدرس كاملةً حتى تُفتح مهمة التحدّث.',
+              })
+            }
+            setSpeakingFor(c)
+          })
+        }
         onWatch={(c) =>
-          gateChallenge(c, () =>
-            challengeVideos(c).length ? setLessonFor(c) : setComingSoonFor(c),
-          )
+          gateChallenge(c, () => {
+            if (!challengeVideos(c).length) return setComingSoonFor(c)
+            // Notes gate: collect 10+ vocabulary before the session video opens.
+            if (!notesDone(c)) return setNotesFor(c)
+            setLessonFor(c)
+          })
         }
-        onSource={(c) =>
-          gateChallenge(c, () =>
-            c.pdf_url ? window.open(c.pdf_url, '_blank', 'noopener') : setComingSoonFor(c),
-          )
-        }
+        onSource={(c) => gateChallenge(c, () => setSourceFor(c))}
         onFile={(c) =>
-          gateChallenge(c, () =>
-            c.file_url ? window.open(c.file_url, '_blank', 'noopener') : setComingSoonFor(c),
-          )
+          gateChallenge(c, () => {
+            if (!c.file_url) return setComingSoonFor(c)
+            // PDF is locked behind the notes gate too.
+            if (!notesDone(c)) return setNotesFor(c)
+            window.open(c.file_url, '_blank', 'noopener')
+          })
         }
         onUpgrade={() => requireAccess()}
         onLevelTestComplete={() => setLevelTestDone(true)}
@@ -253,6 +294,32 @@ function LandingInner() {
         <SpeakingModal challenge={speakingFor} onClose={() => setSpeakingFor(null)} />
       )}
       {lessonFor && <LessonModal challenge={lessonFor} onClose={() => setLessonFor(null)} />}
+      {sourceFor && <SourceModal challenge={sourceFor} onClose={() => setSourceFor(null)} />}
+      {notesFor && user && (
+        <NotesModal
+          challenge={notesFor}
+          userId={user.id}
+          student={(() => {
+            try {
+              return localStorage.getItem('x50_user')
+            } catch {
+              return null
+            }
+          })()}
+          initialEntries={notesByChallenge[notesFor.id] ?? []}
+          onClose={() => setNotesFor(null)}
+          onSaved={(entries) => {
+            const c = notesFor
+            setNotesByChallenge((prev) => ({ ...prev, [c.id]: entries }))
+            setNotesFor(null)
+            // Continue straight into the lesson once the gate is cleared.
+            if (challengeVideos(c).length) setLessonFor(c)
+          }}
+        />
+      )}
+      {notice && (
+        <NoticeModal title={notice.title} message={notice.message} onClose={() => setNotice(null)} />
+      )}
       </div>
   )
 }
