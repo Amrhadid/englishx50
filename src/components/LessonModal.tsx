@@ -9,6 +9,7 @@ import {
   getVideoProgress,
   saveVideoProgress,
   recordCompletionIfDone,
+  VIDEO_WATCHED_PCT,
 } from '../lib/completion'
 import { isAdminEmail } from '../lib/admin'
 import { toArabicDigits } from '../lib/theme'
@@ -66,8 +67,8 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
     getWatchedVideos(user?.id, challenge.id),
   )
   // Per-video watched percent (real playback), persisted so reopening the
-  // modal shows where each part stands. Raw 90% counts as fully watched, so
-  // the displayed bar scales it to read 100% exactly when the next part
+  // modal shows where each part stands. The displayed bar scales the
+  // VIDEO_WATCHED_PCT threshold to read 100% exactly when the next part
   // unlocks.
   const [progressPct, setProgressPct] = useState<Record<string, number>>(() =>
     getVideoProgress(user?.id, challenge.id),
@@ -85,7 +86,7 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
   }
   const displayPct = (vUid: string): number => {
     const raw = watchedUids.includes(vUid) ? 100 : (progressPct[vUid] ?? 0)
-    return Math.min(100, Math.round((raw / 90) * 100))
+    return Math.min(100, Math.round((raw / VIDEO_WATCHED_PCT) * 100))
   }
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const rowIdRef = useRef<string | null>(null)
@@ -120,8 +121,9 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
       // Live per-part progress bar (persisted across reopens).
       saveVideoProgress(user?.id, challenge.id, uid, rounded)
       setProgressPct((prev) => ({ ...prev, [uid]: Math.max(prev[uid] ?? 0, rounded) }))
-      // Count the video as watched near the end, then check challenge completion.
-      if (rounded >= 90 && user) {
+      // Count the video as watched only when effectively all of it was played,
+      // then check challenge completion.
+      if (rounded >= VIDEO_WATCHED_PCT && user) {
         markVideoWatched(user.id, challenge.id, uid)
         // Unlock the next part live.
         setWatchedUids((prev) => (prev.includes(uid) ? prev : [...prev, uid]))
@@ -167,6 +169,15 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
       })
       player.addEventListener?.('ended', () => {
         const dur = player?.duration
+        const cur = player?.currentTime
+        // Credit the tail played since the last poll — `ended` fires between
+        // polls with the player reporting paused, so tick() would skip it.
+        if (typeof cur === 'number' && lastTimeRef.current !== null) {
+          const delta = cur - lastTimeRef.current
+          const rate = player?.playbackRate || 1
+          if (delta > 0 && delta <= POLL_SECONDS * rate * 1.5) watchedSecondsRef.current += delta
+          lastTimeRef.current = cur
+        }
         if (dur > 0) savePercent((watchedSecondsRef.current / dur) * 100)
       })
     }

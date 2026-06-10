@@ -13,6 +13,13 @@ import type { Challenge } from '../types'
 
 export const COOLDOWN_DAYS = 5
 
+/**
+ * Real-playback percent at which a lesson video counts as fully watched.
+ * Effectively the whole video: the 2% slack only absorbs what the 3-second
+ * poll can't credit around pauses and the final moments before `ended`.
+ */
+export const VIDEO_WATCHED_PCT = 98
+
 const VID_PREFIX = 'x50_vid_'
 
 function vidKey(userId: string | null | undefined, challengeId: string): string {
