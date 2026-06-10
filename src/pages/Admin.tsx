@@ -264,7 +264,7 @@ function ChallengesAdmin() {
                     videos[i] = { ...videos[i], title: e.target.value }
                     setForm({ ...form, videos })
                   }}
-                  className={`${field} w-1/3`}
+                  className={`${field} flex-none basis-1/3`}
                 />
                 <input
                   placeholder="Cloudflare Stream video ID"
@@ -274,7 +274,7 @@ function ChallengesAdmin() {
                     videos[i] = { ...videos[i], uid: e.target.value }
                     setForm({ ...form, videos })
                   }}
-                  className={`${field} flex-1`}
+                  className={`${field} min-w-0 flex-1`}
                 />
                 <button
                   type="button"
