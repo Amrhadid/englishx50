@@ -5,9 +5,10 @@ import type { Challenge, Review, Code } from '../types'
 import { TrashIcon } from '../components/icons'
 import FeedbackView from '../components/FeedbackView'
 import { parseSubmission } from '../lib/grading'
-import { challengeVideos } from '../lib/challenge'
+import { challengeVideos, challengeSpeakingTasks } from '../lib/challenge'
 import { audioUrl } from '../lib/audio'
 import { isAdminEmail } from '../lib/admin'
+import { serverTaskKey, MAX_TRIALS } from '../lib/progress'
 
 type Tab = 'challenges' | 'reviews' | 'codes' | 'students' | 'grading'
 
@@ -822,21 +823,39 @@ interface ChallengeGroup {
   videos: VideoStat[]
   subs: Submission[]
   notes: NoteRow[]
+  /** The level test, or a regular challenge. */
+  isLevelTest: boolean
+  /** Challenge row id (used to build the server trial key); null for the level test. */
+  challengeId: string | null
+  /** Speaking task prompts for this challenge, in order (index = taskIndex). */
+  speakingTasks: string[]
 }
 
 interface StudentRow {
   name: string
+  /** Auth user id, resolved from x50_students; null when it can't be matched. */
+  userId: string | null
+  /** Server-side trial counts keyed by task_id (e.g. 'level_test', 'challenge_<id>#1'). */
+  trials: Record<string, number>
   challenges: ChallengeGroup[]
 }
 
 const fmtDate = (s?: string | null) =>
   s ? new Date(s).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
 
+// The activity tables store a student as the "x50_user" string (name - job).
+// x50_students maps that same identity to the auth user_id, which is what the
+// server-side trial counter (x50_trials) is keyed by. Rebuild the string the
+// same way the client does so we can resolve a student row → user_id.
+const studentKeyOf = (name: string | null, job: string | null) =>
+  `${name ?? ''} - ${job ?? ''}`.trim()
+
 function StudentsAdmin() {
   const [students, setStudents] = useState<StudentRow[]>([])
   const [loading, setLoading] = useState(true)
   const [openStudent, setOpenStudent] = useState<string | null>(null)
   const [openChallenge, setOpenChallenge] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
 
   useEffect(() => {
     if (!supabase) {
@@ -851,13 +870,31 @@ function StudentsAdmin() {
       supabase.from('x50_codes').select('used_by').not('used_at', 'is', null),
       supabase.from('x50_notes').select('student, challenge_number, entries, updated_at'),
       supabase.from('x50_challenges').select('*').order('number', { ascending: true }),
-    ]).then(([views, subs, codes, notes, challengesRes]) => {
+      // Maps the student identity string ↔ auth user_id (admin can read all rows).
+      supabase.from('x50_students').select('user_id, name, job'),
+      // Server-side speaking-trial counts, keyed by user_id + task_id.
+      supabase.from('x50_trials').select('user_id, task_id, used'),
+    ]).then(([views, subs, codes, notes, challengesRes, studentsRes, trialsRes]) => {
       const premium = new Set(
         ((codes.data as { used_by: string | null }[]) ?? [])
           .map((c) => c.used_by)
           .filter((v): v is string => !!v),
       )
       const challenges = (challengesRes.data as Challenge[]) ?? []
+
+      // student identity string → auth user_id
+      const userIdByKey = new Map<string, string>()
+      for (const r of (studentsRes.data as { user_id: string; name: string | null; job: string | null }[]) ?? []) {
+        if (r.user_id) userIdByKey.set(studentKeyOf(r.name, r.job), r.user_id)
+      }
+
+      // user_id → { task_id → used }
+      const trialsByUser = new Map<string, Record<string, number>>()
+      for (const t of (trialsRes.data as { user_id: string; task_id: string; used: number }[]) ?? []) {
+        const m = trialsByUser.get(t.user_id) ?? {}
+        m[t.task_id] = t.used
+        trialsByUser.set(t.user_id, m)
+      }
 
       // Group every record under its student.
       type Raw = { views: VideoView[]; subs: Submission[]; notes: NoteRow[] }
@@ -875,6 +912,9 @@ function StudentsAdmin() {
       const result: StudentRow[] = []
       for (const [name, r] of raw) {
         if (!premium.has(name)) continue
+
+        const userId = userIdByKey.get(name) ?? null
+        const trials = (userId && trialsByUser.get(userId)) || {}
 
         // Furthest watched percent per video uid.
         const maxByUid = new Map<string, number>()
@@ -896,7 +936,10 @@ function StudentsAdmin() {
         }
 
         const groups: ChallengeGroup[] = []
-        if (levelSubs.length) {
+        // Show the level test whenever there's an attempt or a trial counter to
+        // reset (the submission insert is best-effort, so a trial can exist
+        // without a stored submission).
+        if (levelSubs.length || (trials['level_test'] ?? 0) > 0) {
           groups.push({
             key: `${name}::lt`,
             label: 'Level test',
@@ -905,6 +948,9 @@ function StudentsAdmin() {
             videos: [],
             subs: levelSubs,
             notes: [],
+            isLevelTest: true,
+            challengeId: null,
+            speakingTasks: [],
           })
         }
         for (const c of challenges) {
@@ -920,9 +966,12 @@ function StudentsAdmin() {
             })),
             subs: subsByNum.get(c.number) ?? [],
             notes: notesByNum.get(c.number) ?? [],
+            isLevelTest: false,
+            challengeId: c.id,
+            speakingTasks: challengeSpeakingTasks(c),
           })
         }
-        result.push({ name, challenges: groups })
+        result.push({ name, userId, trials, challenges: groups })
       }
 
       setStudents(result.sort((a, b) => a.name.localeCompare(b.name)))
@@ -930,12 +979,42 @@ function StudentsAdmin() {
     })
   }, [])
 
+  // Reset one (student, task) trial counter back to a full set of attempts.
+  const resetTrials = async (userId: string | null, taskId: string, label: string) => {
+    if (!supabase) return
+    if (!userId) {
+      setNote("Can't resolve this student's account — no x50_students row to match.")
+      return
+    }
+    if (!confirm(`Reset trials for "${label}"? The student gets ${MAX_TRIALS} fresh attempts.`)) return
+    const { error } = await supabase.rpc('x50_reset_trial', { p_user: userId, p_task: taskId })
+    if (error) {
+      setNote(`Error: ${error.message}`)
+      return
+    }
+    // Reflect the reset locally (counter row deleted ⇒ 0 used).
+    setStudents((prev) =>
+      prev.map((s) => {
+        if (s.userId !== userId) return s
+        const trials = { ...s.trials }
+        delete trials[taskId]
+        return { ...s, trials }
+      }),
+    )
+    setNote(`Trials reset for ${label} ✓`)
+  }
+
   if (loading) return <p className="text-sm text-[#9a9aa2]">Loading…</p>
   if (students.length === 0)
     return <p className="text-sm text-[#9a9aa2]">No premium students yet.</p>
 
   return (
     <div className="space-y-3">
+      {note && (
+        <p className="rounded-xl bg-[#EEEDFE] px-3 py-2 text-sm font-semibold text-[#473BBE]">
+          {note}
+        </p>
+      )}
       {students.map((st) => {
         const sOpen = openStudent === st.name
         return (
@@ -963,6 +1042,8 @@ function StudentsAdmin() {
                   <ChallengePanel
                     key={cg.key}
                     group={cg}
+                    trials={st.trials}
+                    onResetTrials={(taskId, label) => resetTrials(st.userId, taskId, label)}
                     open={openChallenge === cg.key}
                     onToggle={() =>
                       setOpenChallenge(openChallenge === cg.key ? null : cg.key)
@@ -980,10 +1061,14 @@ function StudentsAdmin() {
 
 function ChallengePanel({
   group,
+  trials,
+  onResetTrials,
   open,
   onToggle,
 }: {
   group: ChallengeGroup
+  trials: Record<string, number>
+  onResetTrials: (taskId: string, label: string) => void
   open: boolean
   onToggle: () => void
 }) {
@@ -991,6 +1076,18 @@ function ChallengePanel({
   const avgWatched = group.videos.length
     ? Math.round(group.videos.reduce((m, v) => m + v.percent, 0) / group.videos.length)
     : null
+
+  // Speaking trials the admin can reset for this group: the level test, or one
+  // entry per challenge speaking task. task_id must match serverTaskKey().
+  const trialItems: { taskId: string; label: string }[] = group.isLevelTest
+    ? [{ taskId: 'level_test', label: `${group.label} trials` }]
+    : group.speakingTasks.map((_, i) => ({
+        taskId: serverTaskKey(group.challengeId ?? undefined, group.number ?? undefined, i),
+        label:
+          group.speakingTasks.length > 1
+            ? `${group.label} · speaking task ${i + 1}`
+            : `${group.label} speaking`,
+      }))
 
   return (
     <div className="overflow-hidden rounded-xl border border-[#f0ecf8]">
@@ -1096,6 +1193,43 @@ function ChallengePanel({
               </div>
             )}
           </section>
+
+          {/* Speaking trials — reset to give the student a fresh set of attempts */}
+          {trialItems.length > 0 && (
+            <section>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#9a9aa2]">
+                Speaking trials
+              </p>
+              <div className="space-y-2">
+                {trialItems.map((it) => {
+                  const used = trials[it.taskId] ?? 0
+                  return (
+                    <div
+                      key={it.taskId}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-[#f0ecf8] p-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-semibold text-[#1b1730]">
+                          {it.label}
+                        </p>
+                        <p className="text-[11px] font-semibold text-[#9a9aa2]">
+                          {used} / {MAX_TRIALS} used
+                          {used >= MAX_TRIALS ? ' · no attempts left' : ''}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => onResetTrials(it.taskId, it.label)}
+                        disabled={used === 0}
+                        className="shrink-0 rounded-lg bg-[#EEEDFE] px-3 py-1.5 text-xs font-bold text-[#534AB7] disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Reset trials
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          )}
 
           {/* Vocabulary notes */}
           {group.number != null && (

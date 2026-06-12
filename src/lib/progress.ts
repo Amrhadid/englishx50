@@ -68,8 +68,12 @@ export function serverTaskKey(challengeId?: string, challengeNumber?: number, ta
 }
 
 /**
- * The authoritative attempts-used count from the DB (null when unavailable —
- * e.g. signed out, no row yet, or the table hasn't been created).
+ * The authoritative attempts-used count from the DB. Returns `null` only when
+ * the count can't be read (signed out, no client, or a query error); a
+ * successful read with no row means zero attempts used — including right after
+ * an admin reset, which deletes the row. Callers treat the server value as
+ * authoritative, so this distinction matters: `null` keeps the cached count,
+ * `0` clears it.
  */
 export async function fetchServerTrials(taskKey: string, userId: string): Promise<number | null> {
   if (!supabase) return null
@@ -79,7 +83,8 @@ export async function fetchServerTrials(taskKey: string, userId: string): Promis
     .eq('user_id', userId)
     .eq('task_id', taskKey)
     .maybeSingle()
-  if (error || !data) return null
+  if (error) return null
+  if (!data) return 0
   const used = (data as { used: number }).used
   return Number.isFinite(used) ? used : null
 }

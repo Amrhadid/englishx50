@@ -208,15 +208,16 @@ function LevelTestModal({
   }, [])
 
   // The attempt limit is enforced server-side (x50_trials) — clearing the
-  // browser no longer resets it. Pull the authoritative count so the UI
-  // matches what the server will allow.
+  // browser no longer resets it. Pull the authoritative count and mirror it
+  // exactly: the server is the source of truth, so it can lower the count too
+  // (e.g. after an admin resets this student's trials), not just raise it.
   useEffect(() => {
     if (isAdmin || !user) return
     let active = true
     fetchServerTrials('level_test', user.id).then((server) => {
       if (!active || server == null) return
-      setStoredTrials(taskId, Math.max(server, getTrials(taskId)))
-      setTrials((t) => (t.taskId === taskId && server > t.used ? { taskId, used: server } : t))
+      setStoredTrials(taskId, server)
+      setTrials((t) => (t.taskId === taskId ? { taskId, used: server } : t))
     })
     return () => {
       active = false
