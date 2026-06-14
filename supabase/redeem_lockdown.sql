@@ -120,6 +120,10 @@ begin
 end;
 $$;
 
+-- NOTE: leads.sql re-declares this function (create or replace) with an extra
+-- step that marks the matching x50_leads row as paid. Run leads.sql after this
+-- file so redemptions update the Leads admin section.
+
 revoke all on function public.x50_redeem_code(text, text, text) from public, anon;
 grant execute on function public.x50_redeem_code(text, text, text) to authenticated;
 

@@ -9,7 +9,7 @@ import { challengeVideos } from '../lib/challenge'
 import { audioUrl } from '../lib/audio'
 import { isAdminEmail } from '../lib/admin'
 
-type Tab = 'challenges' | 'reviews' | 'codes' | 'students' | 'grading'
+type Tab = 'challenges' | 'reviews' | 'codes' | 'leads' | 'students' | 'grading'
 
 type ChallengeForm = {
   number: string
@@ -112,7 +112,7 @@ export default function Admin() {
 
       <div className="mx-auto max-w-4xl px-5 py-6">
         <div className="mb-6 flex gap-2">
-          {(['challenges', 'reviews', 'codes', 'students', 'grading'] as Tab[]).map((t) => (
+          {(['challenges', 'reviews', 'codes', 'leads', 'students', 'grading'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -128,6 +128,7 @@ export default function Admin() {
         {tab === 'challenges' && <ChallengesAdmin />}
         {tab === 'reviews' && <ReviewsAdmin />}
         {tab === 'codes' && <CodesAdmin />}
+        {tab === 'leads' && <LeadsAdmin />}
         {tab === 'students' && <StudentsAdmin />}
         {tab === 'grading' && <GradingAdmin />}
       </div>
@@ -766,6 +767,160 @@ function CodesAdmin() {
                       onClick={() => remove(c.id)}
                       className="inline-flex items-center rounded-lg bg-[#FEE2E2] px-2.5 py-1.5 text-xs font-bold text-[#DC2626]"
                       aria-label="Delete code"
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface Lead {
+  id: string
+  name: string | null
+  phone: string | null
+  country_code: string | null
+  job: string | null
+  nationality: string | null
+  university: string | null
+  youtube_subscribed: string | null
+  referral: string | null
+  paid: boolean
+  paid_at: string | null
+  created_at: string
+}
+
+function LeadsAdmin() {
+  const [items, setItems] = useState<Lead[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState<'all' | 'paid' | 'unpaid'>('all')
+
+  const load = async () => {
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+    const { data } = await supabase
+      .from('x50_leads')
+      .select('*')
+      .order('created_at', { ascending: false })
+    setItems((data as Lead[]) ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    load()
+  }, [])
+
+  const togglePaid = async (l: Lead) => {
+    if (!supabase) return
+    const next = !l.paid
+    await supabase
+      .from('x50_leads')
+      .update({ paid: next, paid_at: next ? new Date().toISOString() : null })
+      .eq('id', l.id)
+    load()
+  }
+
+  const remove = async (id: string) => {
+    if (!supabase) return
+    if (!confirm('Delete this lead?')) return
+    await supabase.from('x50_leads').delete().eq('id', id)
+    load()
+  }
+
+  const fmt = (s?: string | null) =>
+    s ? new Date(s).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
+  const yn = (v?: string | null) => (v === 'yes' ? 'نعم' : v === 'no' ? 'لا' : '—')
+
+  const paidCount = items.filter((l) => l.paid).length
+  const shown = items.filter((l) =>
+    filter === 'all' ? true : filter === 'paid' ? l.paid : !l.paid,
+  )
+
+  if (loading) return <p className="text-sm text-[#9a9aa2]">Loading…</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between px-1">
+        <p className="text-sm font-bold text-[#111]">
+          Leads <span className="text-[#9a9aa2]">({items.length})</span>
+        </p>
+        <p className="text-xs text-[#9a9aa2]">
+          {paidCount} paid · {items.length - paidCount} unpaid
+        </p>
+      </div>
+
+      <div className="flex gap-2">
+        {(['all', 'unpaid', 'paid'] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`rounded-full px-4 py-1.5 text-xs font-bold capitalize transition ${
+              filter === f ? 'bg-[#534AB7] text-white' : 'bg-[#f4f3f7] text-[#5b5670]'
+            }`}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+
+      {shown.length === 0 ? (
+        <p className="text-sm text-[#9a9aa2]">No leads yet.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-[#f0ecf8]">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-[#f0ecf8] bg-[#faf9ff] text-xs uppercase text-[#9a9aa2]">
+                <th className="px-4 py-3 font-bold">Name</th>
+                <th className="px-4 py-3 font-bold">Phone</th>
+                <th className="px-4 py-3 font-bold">Nationality</th>
+                <th className="px-4 py-3 font-bold">Job</th>
+                <th className="px-4 py-3 font-bold">University</th>
+                <th className="px-4 py-3 font-bold">YouTube</th>
+                <th className="px-4 py-3 font-bold">How heard</th>
+                <th className="px-4 py-3 font-bold">Date</th>
+                <th className="px-4 py-3 font-bold">Status</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((l) => (
+                <tr key={l.id} className="border-b border-[#f5f2fb] last:border-0">
+                  <td className="px-4 py-3 font-medium text-[#111]">{l.name || '—'}</td>
+                  <td className="px-4 py-3 text-[#5b5670]" dir="ltr">
+                    {l.phone || '—'}
+                  </td>
+                  <td className="px-4 py-3 text-[#5b5670]">{l.nationality || '—'}</td>
+                  <td className="px-4 py-3 text-[#5b5670]">{l.job || '—'}</td>
+                  <td className="px-4 py-3 text-[#5b5670]">{yn(l.university)}</td>
+                  <td className="px-4 py-3 text-[#5b5670]">{yn(l.youtube_subscribed)}</td>
+                  <td className="px-4 py-3 text-[#5b5670]">{l.referral || '—'}</td>
+                  <td className="px-4 py-3 text-[#5b5670]">{fmt(l.created_at)}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => togglePaid(l)}
+                      title={l.paid ? `Paid · ${fmt(l.paid_at)}` : 'Mark as paid'}
+                      className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                        l.paid
+                          ? 'bg-[#E1F5EE] text-[#0C7C62]'
+                          : 'bg-[#FEF3C7] text-[#92400E] hover:bg-[#FDE68A]'
+                      }`}
+                    >
+                      {l.paid ? 'Paid' : 'Unpaid'}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => remove(l.id)}
+                      className="inline-flex items-center rounded-lg bg-[#FEE2E2] px-2.5 py-1.5 text-xs font-bold text-[#DC2626]"
+                      aria-label="Delete lead"
                     >
                       <TrashIcon className="h-4 w-4" />
                     </button>

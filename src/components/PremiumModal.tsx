@@ -5,6 +5,7 @@ import { checkCode, redeemCode } from '../lib/redeem'
 import { useAuth } from '../hooks/useAuth'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { dialCountries, arabNationalities } from '../lib/countries'
+import { createLead } from '../lib/leads'
 
 interface PremiumModalProps {
   onClose: () => void
@@ -335,6 +336,22 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
         /* ignore storage errors */
       }
     }
+  }
+
+  // Persist the lead and mirror identity when the user heads to WhatsApp.
+  const submitJoin = () => {
+    saveIdentity()
+    const nat = arabNationalities.find((n) => n.code === nationality)?.label ?? ''
+    void createLead({
+      name,
+      phone: phone.trim() ? `${dialCode}${phone.trim()}` : '',
+      countryCode: dialCode,
+      job,
+      nationality: nat,
+      university,
+      youtube,
+      referral,
+    })
   }
 
   const submitCode = async () => {
@@ -681,7 +698,7 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
                 href={whatsappUrl()}
                 target="_blank"
                 rel="noreferrer"
-                onClick={saveIdentity}
+                onClick={submitJoin}
                 className="mt-1 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#25D366] py-3.5 text-sm font-bold text-white shadow-lg shadow-[#25D366]/30 transition hover:-translate-y-0.5"
               >
                 <WhatsAppIcon />
