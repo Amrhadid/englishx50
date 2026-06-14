@@ -8,8 +8,9 @@ import { parseSubmission } from '../lib/grading'
 import { challengeVideos } from '../lib/challenge'
 import { audioUrl } from '../lib/audio'
 import { isAdminEmail } from '../lib/admin'
+import { MAX_TRIALS } from '../lib/progress'
 
-type Tab = 'challenges' | 'reviews' | 'codes' | 'leads' | 'students' | 'grading'
+type Tab = 'challenges' | 'reviews' | 'codes' | 'leads' | 'students' | 'trials' | 'grading'
 
 type ChallengeForm = {
   number: string
@@ -112,7 +113,7 @@ export default function Admin() {
 
       <div className="mx-auto max-w-4xl px-5 py-6">
         <div className="mb-6 flex gap-2">
-          {(['challenges', 'reviews', 'codes', 'leads', 'students', 'grading'] as Tab[]).map((t) => (
+          {(['challenges', 'reviews', 'codes', 'leads', 'students', 'trials', 'grading'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -130,6 +131,7 @@ export default function Admin() {
         {tab === 'codes' && <CodesAdmin />}
         {tab === 'leads' && <LeadsAdmin />}
         {tab === 'students' && <StudentsAdmin />}
+        {tab === 'trials' && <TrialsAdmin />}
         {tab === 'grading' && <GradingAdmin />}
       </div>
     </div>
@@ -931,6 +933,218 @@ function LeadsAdmin() {
           </table>
         </div>
       )}
+    </div>
+  )
+}
+
+interface StudentLite {
+  user_id: string
+  name: string | null
+  phone: string | null
+  code: string | null
+}
+
+interface TrialRow {
+  user_id: string
+  task_id: string
+  used: number
+  bonus: number
+  updated_at: string
+}
+
+function speakingTasksOf(c: Challenge): string[] {
+  if (c.speaking_tasks && c.speaking_tasks.length) return c.speaking_tasks
+  return c.speaking_task ? [c.speaking_task] : []
+}
+
+function TrialsAdmin() {
+  const [students, setStudents] = useState<StudentLite[]>([])
+  const [challenges, setChallenges] = useState<Challenge[]>([])
+  const [grants, setGrants] = useState<TrialRow[]>([])
+  const [userId, setUserId] = useState('')
+  const [taskKey, setTaskKey] = useState('level_test')
+  const [bonus, setBonus] = useState('1')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const load = async () => {
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+    const [studentsRes, challengesRes, grantsRes] = await Promise.all([
+      supabase
+        .from('x50_students')
+        .select('user_id, name, phone, code')
+        .order('created_at', { ascending: false }),
+      supabase.from('x50_challenges').select('*').order('number', { ascending: true }),
+      supabase.from('x50_trials').select('user_id, task_id, used, bonus, updated_at').gt('bonus', 0),
+    ])
+    setStudents((studentsRes.data as StudentLite[]) ?? [])
+    setChallenges((challengesRes.data as Challenge[]) ?? [])
+    setGrants((grantsRes.data as TrialRow[]) ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    load()
+  }, [])
+
+  const taskOptions = [
+    { key: 'level_test', label: 'Level Test' },
+    ...challenges.flatMap((c) => {
+      const n = Math.max(speakingTasksOf(c).length, 1)
+      return Array.from({ length: n }, (_, i) => ({
+        key: i > 0 ? `challenge_${c.id}#${i}` : `challenge_${c.id}`,
+        label: `Challenge ${c.number}${n > 1 ? ` · Task ${i + 1}` : ''}`,
+      }))
+    }),
+  ]
+
+  const studentName = (id: string) => {
+    const s = students.find((x) => x.user_id === id)
+    return s ? s.name || s.phone || id.slice(0, 8) : id.slice(0, 8)
+  }
+
+  const taskLabel = (key: string) => {
+    if (key === 'level_test') return 'Level Test'
+    const m = key.match(/^challenge_(.+?)(?:#(\d+))?$/)
+    if (m) {
+      const c = challenges.find((ch) => ch.id === m[1])
+      const idx = m[2] ? Number(m[2]) : 0
+      if (c) return `Challenge ${c.number}${idx ? ` · Task ${idx + 1}` : ''}`
+    }
+    return key
+  }
+
+  const grant = async () => {
+    if (!supabase) {
+      setMsg('Supabase is not configured.')
+      return
+    }
+    if (!userId) {
+      setMsg('Select a student first.')
+      return
+    }
+    const n = Math.min(Math.max(Number(bonus) || 0, 0), 50)
+    setBusy(true)
+    setMsg(null)
+    const { error } = await supabase.rpc('x50_grant_trials', {
+      p_user: userId,
+      p_task: taskKey,
+      p_bonus: n,
+    })
+    setBusy(false)
+    if (error) {
+      setMsg(`Error: ${error.message}`)
+      return
+    }
+    setMsg(n > 0 ? `Granted ${n} extra ${n === 1 ? 'trial' : 'trials'} ✓` : 'Bonus cleared ✓')
+    load()
+  }
+
+  const revoke = async (g: TrialRow) => {
+    if (!supabase) return
+    await supabase.rpc('x50_grant_trials', { p_user: g.user_id, p_task: g.task_id, p_bonus: 0 })
+    load()
+  }
+
+  const fieldCls =
+    'w-full rounded-xl border border-[#e8e0f0] px-3 py-2 text-sm outline-none focus:border-[#534AB7]'
+
+  if (loading) return <p className="text-sm text-[#9a9aa2]">Loading…</p>
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-[#f0ecf8] p-5">
+        <h3 className="mb-1 font-bold text-[#111]">Grant extra speaking trials</h3>
+        <p className="mb-3 text-xs text-[#9a9aa2]">
+          Give a student more attempts on a speaking task (or the level test), on top of the default{' '}
+          {MAX_TRIALS}. The extra attempts kick in once they've used their {MAX_TRIALS}.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <select value={userId} onChange={(e) => setUserId(e.target.value)} className={fieldCls}>
+            <option value="">Select student…</option>
+            {students.map((s) => (
+              <option key={s.user_id} value={s.user_id}>
+                {(s.name || 'Unnamed') +
+                  (s.phone ? ` · ${s.phone}` : '') +
+                  (s.code ? ` · ${s.code}` : '')}
+              </option>
+            ))}
+          </select>
+          <select value={taskKey} onChange={(e) => setTaskKey(e.target.value)} className={fieldCls}>
+            {taskOptions.map((o) => (
+              <option key={o.key} value={o.key}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="number"
+            min={0}
+            max={50}
+            value={bonus}
+            onChange={(e) => setBonus(e.target.value)}
+            className="w-24 rounded-xl border border-[#e8e0f0] px-3 py-2 text-sm outline-none focus:border-[#534AB7]"
+          />
+          <span className="text-xs text-[#9a9aa2]">extra trials</span>
+          <button
+            onClick={grant}
+            disabled={busy || !userId}
+            className="rounded-xl bg-[#534AB7] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#46409c] disabled:opacity-60"
+          >
+            {busy ? 'Saving…' : 'Grant'}
+          </button>
+        </div>
+        {msg && <p className="mt-2 text-xs text-[#5b5670]">{msg}</p>}
+      </div>
+
+      <div>
+        <p className="mb-2 px-1 text-sm font-bold text-[#111]">
+          Active grants <span className="text-[#9a9aa2]">({grants.length})</span>
+        </p>
+        {grants.length === 0 ? (
+          <p className="text-sm text-[#9a9aa2]">No active grants.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-[#f0ecf8]">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-[#f0ecf8] bg-[#faf9ff] text-xs uppercase text-[#9a9aa2]">
+                  <th className="px-4 py-3 font-bold">Student</th>
+                  <th className="px-4 py-3 font-bold">Task</th>
+                  <th className="px-4 py-3 font-bold">Used</th>
+                  <th className="px-4 py-3 font-bold">Bonus</th>
+                  <th className="px-4 py-3 font-bold">Allowed</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {grants.map((g) => (
+                  <tr key={`${g.user_id}-${g.task_id}`} className="border-b border-[#f5f2fb] last:border-0">
+                    <td className="px-4 py-3 font-medium text-[#111]">{studentName(g.user_id)}</td>
+                    <td className="px-4 py-3 text-[#5b5670]">{taskLabel(g.task_id)}</td>
+                    <td className="px-4 py-3 text-[#5b5670]">{g.used}</td>
+                    <td className="px-4 py-3 text-[#5b5670]">+{g.bonus}</td>
+                    <td className="px-4 py-3 text-[#5b5670]">{MAX_TRIALS + g.bonus}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => revoke(g)}
+                        className="rounded-lg bg-[#FEE2E2] px-2.5 py-1.5 text-xs font-bold text-[#DC2626]"
+                      >
+                        Revoke
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -309,9 +309,15 @@ create table if not exists public.x50_trials (
   user_id    uuid not null,
   task_id    text not null,
   used       integer not null default 0,
+  -- Admin-granted extra attempts on top of p_max (see trials_admin.sql).
+  bonus      integer not null default 0,
   updated_at timestamptz not null default now(),
   primary key (user_id, task_id)
 );
+
+-- Safe if the table predates the bonus column.
+alter table public.x50_trials
+  add column if not exists bonus integer not null default 0;
 
 -- Clients may only READ their own counts (to display attempts left); all
 -- writes happen via x50_consume_trial with the service role.
@@ -345,7 +351,7 @@ begin
   values (p_user, p_task, 1)
   on conflict (user_id, task_id) do update
     set used = t.used + 1, updated_at = now()
-    where t.used < p_max
+    where t.used < p_max + coalesce(t.bonus, 0)
   returning t.used into v_used;
 
   if v_used is null then
