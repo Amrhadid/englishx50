@@ -292,9 +292,13 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
 
   // Activation form (after a valid code)
   const [redeemName, setRedeemName] = useState('')
+  const [redeemPhone, setRedeemPhone] = useState('')
+  const [redeemCountry, setRedeemCountry] = useState('EG')
   const [redeemJob, setRedeemJob] = useState('')
   const [agreed, setAgreed] = useState(false)
   const [activated, setActivated] = useState(false)
+
+  const redeemDialCode = dialCountries.find((c) => c.code === redeemCountry)?.dialCode ?? '+20'
 
   // Join form
   const [name, setName] = useState('')
@@ -402,8 +406,8 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
       setCodeMsg({ ok: false, text: 'سجّل الدخول بحساب Google أولاً' })
       return
     }
-    if (!redeemName.trim() || !redeemJob.trim()) {
-      setCodeMsg({ ok: false, text: 'من فضلك أكمل الاسم والوظيفة' })
+    if (!redeemName.trim() || !redeemJob.trim() || !redeemPhone.trim()) {
+      setCodeMsg({ ok: false, text: 'من فضلك أكمل الاسم ورقم الهاتف والوظيفة' })
       return
     }
     if (!agreed) {
@@ -421,6 +425,7 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
       code: validatedCode,
       name: redeemName.trim(),
       job: redeemJob.trim(),
+      phone: `${redeemDialCode}${redeemPhone.trim()}`,
     })
 
     if (!result.ok) {
@@ -526,6 +531,15 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
               className={input}
               autoFocus
             />
+            <div className="mb-3 flex gap-2.5">
+              <input
+                value={redeemPhone}
+                onChange={(e) => setRedeemPhone(e.target.value)}
+                placeholder="رقم الهاتف"
+                className="flex-1 rounded-2xl border border-[#ece7fb] bg-[#faf9ff] px-4 py-3 text-[13px] text-right outline-none transition focus:border-[#7C6FF0] focus:bg-white"
+              />
+              <PhoneCodeSelect value={redeemCountry} onChange={setRedeemCountry} />
+            </div>
             <input
               value={redeemJob}
               onChange={(e) => setRedeemJob(e.target.value)}
@@ -561,7 +575,7 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
 
             <button
               onClick={confirmActivation}
-              disabled={verifying || !redeemName.trim() || !redeemJob.trim() || !agreed}
+              disabled={verifying || !redeemName.trim() || !redeemPhone.trim() || !redeemJob.trim() || !agreed}
               className="w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg shadow-[#A964F0]/30 transition hover:-translate-y-0.5 disabled:opacity-60"
               style={{ background: BRAND_GRADIENT }}
             >

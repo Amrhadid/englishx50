@@ -120,9 +120,10 @@ begin
 end;
 $$;
 
--- NOTE: leads.sql re-declares this function (create or replace) with an extra
--- step that marks the matching x50_leads row as paid. Run leads.sql after this
--- file so redemptions update the Leads admin section.
+-- NOTE: leads.sql DROPS this 3-arg function and recreates it with a 4th
+-- argument (p_phone) plus a step that marks the matching x50_leads row as paid.
+-- Run leads.sql after this file so redemptions update the Leads admin section;
+-- the app always calls the 4-arg signature.
 
 revoke all on function public.x50_redeem_code(text, text, text) from public, anon;
 grant execute on function public.x50_redeem_code(text, text, text) to authenticated;

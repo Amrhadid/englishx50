@@ -26,8 +26,9 @@ create table if not exists public.x50_leads (
   created_at         timestamptz not null default now()
 );
 
--- Speeds up the paid-marking name match in x50_redeem_code.
-create index if not exists x50_leads_name_idx on public.x50_leads (lower(btrim(name)));
+-- Speeds up the paid-marking phone match in x50_redeem_code (digits only).
+create index if not exists x50_leads_phone_idx
+  on public.x50_leads (regexp_replace(coalesce(phone, ''), '\D', '', 'g'));
 
 -- Public form inserts with the anon key; only the admin account reads/manages.
 grant insert on public.x50_leads to anon, authenticated;
@@ -60,22 +61,29 @@ create policy "x50_leads_admin_delete" on public.x50_leads
   using (lower(coalesce(auth.jwt() ->> 'email', '')) = 'siramrhadid@gmail.com');
 
 -- ---------------------------------------------------------------------------
--- 2. Redemption RPC — same as redeem_lockdown.sql, plus a final step that marks
---    the most recent unpaid lead with a matching name as paid. SECURITY DEFINER
---    bypasses RLS, so it can update x50_leads. Best-effort: if no lead matches
---    (student never filled the join form) nothing changes and redemption still
---    succeeds.
+-- 2. Redemption RPC — same as redeem_lockdown.sql, but now takes the student's
+--    phone and, as a final step, marks the most recent unpaid lead with a
+--    matching phone as paid. Matching is on digits only (regexp_replace strips
+--    '+', spaces, etc.) so formatting differences don't break it. SECURITY
+--    DEFINER bypasses RLS so it can update x50_leads. Best-effort: if no lead
+--    matches (student never filled the join form) redemption still succeeds.
+--
+--    Adds a parameter, so the old 3-arg version is dropped first (the client
+--    now always calls the 4-arg signature).
 -- ---------------------------------------------------------------------------
-create or replace function public.x50_redeem_code(p_code text, p_name text, p_job text)
+drop function if exists public.x50_redeem_code(text, text, text);
+
+create or replace function public.x50_redeem_code(p_code text, p_name text, p_job text, p_phone text)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_uid  uuid := auth.uid();
-  v_code public.x50_codes%rowtype;
-  v_now  timestamptz := now();
+  v_uid   uuid := auth.uid();
+  v_code  public.x50_codes%rowtype;
+  v_now   timestamptz := now();
+  v_phone text := nullif(regexp_replace(coalesce(p_phone, ''), '\D', '', 'g'), '');
 begin
   if v_uid is null then
     return jsonb_build_object('ok', false, 'reason', 'auth');
@@ -102,29 +110,32 @@ begin
   update public.x50_students
   set name = trim(p_name),
       job  = trim(p_job),
+      phone = trim(p_phone),
       code = v_code.code,
       code_redeemed_at = v_now
   where user_id = v_uid;
 
   if not found then
     insert into public.x50_students (user_id, phone, name, job, code, code_redeemed_at)
-    values (v_uid, '', trim(p_name), trim(p_job), v_code.code, v_now);
+    values (v_uid, trim(p_phone), trim(p_name), trim(p_job), v_code.code, v_now);
   end if;
 
-  -- Mark the matching lead as paid (most recent unpaid one with this name).
-  update public.x50_leads
-  set paid = true, paid_at = v_now
-  where id = (
-    select id from public.x50_leads
-    where not paid
-      and lower(btrim(name)) = lower(btrim(p_name))
-    order by created_at desc
-    limit 1
-  );
+  -- Mark the matching lead as paid (most recent unpaid one with this phone).
+  if v_phone is not null then
+    update public.x50_leads
+    set paid = true, paid_at = v_now
+    where id = (
+      select id from public.x50_leads
+      where not paid
+        and regexp_replace(coalesce(phone, ''), '\D', '', 'g') = v_phone
+      order by created_at desc
+      limit 1
+    );
+  end if;
 
   return jsonb_build_object('ok', true, 'redeemed_at', v_now);
 end;
 $$;
 
-revoke all on function public.x50_redeem_code(text, text, text) from public, anon;
-grant execute on function public.x50_redeem_code(text, text, text) to authenticated;
+revoke all on function public.x50_redeem_code(text, text, text, text) from public, anon;
+grant execute on function public.x50_redeem_code(text, text, text, text) to authenticated;

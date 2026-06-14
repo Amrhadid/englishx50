@@ -32,6 +32,8 @@ export async function redeemCode(opts: {
   code: string
   name: string
   job: string
+  /** Full phone incl. dial code — used to mark the matching lead paid. */
+  phone: string
 }): Promise<RedeemResult> {
   if (!supabase) return { ok: false, reason: 'error' }
 
@@ -39,6 +41,7 @@ export async function redeemCode(opts: {
     p_code: opts.code.trim(),
     p_name: opts.name,
     p_job: opts.job,
+    p_phone: opts.phone,
   })
   if (error || !data) return { ok: false, reason: 'error' }
 
