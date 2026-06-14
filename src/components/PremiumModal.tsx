@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BRAND_GRADIENT } from '../lib/theme'
 import { supabase } from '../lib/supabase'
 import { checkCode, redeemCode } from '../lib/redeem'
 import { useAuth } from '../hooks/useAuth'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
+import { dialCountries, arabNationalities } from '../lib/countries'
 
 interface PremiumModalProps {
   onClose: () => void
@@ -36,6 +37,186 @@ const TERMS = [
 ]
 
 type YesNo = 'yes' | 'no' | null
+
+const REFERRAL_OPTIONS = [
+  { value: 'تيك توك', label: 'تيك توك' },
+  { value: 'انستجرام', label: 'انستجرام' },
+  { value: 'يوتيوب', label: 'يوتيوب' },
+  { value: 'صديق', label: 'صديق' },
+]
+
+function ChevronIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 opacity-60" aria-hidden="true">
+      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+// Close the dropdown when clicking anywhere outside of it.
+function useDropdown() {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+  return { open, setOpen, ref }
+}
+
+// Searchable country-code picker for the phone field. Tracks the selected
+// country by its ISO code (dial codes are not unique, e.g. +1 for US/CA).
+function PhoneCodeSelect({ value, onChange }: { value: string; onChange: (code: string) => void }) {
+  const { open, setOpen, ref } = useDropdown()
+  const [search, setSearch] = useState('')
+  const selected = dialCountries.find((c) => c.code === value) ?? dialCountries[0]
+  const q = search.trim()
+  const list = q
+    ? dialCountries.filter(
+        (c) => c.name.includes(q) || c.dialCode.includes(q) || c.code.toLowerCase().includes(q.toLowerCase()),
+      )
+    : dialCountries
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex h-full items-center gap-1 rounded-2xl border border-[#ece7fb] bg-[#faf9ff] px-3 py-3 text-[13px] font-semibold text-[#8a85a0] transition hover:border-[#cfc6f5]"
+      >
+        <span className="text-base leading-none">{selected.flag}</span>
+        <span dir="ltr">{selected.dialCode}</span>
+        <ChevronIcon />
+      </button>
+      {open && (
+        <div className="absolute left-0 z-10 mt-2 w-64 overflow-hidden rounded-2xl border border-[#ece7fb] bg-white shadow-xl">
+          <div className="border-b border-[#f2eefc] p-2">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="ابحث عن دولة أو كود..."
+              className="w-full rounded-xl border border-[#ece7fb] bg-[#faf9ff] px-3 py-2 text-[12.5px] text-right outline-none focus:border-[#7C6FF0]"
+              autoFocus
+            />
+          </div>
+          <div className="max-h-56 overflow-y-auto">
+            {list.length === 0 ? (
+              <p className="px-3 py-3 text-center text-[12px] text-[#a39ec0]">لا توجد نتائج</p>
+            ) : (
+              list.map((c) => (
+                <button
+                  type="button"
+                  key={c.code}
+                  onClick={() => {
+                    onChange(c.code)
+                    setOpen(false)
+                    setSearch('')
+                  }}
+                  className={`flex w-full items-center gap-2 px-3 py-2.5 text-right text-[13px] transition hover:bg-[#f6f4ff] ${
+                    c.code === value ? 'bg-[#f1edff]' : ''
+                  }`}
+                >
+                  <span className="text-base">{c.flag}</span>
+                  <span className="flex-1 truncate text-[#1b1730]">{c.name}</span>
+                  <span dir="ltr" className="text-[#8a85a0]">
+                    {c.dialCode}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Arab-only nationality picker.
+function NationalitySelect({ value, onChange }: { value: string; onChange: (code: string) => void }) {
+  const { open, setOpen, ref } = useDropdown()
+  const selected = arabNationalities.find((n) => n.code === value)
+  return (
+    <div className="relative mb-3" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between rounded-2xl border border-[#ece7fb] bg-[#faf9ff] px-4 py-3 text-[13px] outline-none transition hover:border-[#cfc6f5]"
+      >
+        {selected ? (
+          <span className="flex items-center gap-2 text-[#1b1730]">
+            <span className="text-base">{selected.flag}</span>
+            {selected.label}
+          </span>
+        ) : (
+          <span className="text-[#8a85a0]">الجنسية</span>
+        )}
+        <ChevronIcon />
+      </button>
+      {open && (
+        <div className="absolute inset-x-0 z-10 mt-2 overflow-hidden rounded-2xl border border-[#ece7fb] bg-white shadow-xl">
+          <div className="max-h-56 overflow-y-auto">
+            {arabNationalities.map((n) => (
+              <button
+                type="button"
+                key={n.code}
+                onClick={() => {
+                  onChange(n.code)
+                  setOpen(false)
+                }}
+                className={`flex w-full items-center gap-2 px-4 py-2.5 text-right text-[13px] transition hover:bg-[#f6f4ff] ${
+                  n.code === value ? 'bg-[#f1edff]' : ''
+                }`}
+              >
+                <span className="text-base">{n.flag}</span>
+                <span className="flex-1 text-[#1b1730]">{n.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ChoiceSelector({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string
+  options: { value: string; label: string }[]
+  value: string | null
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className="mb-3.5">
+      <p className="mb-2 text-[13px] font-bold text-[#1b1730]">{label}</p>
+      <div className="grid grid-cols-2 gap-2.5">
+        {options.map((o) => {
+          const active = value === o.value
+          return (
+            <button
+              type="button"
+              key={o.value}
+              onClick={() => onChange(o.value)}
+              className={
+                active
+                  ? 'cursor-pointer rounded-2xl border-2 border-[#7C6FF0] bg-[#f1edff] p-2.5 text-center text-[13px] font-bold text-[#7C6FF0]'
+                  : 'cursor-pointer rounded-2xl border border-[#ece7fb] p-2.5 text-center text-[13px] font-semibold text-[#9a95ad] hover:border-[#cfc6f5]'
+              }
+            >
+              {o.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 function CloseIcon() {
   return (
@@ -117,26 +298,36 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
   // Join form
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [country, setCountry] = useState('EG')
   const [job, setJob] = useState('')
+  const [nationality, setNationality] = useState('')
   const [university, setUniversity] = useState<YesNo>('yes')
   const [youtube, setYoutube] = useState<YesNo>(null)
+  const [referral, setReferral] = useState<string | null>(null)
+
+  const dialCode = dialCountries.find((c) => c.code === country)?.dialCode ?? '+20'
 
   const input =
     'mb-3 w-full rounded-2xl border border-[#ece7fb] bg-[#faf9ff] px-4 py-3 text-[13px] text-right outline-none transition focus:border-[#7C6FF0] focus:bg-white'
 
   const whatsappUrl = () => {
+    const nat = arabNationalities.find((n) => n.code === nationality)?.label
     const lines = [
       `انا اسمي ${name || '...'}`,
+      ...(nat ? [`وجنسيتي ${nat}`] : []),
+      ...(phone.trim() ? [`ورقمي ${dialCode}${phone.trim()}`] : []),
       `وظيفتي ${job || '...'}`,
       university === 'no' ? 'لم التحق بالجامعة' : 'التحقت بالجامعة',
       youtube === 'yes' ? 'مشترك في قناة اليوتيوب' : 'غير مشترك في قناة اليوتيوب',
+      ...(referral ? [`وعرفت عن التحدي من ${referral}`] : []),
       'وشاهدت الفيديو وراجعت النظام جيداً وحابب اشترك في تحدي ٥٠ يوم',
     ]
     return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(lines.join('\n'))}`
   }
 
   const saveIdentity = () => {
-    const identity = [name.trim(), phone.trim()].filter(Boolean).join(' - ')
+    const fullPhone = phone.trim() ? `${dialCode}${phone.trim()}` : ''
+    const identity = [name.trim(), fullPhone].filter(Boolean).join(' - ')
     if (identity) {
       try {
         localStorage.setItem(USER_KEY, identity)
@@ -461,9 +652,7 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
                   placeholder="رقم الهاتف"
                   className="flex-1 rounded-2xl border border-[#ece7fb] bg-[#faf9ff] px-4 py-3 text-[13px] text-right outline-none transition focus:border-[#7C6FF0] focus:bg-white"
                 />
-                <div className="flex w-20 items-center justify-center rounded-2xl border border-[#ece7fb] bg-[#faf9ff] px-2.5 py-3 text-[13px] font-semibold text-[#8a85a0]">
-                  +20
-                </div>
+                <PhoneCodeSelect value={country} onChange={setCountry} />
               </div>
 
               <input
@@ -473,11 +662,19 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
                 className={input}
               />
 
+              <NationalitySelect value={nationality} onChange={setNationality} />
+
               <YesNoSelector label="هل التحقت بالجامعة؟" value={university} onChange={setUniversity} />
               <YesNoSelector
                 label="هل أنت مشترك بقناة اليوتيوب؟"
                 value={youtube}
                 onChange={setYoutube}
+              />
+              <ChoiceSelector
+                label="كيف عرفت عن التحدي؟"
+                options={REFERRAL_OPTIONS}
+                value={referral}
+                onChange={setReferral}
               />
 
               <a
