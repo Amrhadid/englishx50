@@ -7,9 +7,12 @@ import { isAdminEmail } from '../lib/admin'
 
 interface NavbarProps {
   onStart: () => void
+  // Optional shortcut for existing buyers to redeem a code / sign in without
+  // going through the program page first.
+  onRedeem?: () => void
 }
 
-export default function Navbar({ onStart }: NavbarProps) {
+export default function Navbar({ onStart, onRedeem }: NavbarProps) {
   const { user, signOut } = useAuth()
   const { daysLeft, student } = useOnboardingContext()
 
@@ -50,6 +53,14 @@ export default function Navbar({ onStart }: NavbarProps) {
           >
             آراء الطلاب
           </a>
+          {onRedeem && (
+            <button
+              onClick={onRedeem}
+              className="hidden rounded-full px-3.5 py-2 text-sm font-bold text-[#6b6685] transition hover:bg-[#f1edff] hover:text-[#8B5CF6] sm:inline-block"
+            >
+              عندك كود؟
+            </button>
+          )}
           <button
             onClick={onStart}
             className="rounded-full bg-[#1b1730] px-5 py-2.5 text-sm font-extrabold text-white transition hover:bg-[#8B5CF6]"

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { PLACEHOLDER_REVIEWS, mergeWithPlaceholders, isPlaceholderChallenge } from '../lib/placeholders'
 import { challengeVideos } from '../lib/challenge'
@@ -13,10 +14,10 @@ import NoticeModal from '../components/NoticeModal'
 import type { Challenge, Review } from '../types'
 import Navbar from '../components/Navbar'
 import Hero from '../components/Hero'
-import IntroVideo from '../components/IntroVideo'
 import Challenges from '../components/Challenges'
 import Countdown from '../components/Countdown'
 import PremiumModal from '../components/PremiumModal'
+import ProgramGateModal from '../components/ProgramGateModal'
 import ComingSoonModal from '../components/ComingSoonModal'
 import FeedbackModal from '../components/FeedbackModal'
 import SpeakingModal from '../components/SpeakingModal'
@@ -26,7 +27,7 @@ import { OnboardingProvider } from '../context/OnboardingContext'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { useAuth } from '../hooks/useAuth'
 import { isAdminEmail } from '../lib/admin'
-import { toArabicDigits } from '../lib/theme'
+import { toArabicDigits, BRAND_GRADIENT } from '../lib/theme'
 
 export default function Landing() {
   return (
@@ -43,7 +44,10 @@ function LandingInner() {
 
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
+  // Upgrade popup — reached only via the navbar "عندك كود؟" redeem shortcut.
   const [showPremium, setShowPremium] = useState(false)
+  // Premium gate — shown when a visitor clicks any premium feature/CTA.
+  const [showProgramGate, setShowProgramGate] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<Challenge | null>(null)
   const [speakingFor, setSpeakingFor] = useState<Challenge | null>(null)
   const [lessonFor, setLessonFor] = useState<Challenge | null>(null)
@@ -140,10 +144,10 @@ function LandingInner() {
     }
   }, [])
 
-  // Gate for locked actions (clicking a challenge or the level test). Opens
-  // the premium popup, which handles Google sign-in + account-bound code
-  // activation. Only ever opens on an explicit click.
-  const requireAccess = () => setShowPremium(true)
+  // Gate for locked actions (clicking a challenge, the level test, or any
+  // "start" CTA). Nudges visitors to the program page first instead of opening
+  // the upgrade flow directly. Only ever opens on an explicit click.
+  const requireAccess = () => setShowProgramGate(true)
 
   // "ابدأ التحدي" CTAs: premium accounts go straight to the challenges
   // (the level test sits at the top); everyone else gets the upgrade popup.
@@ -200,11 +204,19 @@ function LandingInner() {
 
   return (
       <div className="min-h-screen bg-white">
-        <Navbar onStart={start} />
+        <Navbar onStart={start} onRedeem={() => setShowPremium(true)} />
       <Hero onStart={start} />
 
-      {/* Intro video */}
-      <IntroVideo />
+      {/* Learn about the program → dedicated page (video + details + reviews) */}
+      <section className="bg-[#ECEAFF] px-5 pb-14 pt-2 text-center" dir="rtl">
+        <Link
+          to="/program"
+          className="mx-auto block w-full max-w-2xl rounded-[28px] py-5 text-lg font-extrabold text-white shadow-xl transition hover:-translate-y-0.5 sm:text-xl"
+          style={{ background: BRAND_GRADIENT }}
+        >
+          تعرف على البرنامج - اضغط هنا 👈
+        </Link>
+      </section>
 
       <Challenges
         challenges={displayedChallenges}
@@ -264,6 +276,7 @@ function LandingInner() {
         </p>
       </footer>
 
+      {showProgramGate && <ProgramGateModal onClose={() => setShowProgramGate(false)} />}
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
       {showLevelTestRequired && (
         <LevelTestRequiredModal
