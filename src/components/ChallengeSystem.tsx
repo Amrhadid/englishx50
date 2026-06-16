@@ -1,5 +1,6 @@
 import { themeFor, toArabicDigits } from '../lib/theme'
 import achievement from '../assets/Achievement-bro.svg'
+import StatsStrip from './StatsStrip'
 
 const STEPS = [
   'راجع المصدر جيداً',
@@ -11,13 +12,6 @@ const STEPS = [
   'قم بمراجعة غلطاتك جيداً',
 ]
 
-const STATS = [
-  { n: '100%', l: 'Guaranteed', color: '#1b1730' },
-  { n: '2,000+', l: 'Students', color: '#F59E0B' },
-  { n: '10', l: 'Challenges', color: '#EC4899' },
-  { n: '50', l: 'Days', color: '#8B5CF6' },
-]
-
 /**
  * The "نظام التحدي / ٢ تحدي كل اسبوع" program-details block — the steps,
  * weekly cadence badges and a quick stats strip. Lives on the dedicated
@@ -27,21 +21,9 @@ export default function ChallengeSystem() {
   return (
     <section id="program-details" className="bg-[#ECEAFF]">
       {/* Stats strip */}
-      <div className="grid grid-cols-2 border-b border-[#f0eeff] bg-white sm:grid-cols-4">
-        {STATS.map((s, i) => (
-          <div
-            key={s.l}
-            className={`px-5 py-4 text-center ${i !== 0 ? 'border-r border-[#f0eeff] sm:border-l sm:border-r-0' : ''}`}
-          >
-            <div className="text-[22px] font-black" style={{ color: s.color }}>
-              {s.n}
-            </div>
-            <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-[#8b85a0]">{s.l}</div>
-          </div>
-        ))}
-      </div>
+      <StatsStrip />
 
-      <div className="mx-auto grid max-w-5xl items-center gap-10 px-5 py-14 sm:px-8 md:grid-cols-[1.1fr_1fr]" dir="rtl">
+      <div className="mx-auto grid max-w-5xl items-center gap-10 px-5 pb-14 pt-4 sm:px-8 md:grid-cols-[1.1fr_1fr]" dir="rtl">
         {/* Steps card + badges */}
         <div>
           <span className="mb-3 inline-block rounded-full bg-white px-4 py-1.5 text-[12px] font-bold tracking-wide text-[#8B5CF6]">

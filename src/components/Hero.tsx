@@ -1,4 +1,5 @@
 import voiceChat from '../assets/Voice chat-pana.svg'
+import StatsStrip from './StatsStrip'
 
 interface HeroProps {
   onStart: () => void
@@ -16,13 +17,6 @@ const AVATARS = [
   { letter: 'ف', bg: '#F59E0B' },
   { letter: 'س', bg: '#1b1730' },
   { letter: 'ه', bg: '#0F6E56' },
-]
-
-const STATS = [
-  { n: '50', l: 'Days', color: '#8B5CF6' },
-  { n: '10', l: 'Challenges', color: '#EC4899' },
-  { n: '2,000+', l: 'Students', color: '#F59E0B' },
-  { n: '100%', l: 'Guaranteed', color: '#1b1730' },
 ]
 
 export default function Hero({ onStart }: HeroProps) {
@@ -136,19 +130,7 @@ export default function Hero({ onStart }: HeroProps) {
       </div>
 
       {/* Stats strip */}
-      <div className="grid grid-cols-2 border-t border-[#f0eeff] bg-white sm:grid-cols-4">
-        {STATS.map((s, i) => (
-          <div
-            key={s.l}
-            className={`px-5 py-4 text-center ${i !== 0 ? 'border-r border-[#f0eeff] sm:border-l sm:border-r-0' : ''}`}
-          >
-            <div className="text-[22px] font-black" style={{ color: s.color }}>
-              {s.n}
-            </div>
-            <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-[#8b85a0]">{s.l}</div>
-          </div>
-        ))}
-      </div>
+      <StatsStrip />
     </section>
   )
 }
