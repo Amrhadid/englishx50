@@ -112,12 +112,12 @@ export default function Admin() {
       </header>
 
       <div className="mx-auto max-w-4xl px-5 py-6">
-        <div className="mb-6 flex gap-2">
+        <div className="mb-6 -mx-5 flex gap-2 overflow-x-auto px-5 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {(['challenges', 'reviews', 'codes', 'leads', 'students', 'trials', 'grading'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`rounded-full px-5 py-2 text-sm font-bold capitalize transition ${
+              className={`shrink-0 whitespace-nowrap rounded-full px-5 py-2 text-sm font-bold capitalize transition ${
                 tab === t ? 'bg-[#534AB7] text-white' : 'bg-[#f4f3f7] text-[#5b5670]'
               }`}
             >
