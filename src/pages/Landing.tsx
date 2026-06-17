@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { PLACEHOLDER_REVIEWS, mergeWithPlaceholders, isPlaceholderChallenge } from '../lib/placeholders'
 import { challengeVideos } from '../lib/challenge'
 import { challengeLockState, allVideosWatched, type LockState } from '../lib/completion'
-import { levelTestTaskId, getAttempt, fetchServerTrials } from '../lib/progress'
+import { levelTestTaskId, getAttempt, fetchServerTrials, hasLevelTestSubmission } from '../lib/progress'
 import { loadUserNotes, countNotes, REQUIRED_NOTES } from '../lib/notes'
 import ChallengeLockedModal from '../components/ChallengeLockedModal'
 import LevelTestRequiredModal from '../components/LevelTestRequiredModal'
@@ -93,8 +93,15 @@ function LandingInner() {
       const saved = getAttempt(levelTestTaskId(user?.id))
       if (saved && (saved.outcome === 'passed' || saved.outcome === 'failed')) return true
       if (!user) return false
-      const used = await fetchServerTrials('level_test', user.id)
-      return used != null && used > 0
+      // Cross-device, account-scoped proof: a recorded level-test submission is
+      // authoritative; a consumed server-side trial is the secondary signal.
+      // Either one means the test was already taken (survives a new device /
+      // cleared cache), so don't force it again.
+      const [hasSub, used] = await Promise.all([
+        hasLevelTestSubmission(user.id),
+        fetchServerTrials('level_test', user.id),
+      ])
+      return hasSub || (used != null && used > 0)
     }
     check().then((done) => {
       if (active && done) setLevelTestDone(true)

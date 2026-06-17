@@ -237,6 +237,9 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           challenge_id: payload.challengeId ?? null,
           challenge_number: payload.challengeNumber ?? null,
+          // Bind the row to the verified account so the client gate can read
+          // its own level-test completion cross-device (see level_test_done.sql).
+          user_id: caller.userId,
           student: payload.student ?? null,
           question,
           transcript,

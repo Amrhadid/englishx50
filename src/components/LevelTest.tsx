@@ -370,6 +370,7 @@ function LevelTestModal({
       .insert({
         challenge_id: null,
         challenge_number: null,
+        user_id: user?.id ?? null,
         student,
         question: 'Level Test — Introduce yourself in English',
         transcript: text,

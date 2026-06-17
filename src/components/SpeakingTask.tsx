@@ -185,6 +185,7 @@ export default function SpeakingTask({
       question,
       transcript: text,
       student,
+      userId: user?.id,
       challengeId,
       challengeNumber,
       taskIndex,

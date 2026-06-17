@@ -84,6 +84,27 @@ export async function fetchServerTrials(taskKey: string, userId: string): Promis
   return Number.isFinite(used) ? used : null
 }
 
+/**
+ * Authoritative, cross-device check: has this account ever recorded a level-test
+ * attempt? Reads the user's OWN level-test submission (challenge id/number NULL)
+ * — RLS lets a user read only their own rows. Returns false when signed out or
+ * unavailable, so callers fall back to other signals. This survives a new
+ * device / cleared cache, unlike the localStorage saved attempt.
+ */
+export async function hasLevelTestSubmission(userId: string | null | undefined): Promise<boolean> {
+  if (!supabase || !userId) return false
+  const { data, error } = await supabase
+    .from('x50_submissions')
+    .select('id')
+    .eq('user_id', userId)
+    .is('challenge_number', null)
+    .is('challenge_id', null)
+    .limit(1)
+    .maybeSingle()
+  if (error || !data) return false
+  return true
+}
+
 // Keys are scoped to the signed-in account so saved attempts/trials never leak
 // between accounts sharing the same browser (localStorage is per-device).
 function scope(userId: string | null | undefined): string {

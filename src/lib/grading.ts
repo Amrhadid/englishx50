@@ -8,6 +8,8 @@ interface GradeParams {
   question: string
   transcript: string
   student?: string
+  /** Signed-in account id, so the saved row can be read back by its owner. */
+  userId?: string | null
   challengeId?: string
   challengeNumber?: number
   taskIndex?: number
@@ -179,6 +181,7 @@ export async function gradeSpeaking(params: GradeParams): Promise<GradeOutcome> 
     .insert({
       challenge_id: params.challengeId ?? null,
       challenge_number: params.challengeNumber ?? null,
+      user_id: params.userId ?? null,
       student: params.student ?? null,
       question: params.question,
       transcript: params.transcript,
