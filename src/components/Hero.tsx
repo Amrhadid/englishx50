@@ -1,5 +1,4 @@
 import voiceChat from '../assets/Voice chat-pana.svg'
-import StatsStrip from './StatsStrip'
 
 interface HeroProps {
   onStart: () => void
@@ -129,8 +128,6 @@ export default function Hero({ onStart }: HeroProps) {
         </div>
       </div>
 
-      {/* Stats strip */}
-      <StatsStrip />
     </section>
   )
 }

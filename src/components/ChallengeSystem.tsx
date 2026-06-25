@@ -1,6 +1,5 @@
 import { themeFor, toArabicDigits } from '../lib/theme'
 import achievement from '../assets/Achievement-bro.svg'
-import StatsStrip from './StatsStrip'
 
 const STEPS = [
   'راجع المصدر جيداً',
@@ -20,9 +19,6 @@ const STEPS = [
 export default function ChallengeSystem() {
   return (
     <section id="program-details" className="bg-[#ECEAFF]">
-      {/* Stats strip */}
-      <StatsStrip />
-
       <div className="mx-auto grid max-w-5xl items-center gap-10 px-5 pb-14 pt-4 sm:px-8 md:grid-cols-[1.1fr_1fr]" dir="rtl">
         {/* Steps card + badges */}
         <div>
