@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import DaysLeftBadge from './DaysLeftBadge'
@@ -15,6 +15,17 @@ interface NavbarProps {
 export default function Navbar({ onStart, onRedeem }: NavbarProps) {
   const { user, signOut } = useAuth()
   const { daysLeft, student } = useOnboardingContext()
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  const scrollToId = (id: string) => {
+    if (location.pathname === '/') {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
+    } else {
+      navigate('/')
+      setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }), 300)
+    }
+  }
 
   // Show the days-left badge to a signed-in account that redeemed a code
   // (including after expiry, so it reads "انتهى اشتراكك"). DB-driven.
@@ -31,28 +42,28 @@ export default function Navbar({ onStart, onRedeem }: NavbarProps) {
   return (
     <header className="sticky top-0 z-30 w-full border-b border-[#f0eeff] bg-white">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5 sm:px-8">
-        <a href="#" className="flex items-center gap-2.5">
+        <Link to="/" className="flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[#8B5CF6] text-[12px] font-black text-white">
             50
           </span>
           <span className="text-[17px] font-black tracking-tight text-[#1b1730]">
             English<span className="text-[#8B5CF6]">X50</span>
           </span>
-        </a>
+        </Link>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <a
-            href="#challenges"
+          <button
+            onClick={() => scrollToId('challenges')}
             className="hidden rounded-full px-3.5 py-2 text-sm font-bold text-[#6b6685] transition hover:bg-[#f1edff] hover:text-[#8B5CF6] sm:inline-block"
           >
             التحديات
-          </a>
-          <a
-            href="#reviews"
+          </button>
+          <button
+            onClick={() => scrollToId('reviews')}
             className="hidden rounded-full px-3.5 py-2 text-sm font-bold text-[#6b6685] transition hover:bg-[#f1edff] hover:text-[#8B5CF6] sm:inline-block"
           >
             آراء الطلاب
-          </a>
+          </button>
           {onRedeem && (
             <button
               onClick={onRedeem}
