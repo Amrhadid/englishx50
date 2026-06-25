@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BRAND_GRADIENT } from '../lib/theme'
+import { checkCode } from '../lib/redeem'
 
 function CloseIcon() {
   return (
@@ -14,7 +16,30 @@ function CloseIcon() {
  * feature (a challenge, the level test, or a "start" CTA). Instead of opening
  * the full upgrade flow directly, it nudges them to the program page first.
  */
-export default function ProgramGateModal({ onClose }: { onClose: () => void }) {
+export default function ProgramGateModal({
+  onClose,
+  onRedeemCode,
+}: {
+  onClose: () => void
+  onRedeemCode?: (code: string) => void
+}) {
+  const [codeInput, setCodeInput] = useState('')
+  const [checking, setChecking] = useState(false)
+  const [codeError, setCodeError] = useState<string | null>(null)
+
+  const handleCodeSubmit = async () => {
+    const value = codeInput.trim()
+    if (!value) { setCodeError('أدخل الكود أولاً'); return }
+    setChecking(true)
+    setCodeError(null)
+    const status = await checkCode(value)
+    setChecking(false)
+    if (status === 'used') { setCodeError('هذا الكود مستخدم بالفعل'); return }
+    if (status === 'error') { setCodeError('تعذّر التحقق الآن، حاول لاحقاً'); return }
+    if (status === 'invalid') { setCodeError('كود غير صحيح'); return }
+    onRedeemCode?.(value)
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-[#1b1730]/50 p-4 backdrop-blur-sm"
@@ -48,6 +73,33 @@ export default function ProgramGateModal({ onClose }: { onClose: () => void }) {
         >
           تعرف على البرنامج من هنا ←
         </Link>
+
+        <div className="my-5 flex items-center gap-3">
+          <div className="flex-1 border-t border-[#ece7fb]" />
+          <span className="text-xs text-[#9a95b0]">أو</span>
+          <div className="flex-1 border-t border-[#ece7fb]" />
+        </div>
+
+        <p className="mb-2 text-right text-[13px] font-bold text-[#1b1730]">عندك كود؟</p>
+        <input
+          type="text"
+          value={codeInput}
+          onChange={(e) => { setCodeInput(e.target.value); setCodeError(null) }}
+          onKeyDown={(e) => e.key === 'Enter' && handleCodeSubmit()}
+          placeholder="أدخل كود الاشتراك"
+          className="mb-2 w-full rounded-2xl border border-[#ece7fb] bg-[#faf9ff] px-4 py-3 text-right text-[13px] outline-none transition focus:border-[#7C6FF0] focus:bg-white"
+          dir="rtl"
+        />
+        {codeError && (
+          <p className="mb-2 text-right text-[12px] font-semibold text-red-500">{codeError}</p>
+        )}
+        <button
+          onClick={handleCodeSubmit}
+          disabled={checking}
+          className="w-full rounded-2xl border-2 border-[#7C6FF0] py-3 text-sm font-bold text-[#7C6FF0] transition hover:bg-[#f4f2fc] disabled:opacity-50"
+        >
+          {checking ? 'جارٍ التحقق…' : 'تفعيل الكود ←'}
+        </button>
       </div>
     </div>
   )

@@ -9,6 +9,7 @@ import { createLead } from '../lib/leads'
 
 interface PremiumModalProps {
   onClose: () => void
+  initialCode?: string
 }
 
 const WHATSAPP_NUMBER = '201097965058'
@@ -271,10 +272,10 @@ function YesNoSelector({
   )
 }
 
-export default function PremiumModal({ onClose }: PremiumModalProps) {
+export default function PremiumModal({ onClose, initialCode }: PremiumModalProps) {
   const { user } = useAuth()
   const { refetch } = useOnboardingContext()
-  const [view, setView] = useState<'features' | 'join' | 'redeem'>('features')
+  const [view, setView] = useState<'features' | 'join' | 'redeem'>(initialCode ? 'redeem' : 'features')
 
   const signInWithGoogle = () => {
     if (!supabase) return
@@ -285,10 +286,10 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
   }
 
   // Code redemption
-  const [code, setCode] = useState('')
+  const [code, setCode] = useState(initialCode ?? '')
   const [verifying, setVerifying] = useState(false)
   const [codeMsg, setCodeMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const [validatedCode, setValidatedCode] = useState<string | null>(null)
+  const [validatedCode, setValidatedCode] = useState<string | null>(initialCode ?? null)
 
   // Activation form (after a valid code)
   const [redeemName, setRedeemName] = useState('')

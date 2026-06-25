@@ -1,9 +1,11 @@
-import { useSearchParams, Link } from 'react-router-dom'
+import { useState } from 'react'
+import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import SpeakingTask from '../components/SpeakingTask'
 import { OnboardingProvider } from '../context/OnboardingContext'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { useAuth } from '../hooks/useAuth'
 import { isAdminEmail } from '../lib/admin'
+import { checkCode } from '../lib/redeem'
 
 const DEFAULT_QUESTION =
   'Talk about your daily routine and how you stay healthy. Form at least 3 complete sentences.'
@@ -24,6 +26,23 @@ function SpeakingInner() {
   const [params] = useSearchParams()
   const { premiumActive, loading } = useOnboardingContext()
   const { user } = useAuth()
+  const navigate = useNavigate()
+  const [codeInput, setCodeInput] = useState('')
+  const [checking, setChecking] = useState(false)
+  const [codeError, setCodeError] = useState<string | null>(null)
+
+  const handleCodeSubmit = async () => {
+    const value = codeInput.trim()
+    if (!value) { setCodeError('أدخل الكود أولاً'); return }
+    setChecking(true)
+    setCodeError(null)
+    const status = await checkCode(value)
+    setChecking(false)
+    if (status === 'used') { setCodeError('هذا الكود مستخدم بالفعل'); return }
+    if (status === 'error') { setCodeError('تعذّر التحقق الآن، حاول لاحقاً'); return }
+    if (status === 'invalid') { setCodeError('كود غير صحيح'); return }
+    navigate(`/?code=${encodeURIComponent(value)}`)
+  }
   const question = params.get('q') || DEFAULT_QUESTION
   const num = params.get('n')
 
@@ -61,6 +80,33 @@ function SpeakingInner() {
           >
             الرجوع للصفحة الرئيسية
           </Link>
+
+          <div className="my-5 flex items-center gap-3">
+            <div className="flex-1 border-t border-[#ece7fb]" />
+            <span className="text-xs text-[#9a95b0]">أو</span>
+            <div className="flex-1 border-t border-[#ece7fb]" />
+          </div>
+
+          <p className="mb-2 text-right text-[13px] font-bold text-[#1b1730]">عندك كود؟</p>
+          <input
+            type="text"
+            value={codeInput}
+            onChange={(e) => { setCodeInput(e.target.value); setCodeError(null) }}
+            onKeyDown={(e) => e.key === 'Enter' && handleCodeSubmit()}
+            placeholder="أدخل كود الاشتراك"
+            className="mb-2 w-full rounded-2xl border border-[#ece7fb] bg-[#faf9ff] px-4 py-3 text-right text-[13px] outline-none transition focus:border-[#7C6FF0] focus:bg-white"
+            dir="rtl"
+          />
+          {codeError && (
+            <p className="mb-2 text-right text-[12px] font-semibold text-red-500">{codeError}</p>
+          )}
+          <button
+            onClick={handleCodeSubmit}
+            disabled={checking}
+            className="w-full rounded-2xl border-2 border-[#7C6FF0] py-3 text-sm font-bold text-[#7C6FF0] transition hover:bg-[#f4f2fc] disabled:opacity-50"
+          >
+            {checking ? 'جارٍ التحقق…' : 'تفعيل الكود ←'}
+          </button>
         </div>
       </div>
     )
