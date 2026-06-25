@@ -10,6 +10,7 @@ import Reviews from '../components/Reviews'
 import PremiumModal from '../components/PremiumModal'
 import SubscribeConfirmModal from '../components/SubscribeConfirmModal'
 import { OnboardingProvider } from '../context/OnboardingContext'
+import { useOnboardingContext } from '../hooks/useOnboardingContext'
 
 export default function Program() {
   return (
@@ -20,6 +21,7 @@ export default function Program() {
 }
 
 function ProgramInner() {
+  const { premiumActive } = useOnboardingContext()
   const [reviews, setReviews] = useState<Review[]>([])
   const [showConfirm, setShowConfirm] = useState(false)
   const [showPremium, setShowPremium] = useState(false)
@@ -51,7 +53,7 @@ function ProgramInner() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navbar onStart={() => setShowConfirm(true)} onRedeem={() => setShowPremium(true)} />
+      <Navbar onStart={() => setShowConfirm(true)} onRedeem={premiumActive ? undefined : () => setShowPremium(true)} />
 
       {/* Title */}
       <section className="bg-[#ECEAFF] py-12 text-center sm:py-14" dir="rtl">

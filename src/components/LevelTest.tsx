@@ -47,10 +47,12 @@ function countSentences(text: string): number {
 export default function LevelTest({
   onUpgrade,
   onComplete,
+  done = false,
 }: {
   onUpgrade?: () => void
   /** Called when a level-test attempt is graded and saved (passed or failed). */
   onComplete?: () => void
+  done?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const { premiumActive } = useOnboardingContext()
@@ -108,6 +110,17 @@ export default function LevelTest({
             <h3 className="flex items-center gap-2 text-[22px] font-black leading-tight text-[#1b1730]">
               اختبار المستوى
               {!premium && <LockBadge />}
+              {done && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
+                  style={{ backgroundColor: TEAL }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" className="h-3 w-3" aria-hidden="true">
+                    <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  تم
+                </span>
+              )}
             </h3>
             <p className="text-[13px] font-semibold leading-relaxed text-[#7a7596]">
               قيّم مستواك في التحدّث قبل ما تبدأ التحدي الأول
@@ -118,9 +131,9 @@ export default function LevelTest({
             <button
               onClick={handleStart}
               className="rounded-[30px] px-[20px] py-2.5 text-[13px] font-bold text-white transition hover:brightness-95"
-              style={{ backgroundColor: PURPLE }}
+              style={{ backgroundColor: done ? TEAL : PURPLE }}
             >
-              ابدأ الاختبار
+              {done ? 'مراجعة النتيجة' : 'ابدأ الاختبار'}
             </button>
           </div>
         </div>

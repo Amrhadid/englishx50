@@ -221,7 +221,7 @@ function LandingInner() {
 
   return (
       <div className="min-h-screen bg-white">
-        <Navbar onStart={start} onRedeem={() => setShowPremium(true)} />
+        <Navbar onStart={start} onRedeem={premiumActive ? undefined : () => setShowPremium(true)} />
       <Hero onStart={start} />
 
       {/* Learn about the program → dedicated page (video + details + reviews) */}
@@ -271,6 +271,7 @@ function LandingInner() {
         }
         onUpgrade={() => requireAccess()}
         onLevelTestComplete={() => setLevelTestDone(true)}
+        levelTestDone={levelTestDone}
         lockLabelFor={lockLabelFor}
       />
       <Countdown onStart={start} />

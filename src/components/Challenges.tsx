@@ -12,6 +12,7 @@ interface ChallengesProps {
   onFile: (challenge: Challenge) => void
   onUpgrade: () => void
   onLevelTestComplete?: () => void
+  levelTestDone?: boolean
   lockLabelFor?: (challenge: Challenge) => string | null
 }
 
@@ -196,6 +197,7 @@ export default function Challenges({
   onFile,
   onUpgrade,
   onLevelTestComplete,
+  levelTestDone,
   lockLabelFor,
 }: ChallengesProps) {
   return (
@@ -209,7 +211,7 @@ export default function Challenges({
             </span>
             <h2 className="text-[28px] font-black text-[#1b1730] sm:text-[34px]">التحديات</h2>
           </div>
-          <LevelTest onUpgrade={onUpgrade} onComplete={onLevelTestComplete} />
+          <LevelTest onUpgrade={onUpgrade} onComplete={onLevelTestComplete} done={levelTestDone} />
           {challenges.map((c, i) => (
             <ChallengeRow
               key={c.id}
