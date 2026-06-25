@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { PLACEHOLDER_REVIEWS, mergeWithPlaceholders, isPlaceholderChallenge } from '../lib/placeholders'
 import { challengeVideos } from '../lib/challenge'
@@ -41,12 +41,22 @@ function LandingInner() {
   const { premiumActive, progress } = useOnboardingContext()
   const { user } = useAuth()
   const isAdmin = isAdminEmail(user?.email)
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
-  // Upgrade popup — reached only via the navbar "عندك كود؟" redeem shortcut.
   const [showPremium, setShowPremium] = useState(false)
-  // Premium gate — shown when a visitor clicks any premium feature/CTA.
+  const [premiumInitialCode, setPremiumInitialCode] = useState<string | undefined>()
+
+  // Auto-open PremiumModal when ?code= is present (e.g. navigated from Speaking page)
+  useEffect(() => {
+    const code = searchParams.get('code')
+    if (code) {
+      setPremiumInitialCode(code)
+      setShowPremium(true)
+      setSearchParams({}, { replace: true })
+    }
+  }, [])
   const [showProgramGate, setShowProgramGate] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<Challenge | null>(null)
   const [speakingFor, setSpeakingFor] = useState<Challenge | null>(null)
@@ -283,8 +293,22 @@ function LandingInner() {
         </p>
       </footer>
 
-      {showProgramGate && <ProgramGateModal onClose={() => setShowProgramGate(false)} />}
-      {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
+      {showProgramGate && (
+        <ProgramGateModal
+          onClose={() => setShowProgramGate(false)}
+          onRedeemCode={(code) => {
+            setShowProgramGate(false)
+            setPremiumInitialCode(code)
+            setShowPremium(true)
+          }}
+        />
+      )}
+      {showPremium && (
+        <PremiumModal
+          onClose={() => { setShowPremium(false); setPremiumInitialCode(undefined) }}
+          initialCode={premiumInitialCode}
+        />
+      )}
       {showLevelTestRequired && (
         <LevelTestRequiredModal
           onClose={() => setShowLevelTestRequired(false)}
