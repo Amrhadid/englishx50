@@ -98,8 +98,14 @@ function LandingInner() {
       active = false
     }
   }, [user])
+  // A challenge only requires the vocabulary gate when it has a source link
+  // (pdf_url) to study — the vocab is collected FROM that source (see
+  // SourceModal's steps). With no source link there's nothing to gather, so the
+  // notes gate is skipped and the session video / speaking task / PDF open
+  // directly.
+  const hasSourceLink = (c: Challenge): boolean => Boolean(c.pdf_url && c.pdf_url.trim())
   const notesDone = (c: Challenge): boolean =>
-    isAdmin || countNotes(notesByChallenge[c.id] ?? []) >= REQUIRED_NOTES
+    isAdmin || !hasSourceLink(c) || countNotes(notesByChallenge[c.id] ?? []) >= REQUIRED_NOTES
 
   // The level test is the mandatory first step: challenges stay locked until
   // the account has a graded attempt. Local saved attempt is checked first;
