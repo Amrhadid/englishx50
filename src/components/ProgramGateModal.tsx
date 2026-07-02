@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BRAND_GRADIENT } from '../lib/theme'
 import { checkCode } from '../lib/redeem'
+import { useAuth } from '../hooks/useAuth'
 
 function CloseIcon() {
   return (
@@ -23,6 +24,7 @@ export default function ProgramGateModal({
   onClose: () => void
   onRedeemCode?: (code: string) => void
 }) {
+  const { user, signInWithGoogle } = useAuth()
   const [codeInput, setCodeInput] = useState('')
   const [checking, setChecking] = useState(false)
   const [codeError, setCodeError] = useState<string | null>(null)
@@ -81,25 +83,46 @@ export default function ProgramGateModal({
         </div>
 
         <p className="mb-2 text-right text-[13px] font-bold text-[#1b1730]">عندك كود؟</p>
-        <input
-          type="text"
-          value={codeInput}
-          onChange={(e) => { setCodeInput(e.target.value); setCodeError(null) }}
-          onKeyDown={(e) => e.key === 'Enter' && handleCodeSubmit()}
-          placeholder="أدخل كود الاشتراك"
-          className="mb-2 w-full rounded-2xl border border-[#ece7fb] bg-[#faf9ff] px-4 py-3 text-right text-[13px] outline-none transition focus:border-[#7C6FF0] focus:bg-white"
-          dir="rtl"
-        />
-        {codeError && (
-          <p className="mb-2 text-right text-[12px] font-semibold text-red-500">{codeError}</p>
+        {/* Redemption binds the code to a Google account and the code check is an
+            authenticated-only call, so a signed-out visitor must sign in first.
+            After the redirect returns them signed in, ?redeem=1 reopens the
+            premium modal with the code box focused (see Landing). */}
+        {user ? (
+          <>
+            <input
+              type="text"
+              value={codeInput}
+              onChange={(e) => { setCodeInput(e.target.value); setCodeError(null) }}
+              onKeyDown={(e) => e.key === 'Enter' && handleCodeSubmit()}
+              placeholder="أدخل كود الاشتراك"
+              className="mb-2 w-full rounded-2xl border border-[#ece7fb] bg-[#faf9ff] px-4 py-3 text-right text-[13px] outline-none transition focus:border-[#7C6FF0] focus:bg-white"
+              dir="rtl"
+            />
+            {codeError && (
+              <p className="mb-2 text-right text-[12px] font-semibold text-red-500">{codeError}</p>
+            )}
+            <button
+              onClick={handleCodeSubmit}
+              disabled={checking}
+              className="w-full rounded-2xl border-2 border-[#7C6FF0] py-3 text-sm font-bold text-[#7C6FF0] transition hover:bg-[#f4f2fc] disabled:opacity-50"
+            >
+              {checking ? 'جارٍ التحقق…' : 'تفعيل الكود ←'}
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => signInWithGoogle('?redeem=1')}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-[#7C6FF0] py-3 text-sm font-bold text-[#7C6FF0] transition hover:bg-[#f4f2fc]"
+            >
+              <span className="text-base">🔑</span>
+              الدخول بـ Google لتفعيل الكود
+            </button>
+            <p className="mt-2 text-[12px] text-[#9a95b0]">
+              اشتراكك مرتبط بحسابك ويعمل على أي جهاز بعد تسجيل الدخول.
+            </p>
+          </>
         )}
-        <button
-          onClick={handleCodeSubmit}
-          disabled={checking}
-          className="w-full rounded-2xl border-2 border-[#7C6FF0] py-3 text-sm font-bold text-[#7C6FF0] transition hover:bg-[#f4f2fc] disabled:opacity-50"
-        >
-          {checking ? 'جارٍ التحقق…' : 'تفعيل الكود ←'}
-        </button>
       </div>
     </div>
   )

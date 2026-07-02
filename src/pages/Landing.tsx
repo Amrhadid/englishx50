@@ -48,11 +48,21 @@ function LandingInner() {
   const [showPremium, setShowPremium] = useState(false)
   const [premiumInitialCode, setPremiumInitialCode] = useState<string | undefined>()
 
-  // Auto-open PremiumModal when ?code= is present (e.g. navigated from Speaking page)
+  const [premiumFocusCode, setPremiumFocusCode] = useState(false)
+  // Auto-open PremiumModal when ?code= is present (e.g. navigated from Speaking
+  // page), or ?redeem=1 after a sign-in redirect — the latter reopens the modal
+  // with the code box focused so a freshly signed-in visitor can type it right
+  // away (see the gated code entry in ProgramGateModal / Speaking).
   useEffect(() => {
     const code = searchParams.get('code')
     if (code) {
       setPremiumInitialCode(code)
+      setShowPremium(true)
+      setSearchParams({}, { replace: true })
+      return
+    }
+    if (searchParams.get('redeem') === '1') {
+      setPremiumFocusCode(true)
       setShowPremium(true)
       setSearchParams({}, { replace: true })
     }
@@ -306,8 +316,9 @@ function LandingInner() {
       )}
       {showPremium && (
         <PremiumModal
-          onClose={() => { setShowPremium(false); setPremiumInitialCode(undefined) }}
+          onClose={() => { setShowPremium(false); setPremiumInitialCode(undefined); setPremiumFocusCode(false) }}
           initialCode={premiumInitialCode}
+          focusCode={premiumFocusCode}
         />
       )}
       {showLevelTestRequired && (

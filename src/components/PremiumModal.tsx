@@ -10,6 +10,8 @@ import { createLead } from '../lib/leads'
 interface PremiumModalProps {
   onClose: () => void
   initialCode?: string
+  /** Open on the features view and focus the code box (used after sign-in). */
+  focusCode?: boolean
 }
 
 const WHATSAPP_NUMBER = '201097965058'
@@ -272,18 +274,20 @@ function YesNoSelector({
   )
 }
 
-export default function PremiumModal({ onClose, initialCode }: PremiumModalProps) {
-  const { user } = useAuth()
+export default function PremiumModal({ onClose, initialCode, focusCode }: PremiumModalProps) {
+  const { user, signInWithGoogle } = useAuth()
   const { refetch } = useOnboardingContext()
   const [view, setView] = useState<'features' | 'join' | 'redeem'>(initialCode ? 'redeem' : 'features')
 
-  const signInWithGoogle = () => {
-    if (!supabase) return
-    supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
-    })
-  }
+  // Bring the code box into view and focus it when the modal is opened right
+  // after sign-in (the visitor came here specifically to enter their code).
+  const codeInputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (focusCode && user && view === 'features') {
+      codeInputRef.current?.scrollIntoView({ block: 'center' })
+      codeInputRef.current?.focus()
+    }
+  }, [focusCode, user, view])
 
   // Code redemption
   const [code, setCode] = useState(initialCode ?? '')
@@ -622,6 +626,7 @@ export default function PremiumModal({ onClose, initialCode }: PremiumModalProps
                 <>
                   <div className="flex gap-2">
                     <input
+                      ref={codeInputRef}
                       value={code}
                       onChange={(e) => {
                         setCode(e.target.value)
@@ -653,7 +658,7 @@ export default function PremiumModal({ onClose, initialCode }: PremiumModalProps
               ) : (
                 <>
                   <button
-                    onClick={signInWithGoogle}
+                    onClick={() => signInWithGoogle('?redeem=1')}
                     className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#e7e3ff] bg-white py-3 text-sm font-extrabold text-[#1b1730] transition hover:bg-[#f1edff]"
                   >
                     <span className="text-base">🔑</span>

@@ -19,6 +19,21 @@ export function useAuth() {
     return () => listener.subscription.unsubscribe()
   }, [])
 
+  // Start Google OAuth. `next` is an optional relative target (e.g. '?redeem=1')
+  // appended to the site origin, so we can bring the user back to a specific
+  // spot after the sign-in redirect reloads the page — used to reopen the code
+  // entry once they're authenticated.
+  const signInWithGoogle = (next?: string) => {
+    if (!supabase) return
+    const redirectTo = next
+      ? `${window.location.origin}/${next.replace(/^\/+/, '')}`
+      : window.location.origin
+    supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo },
+    })
+  }
+
   const signOut = async () => {
     if (supabase) await supabase.auth.signOut()
     // Clear the activity identity so it doesn't carry over to the next account
@@ -31,5 +46,5 @@ export function useAuth() {
     setUser(null)
   }
 
-  return { user, signOut }
+  return { user, signInWithGoogle, signOut }
 }
