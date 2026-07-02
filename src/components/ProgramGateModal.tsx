@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BRAND_GRADIENT } from '../lib/theme'
 import { checkCode } from '../lib/redeem'
+import { useAuth } from '../hooks/useAuth'
 
 function CloseIcon() {
   return (
@@ -23,6 +24,7 @@ export default function ProgramGateModal({
   onClose: () => void
   onRedeemCode?: (code: string) => void
 }) {
+  const { user } = useAuth()
   const [codeInput, setCodeInput] = useState('')
   const [checking, setChecking] = useState(false)
   const [codeError, setCodeError] = useState<string | null>(null)
@@ -30,6 +32,12 @@ export default function ProgramGateModal({
   const handleCodeSubmit = async () => {
     const value = codeInput.trim()
     if (!value) { setCodeError('أدخل الكود أولاً'); return }
+    // The status check runs through an authenticated-only RPC (x50_check_code),
+    // and redemption binds the code to a Google account anyway. A signed-out
+    // visitor can't do either here — calling checkCode would just be rejected
+    // and surface a misleading "try again later" error. Hand straight off to
+    // the premium modal, which prompts sign-in before activating the code.
+    if (!user) { onRedeemCode?.(value); return }
     setChecking(true)
     setCodeError(null)
     const status = await checkCode(value)

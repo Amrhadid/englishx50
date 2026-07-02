@@ -34,6 +34,11 @@ function SpeakingInner() {
   const handleCodeSubmit = async () => {
     const value = codeInput.trim()
     if (!value) { setCodeError('أدخل الكود أولاً'); return }
+    // Checking a code runs through an authenticated-only RPC, and redemption
+    // binds the code to a Google account. A signed-out visitor can't do either
+    // here, so skip the pre-check and hand off to the landing page's premium
+    // modal (via ?code=), which prompts sign-in before activating the code.
+    if (!user) { navigate(`/?code=${encodeURIComponent(value)}`); return }
     setChecking(true)
     setCodeError(null)
     const status = await checkCode(value)
