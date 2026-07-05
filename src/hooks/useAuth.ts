@@ -19,18 +19,31 @@ export function useAuth() {
     return () => listener.subscription.unsubscribe()
   }, [])
 
-  // Start Google OAuth. `next` is an optional relative target (e.g. '?redeem=1')
-  // appended to the site origin, so we can bring the user back to a specific
-  // spot after the sign-in redirect reloads the page — used to reopen the code
-  // entry once they're authenticated.
+  // Start Google OAuth. `next` is an optional post-sign-in intent (e.g.
+  // '?redeem=1') used to bring the user back to a specific spot — e.g. reopen
+  // the code entry once they're authenticated.
+  //
+  // We deliberately always redirect to the *bare* site origin and stash `next`
+  // in sessionStorage instead of appending it to `redirectTo`. A bare-origin
+  // URL is the one most reliably present in the Supabase project's allowed
+  // Redirect URLs; a variant like `${origin}/?redeem=1` that isn't allow-listed
+  // makes Supabase silently fall back to the project's Site URL. If that Site
+  // URL is a different origin (e.g. www vs apex, or a stale preview), the
+  // session is written to that other origin's storage and the user lands back
+  // here looking signed-out — the "auto sign-out after Google" symptom.
+  // sessionStorage survives the OAuth round-trip within the same tab/origin.
   const signInWithGoogle = (next?: string) => {
     if (!supabase) return
-    const redirectTo = next
-      ? `${window.location.origin}/${next.replace(/^\/+/, '')}`
-      : window.location.origin
+    if (next) {
+      try {
+        sessionStorage.setItem('x50_post_signin', next)
+      } catch {
+        /* ignore */
+      }
+    }
     supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo },
+      options: { redirectTo: window.location.origin },
     })
   }
 

@@ -50,9 +50,12 @@ function LandingInner() {
 
   const [premiumFocusCode, setPremiumFocusCode] = useState(false)
   // Auto-open PremiumModal when ?code= is present (e.g. navigated from Speaking
-  // page), or ?redeem=1 after a sign-in redirect — the latter reopens the modal
-  // with the code box focused so a freshly signed-in visitor can type it right
-  // away (see the gated code entry in ProgramGateModal / Speaking).
+  // page), or when a redeem intent survives a sign-in redirect — the latter
+  // reopens the modal with the code box focused so a freshly signed-in visitor
+  // can type it right away (see the gated code entry in ProgramGateModal /
+  // Speaking). The intent is stashed in sessionStorage before the OAuth redirect
+  // (see useAuth.signInWithGoogle) so `redirectTo` can stay the bare origin; the
+  // legacy `?redeem=1` query param is still honored for older links.
   useEffect(() => {
     const code = searchParams.get('code')
     if (code) {
@@ -61,10 +64,17 @@ function LandingInner() {
       setSearchParams({}, { replace: true })
       return
     }
-    if (searchParams.get('redeem') === '1') {
+    let postSignin: string | null = null
+    try {
+      postSignin = sessionStorage.getItem('x50_post_signin')
+      if (postSignin) sessionStorage.removeItem('x50_post_signin')
+    } catch {
+      /* ignore */
+    }
+    if (searchParams.get('redeem') === '1' || postSignin === '?redeem=1') {
       setPremiumFocusCode(true)
       setShowPremium(true)
-      setSearchParams({}, { replace: true })
+      if (searchParams.get('redeem') === '1') setSearchParams({}, { replace: true })
     }
   }, [])
   const [showProgramGate, setShowProgramGate] = useState(false)
