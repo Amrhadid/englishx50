@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import type { Challenge, Review, Code } from '../types'
 import { TrashIcon } from '../components/icons'
 import FeedbackView from '../components/FeedbackView'
+import StudentsDashboard from '../components/StudentsDashboard'
 import { parseSubmission } from '../lib/grading'
 import { challengeVideos } from '../lib/challenge'
 import { audioUrl } from '../lib/audio'
@@ -130,7 +131,7 @@ export default function Admin() {
         {tab === 'reviews' && <ReviewsAdmin />}
         {tab === 'codes' && <CodesAdmin />}
         {tab === 'leads' && <LeadsAdmin />}
-        {tab === 'students' && <StudentsAdmin />}
+        {tab === 'students' && <StudentsSection />}
         {tab === 'trials' && <TrialsAdmin />}
         {tab === 'grading' && <GradingAdmin />}
       </div>
@@ -1200,6 +1201,36 @@ interface StudentRow {
 
 const fmtDate = (s?: string | null) =>
   s ? new Date(s).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
+
+/**
+ * The Students tab: a whole-cohort "Overview" dashboard (challenge completion +
+ * speaking) alongside the existing per-student drill-down list.
+ */
+function StudentsSection() {
+  const [view, setView] = useState<'overview' | 'list'>('overview')
+  const subTabs: { key: 'overview' | 'list'; label: string }[] = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'list', label: 'Students' },
+  ]
+  return (
+    <div className="space-y-5">
+      <div className="inline-flex gap-1 rounded-full bg-[#f4f3f7] p-1">
+        {subTabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setView(t.key)}
+            className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${
+              view === t.key ? 'bg-white text-[#534AB7] shadow-sm' : 'text-[#5b5670]'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {view === 'overview' ? <StudentsDashboard /> : <StudentsAdmin />}
+    </div>
+  )
+}
 
 function StudentsAdmin() {
   const [students, setStudents] = useState<StudentRow[]>([])
