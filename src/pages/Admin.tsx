@@ -615,6 +615,7 @@ function CodesAdmin() {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const load = async () => {
     if (!supabase) return
@@ -673,6 +674,51 @@ function CodesAdmin() {
     if (!supabase) return
     if (!confirm('Delete this code?')) return
     await supabase.from('x50_codes').delete().eq('id', id)
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+    load()
+  }
+
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const allSelected = items.length > 0 && selected.size === items.length
+  const toggleAll = () =>
+    setSelected((prev) => (prev.size === items.length ? new Set() : new Set(items.map((c) => c.id))))
+
+  const copySelected = async () => {
+    const codes = items.filter((c) => selected.has(c.id)).map((c) => c.code)
+    if (codes.length === 0) return
+    try {
+      await navigator.clipboard.writeText(codes.join('\n'))
+      setMsg(`Copied ${codes.length} selected code${codes.length === 1 ? '' : 's'} to clipboard ✓`)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const removeSelected = async () => {
+    if (!supabase || selected.size === 0) return
+    const ids = [...selected]
+    if (!confirm(`Delete ${ids.length} selected code${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) return
+    setBusy(true)
+    setMsg(null)
+    const { error } = await supabase.from('x50_codes').delete().in('id', ids)
+    setBusy(false)
+    if (error) {
+      setMsg(`Error: ${error.message}`)
+      return
+    }
+    setMsg(`Deleted ${ids.length} code${ids.length === 1 ? '' : 's'} ✓`)
+    setSelected(new Set())
     load()
   }
 
@@ -723,6 +769,32 @@ function CodesAdmin() {
         </p>
       </div>
 
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#e8e0f0] bg-[#faf9ff] px-4 py-3">
+          <span className="text-sm font-bold text-[#111]">{selected.size} selected</span>
+          <span className="flex-1" />
+          <button
+            onClick={copySelected}
+            className="rounded-xl border border-[#e8e0f0] px-4 py-2 text-sm font-bold text-[#5b5670] hover:bg-white"
+          >
+            Copy selected
+          </button>
+          <button
+            onClick={removeSelected}
+            disabled={busy}
+            className="rounded-xl bg-[#DC2626] px-4 py-2 text-sm font-bold text-white hover:bg-[#b91c1c] disabled:opacity-60"
+          >
+            Delete selected
+          </button>
+          <button
+            onClick={() => setSelected(new Set())}
+            className="rounded-xl px-3 py-2 text-sm font-bold text-[#9a9aa2] hover:text-[#5b5670]"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       {items.length === 0 ? (
         <p className="text-sm text-[#9a9aa2]">No codes yet.</p>
       ) : (
@@ -730,6 +802,15 @@ function CodesAdmin() {
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-[#f0ecf8] bg-[#faf9ff] text-xs uppercase text-[#9a9aa2]">
+                <th className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    aria-label="Select all codes"
+                    className="h-4 w-4 cursor-pointer accent-[#534AB7]"
+                  />
+                </th>
                 <th className="px-4 py-3 font-bold">Code</th>
                 <th className="px-4 py-3 font-bold">Status</th>
                 <th className="px-4 py-3 font-bold">Created</th>
@@ -740,7 +821,21 @@ function CodesAdmin() {
             </thead>
             <tbody>
               {items.map((c) => (
-                <tr key={c.id} className="border-b border-[#f5f2fb] last:border-0">
+                <tr
+                  key={c.id}
+                  className={`border-b border-[#f5f2fb] last:border-0 ${
+                    selected.has(c.id) ? 'bg-[#f4f3fb]' : ''
+                  }`}
+                >
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(c.id)}
+                      onChange={() => toggleOne(c.id)}
+                      aria-label={`Select ${c.code}`}
+                      className="h-4 w-4 cursor-pointer accent-[#534AB7]"
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() => copy(c.code)}
