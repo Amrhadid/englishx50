@@ -1227,7 +1227,136 @@ function StudentsSection() {
           </button>
         ))}
       </div>
+      <LevelTestBypass />
       {view === 'overview' ? <StudentsDashboard /> : <StudentsAdmin />}
+    </div>
+  )
+}
+
+/**
+ * Lets the admin mark a student's level test as passed without them actually
+ * taking it. Writes a synthetic, already-graded x50_submissions row (or
+ * updates their existing level-test row) so every gate that checks for a
+ * level-test record — Landing.tsx / StudentHome.tsx via hasLevelTestSubmission
+ * — unlocks immediately.
+ */
+function LevelTestBypass() {
+  const [students, setStudents] = useState<StudentLite[]>([])
+  const [loading, setLoading] = useState(true)
+  const [userId, setUserId] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+    supabase
+      .from('x50_students')
+      .select('user_id, name, phone, code')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setStudents((data as StudentLite[]) ?? [])
+        setLoading(false)
+      })
+  }, [])
+
+  const bypass = async () => {
+    if (!supabase) {
+      setMsg('Supabase is not configured.')
+      return
+    }
+    if (!userId) {
+      setMsg('Select a student first.')
+      return
+    }
+    setBusy(true)
+    setMsg(null)
+
+    const student = students.find((s) => s.user_id === userId) ?? null
+    const label = student ? student.name || student.phone || userId.slice(0, 8) : userId.slice(0, 8)
+
+    // Reuse the student's existing level-test row (if any) so this doesn't
+    // pile up duplicate "attempts"; otherwise insert a fresh, pre-passed one.
+    const { data: existing, error: findError } = await supabase
+      .from('x50_submissions')
+      .select('id')
+      .eq('user_id', userId)
+      .is('challenge_number', null)
+      .is('challenge_id', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (findError) {
+      setBusy(false)
+      setMsg(`Error: ${findError.message}`)
+      return
+    }
+
+    const { error } = existing
+      ? await supabase
+          .from('x50_submissions')
+          .update({ passed: true, score: 100 })
+          .eq('id', (existing as { id: string }).id)
+      : await supabase.from('x50_submissions').insert({
+          challenge_id: null,
+          challenge_number: null,
+          user_id: userId,
+          student: student?.name ?? null,
+          question: 'Level Test — marked passed by admin',
+          transcript: null,
+          score: 100,
+          passed: true,
+          feedback: 'Marked as passed by an admin, without taking the test.',
+          mistakes_json: '[]',
+          vocabulary_json: '[]',
+          strengths_json: '[]',
+          weaknesses_json: '[]',
+          corrected_sentences_json: '[]',
+          audio_key: null,
+        })
+
+    setBusy(false)
+    if (error) {
+      setMsg(`Error: ${error.message}`)
+      return
+    }
+    setMsg(`${label}'s level test is now marked as passed ✓`)
+  }
+
+  if (loading) return null
+
+  return (
+    <div className="rounded-2xl border border-[#f0ecf8] p-5">
+      <h3 className="mb-1 font-bold text-[#111]">Bypass the level test</h3>
+      <p className="mb-3 text-xs text-[#9a9aa2]">
+        Mark a student's level test as passed without them completing it. This unlocks the
+        challenges for their account immediately, on any device.
+      </p>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <select
+          value={userId}
+          onChange={(e) => setUserId(e.target.value)}
+          className="w-full rounded-xl border border-[#e8e0f0] px-3 py-2 text-sm outline-none focus:border-[#534AB7] sm:flex-1"
+        >
+          <option value="">Select student…</option>
+          {students.map((s) => (
+            <option key={s.user_id} value={s.user_id}>
+              {(s.name || 'Unnamed') + (s.phone ? ` · ${s.phone}` : '') + (s.code ? ` · ${s.code}` : '')}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={bypass}
+          disabled={busy || !userId}
+          className="shrink-0 rounded-xl bg-[#534AB7] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#46409c] disabled:opacity-60"
+        >
+          {busy ? 'Saving…' : 'Mark as passed'}
+        </button>
+      </div>
+      {msg && <p className="mt-2 text-xs text-[#5b5670]">{msg}</p>}
     </div>
   )
 }
