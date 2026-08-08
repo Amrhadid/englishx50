@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase, REVIEWS_BUCKET, FILES_BUCKET } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import type { Challenge, Review, Code } from '../types'
@@ -799,10 +799,35 @@ interface Lead {
   created_at: string
 }
 
+/** Sentinel for "field is empty" in the dropdown filters. */
+const LEAD_BLANK = '__blank__'
+
+/** Distinct non-empty values of one Lead field, plus a blank bucket if any row lacks it. */
+function leadOptions(items: Lead[], pick: (l: Lead) => string | null | undefined): string[] {
+  const seen = new Set<string>()
+  let hasBlank = false
+  for (const l of items) {
+    const v = (pick(l) ?? '').trim()
+    if (v) seen.add(v)
+    else hasBlank = true
+  }
+  const list = [...seen].sort((a, b) => a.localeCompare(b, 'ar'))
+  return hasBlank ? [...list, LEAD_BLANK] : list
+}
+
 function LeadsAdmin() {
   const [items, setItems] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'paid' | 'unpaid'>('all')
+  const [sort, setSort] = useState<'newest' | 'oldest'>('newest')
+  const [search, setSearch] = useState('')
+  const [nationality, setNationality] = useState('all')
+  const [job, setJob] = useState('all')
+  const [referral, setReferral] = useState('all')
+  const [university, setUniversity] = useState('all')
+  const [youtube, setYoutube] = useState('all')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
 
   const load = async () => {
     if (!supabase) {
@@ -843,9 +868,82 @@ function LeadsAdmin() {
   const yn = (v?: string | null) => (v === 'yes' ? 'نعم' : v === 'no' ? 'لا' : '—')
 
   const paidCount = items.filter((l) => l.paid).length
-  const shown = items.filter((l) =>
-    filter === 'all' ? true : filter === 'paid' ? l.paid : !l.paid,
-  )
+
+  const nationalities = useMemo(() => leadOptions(items, (l) => l.nationality), [items])
+  const jobs = useMemo(() => leadOptions(items, (l) => l.job), [items])
+  const referrals = useMemo(() => leadOptions(items, (l) => l.referral), [items])
+
+  const matchesPick = (value: string | null | undefined, selected: string) => {
+    if (selected === 'all') return true
+    const v = (value ?? '').trim()
+    return selected === LEAD_BLANK ? !v : v === selected
+  }
+
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    // Date inputs are calendar days in the admin's local timezone; widen `to`
+    // to the end of that day so a same-day from/to still matches.
+    const fromTs = from ? new Date(`${from}T00:00:00`).getTime() : null
+    const toTs = to ? new Date(`${to}T23:59:59.999`).getTime() : null
+
+    const list = items.filter((l) => {
+      if (filter === 'paid' && !l.paid) return false
+      if (filter === 'unpaid' && l.paid) return false
+      if (!matchesPick(l.nationality, nationality)) return false
+      if (!matchesPick(l.job, job)) return false
+      if (!matchesPick(l.referral, referral)) return false
+      if (university !== 'all' && (l.university ?? '') !== university) return false
+      if (youtube !== 'all' && (l.youtube_subscribed ?? '') !== youtube) return false
+
+      if (fromTs !== null || toTs !== null) {
+        const ts = new Date(l.created_at).getTime()
+        if (fromTs !== null && ts < fromTs) return false
+        if (toTs !== null && ts > toTs) return false
+      }
+
+      if (q) {
+        const hay = [l.name, l.phone, l.job, l.nationality, l.referral, l.country_code]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+
+    return list.sort((a, b) => {
+      const diff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      return sort === 'newest' ? diff : -diff
+    })
+  }, [items, filter, sort, search, nationality, job, referral, university, youtube, from, to])
+
+  const filtersActive =
+    filter !== 'all' ||
+    search.trim() !== '' ||
+    nationality !== 'all' ||
+    job !== 'all' ||
+    referral !== 'all' ||
+    university !== 'all' ||
+    youtube !== 'all' ||
+    from !== '' ||
+    to !== ''
+
+  const resetFilters = () => {
+    setFilter('all')
+    setSearch('')
+    setNationality('all')
+    setJob('all')
+    setReferral('all')
+    setUniversity('all')
+    setYoutube('all')
+    setFrom('')
+    setTo('')
+  }
+
+  const field =
+    'rounded-xl border border-[#e8e0f0] bg-white px-3 py-2 text-xs text-[#5b5670] outline-none focus:border-[#534AB7]'
+  const label = 'mb-1 block text-[11px] font-bold uppercase tracking-wide text-[#9a9aa2]'
+  const optionLabel = (v: string) => (v === LEAD_BLANK ? '— not specified —' : v)
 
   if (loading) return <p className="text-sm text-[#9a9aa2]">Loading…</p>
 
@@ -853,14 +951,18 @@ function LeadsAdmin() {
     <div className="space-y-4">
       <div className="flex items-center justify-between px-1">
         <p className="text-sm font-bold text-[#111]">
-          Leads <span className="text-[#9a9aa2]">({items.length})</span>
+          Leads{' '}
+          <span className="text-[#9a9aa2]">
+            ({shown.length}
+            {shown.length !== items.length ? ` of ${items.length}` : ''})
+          </span>
         </p>
         <p className="text-xs text-[#9a9aa2]">
           {paidCount} paid · {items.length - paidCount} unpaid
         </p>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {(['all', 'unpaid', 'paid'] as const).map((f) => (
           <button
             key={f}
@@ -872,10 +974,172 @@ function LeadsAdmin() {
             {f}
           </button>
         ))}
+
+        <span className="mx-1 h-5 w-px bg-[#ece7fb]" />
+
+        {([
+          ['newest', 'Newest first'],
+          ['oldest', 'Oldest first'],
+        ] as const).map(([value, text]) => (
+          <button
+            key={value}
+            onClick={() => setSort(value)}
+            className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+              sort === value ? 'bg-[#534AB7] text-white' : 'bg-[#f4f3f7] text-[#5b5670]'
+            }`}
+          >
+            {text}
+          </button>
+        ))}
+
+        {filtersActive && (
+          <button
+            onClick={resetFilters}
+            className="ml-auto rounded-full border border-[#e8e0f0] px-4 py-1.5 text-xs font-bold text-[#5b5670] hover:border-[#534AB7] hover:text-[#534AB7]"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
+      <div className="grid gap-3 rounded-2xl border border-[#f0ecf8] bg-[#faf9ff] p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="sm:col-span-2">
+          <label className={label} htmlFor="lead-search">
+            Search
+          </label>
+          <input
+            id="lead-search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Name, phone, job, nationality…"
+            className={`${field} w-full`}
+          />
+        </div>
+
+        <div>
+          <label className={label} htmlFor="lead-nationality">
+            Nationality
+          </label>
+          <select
+            id="lead-nationality"
+            value={nationality}
+            onChange={(e) => setNationality(e.target.value)}
+            className={`${field} w-full`}
+          >
+            <option value="all">All nationalities</option>
+            {nationalities.map((n) => (
+              <option key={n} value={n}>
+                {optionLabel(n)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className={label} htmlFor="lead-job">
+            Job
+          </label>
+          <select
+            id="lead-job"
+            value={job}
+            onChange={(e) => setJob(e.target.value)}
+            className={`${field} w-full`}
+          >
+            <option value="all">All jobs</option>
+            {jobs.map((j) => (
+              <option key={j} value={j}>
+                {optionLabel(j)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className={label} htmlFor="lead-referral">
+            How heard
+          </label>
+          <select
+            id="lead-referral"
+            value={referral}
+            onChange={(e) => setReferral(e.target.value)}
+            className={`${field} w-full`}
+          >
+            <option value="all">Any source</option>
+            {referrals.map((r) => (
+              <option key={r} value={r}>
+                {optionLabel(r)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className={label} htmlFor="lead-university">
+            University
+          </label>
+          <select
+            id="lead-university"
+            value={university}
+            onChange={(e) => setUniversity(e.target.value)}
+            className={`${field} w-full`}
+          >
+            <option value="all">Any</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+            <option value="">Not specified</option>
+          </select>
+        </div>
+
+        <div>
+          <label className={label} htmlFor="lead-youtube">
+            YouTube
+          </label>
+          <select
+            id="lead-youtube"
+            value={youtube}
+            onChange={(e) => setYoutube(e.target.value)}
+            className={`${field} w-full`}
+          >
+            <option value="all">Any</option>
+            <option value="yes">Subscribed</option>
+            <option value="no">Not subscribed</option>
+            <option value="">Not specified</option>
+          </select>
+        </div>
+
+        <div>
+          <label className={label} htmlFor="lead-from">
+            From date
+          </label>
+          <input
+            id="lead-from"
+            type="date"
+            value={from}
+            max={to || undefined}
+            onChange={(e) => setFrom(e.target.value)}
+            className={`${field} w-full`}
+          />
+        </div>
+
+        <div>
+          <label className={label} htmlFor="lead-to">
+            To date
+          </label>
+          <input
+            id="lead-to"
+            type="date"
+            value={to}
+            min={from || undefined}
+            onChange={(e) => setTo(e.target.value)}
+            className={`${field} w-full`}
+          />
+        </div>
       </div>
 
       {shown.length === 0 ? (
-        <p className="text-sm text-[#9a9aa2]">No leads yet.</p>
+        <p className="text-sm text-[#9a9aa2]">
+          {items.length === 0 ? 'No leads yet.' : 'No leads match these filters.'}
+        </p>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-[#f0ecf8]">
           <table className="w-full text-left text-sm">
