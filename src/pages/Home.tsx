@@ -1,10 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
-import { PLACEHOLDER_REVIEWS } from '../lib/placeholders'
 import { UI } from '../lib/theme'
-import type { Review } from '../types'
-import Reviews from '../components/Reviews'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
 import DaysLeftBadge from '../components/DaysLeftBadge'
@@ -13,13 +8,12 @@ import { useAuth } from '../hooks/useAuth'
 import { isAdminEmail } from '../lib/admin'
 
 /**
- * The homepage: three sections and nothing else.
+ * The homepage: two doors and nothing else.
  *
  *   ابدأ التحدي   → /challenge  (for someone who already subscribed)
  *   انضم للتحدي   → /join       (for someone who wants to subscribe)
- *   آراء الطلاب   → #reviews    (social proof, in place)
  *
- * Whichever of the first two applies to the visitor leads, but both stay
+ * Whichever one applies to the visitor leads, but both stay
  * visible — the code box is gone from the join flow entirely, so an existing
  * subscriber has to be able to find their way in from here.
  *
@@ -30,25 +24,6 @@ export default function Home() {
   const { user, signOut } = useAuth()
   const isAdmin = isAdminEmail(user?.email)
   const subscribed = premiumActive || isAdmin
-
-  const [reviews, setReviews] = useState<Review[]>([])
-  useEffect(() => {
-    let active = true
-    if (!supabase) return
-    supabase
-      .from('x50_reviews')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (!active) return
-        if (!error) setReviews((data as Review[]) ?? [])
-      })
-    return () => {
-      active = false
-    }
-  }, [])
-
-  const displayedReviews = useMemo(() => (reviews.length > 0 ? reviews : PLACEHOLDER_REVIEWS), [reviews])
 
   const firstName = (student?.name ?? '').trim().split(/\s+/)[0]
 
@@ -113,30 +88,7 @@ export default function Home() {
             primary={!subscribed}
           />
         </div>
-
-        {/* Third section */}
-        <a
-          href="#reviews"
-          className="mt-5 flex items-center justify-between gap-5 rounded-[20px] border px-7 py-6 transition hover:border-[#14171F]"
-          style={{ borderColor: UI.line, backgroundColor: UI.sand }}
-        >
-          <span>
-            <span className="block text-[24px] font-black tracking-tight" style={{ color: UI.ink }}>
-              آراء الطلاب
-            </span>
-            <span className="mt-1 block text-[15px]" style={{ color: UI.muted }}>
-              لقطات من رسائل وتقييمات أكثر من ٢٠٠٠ طالب
-            </span>
-          </span>
-          <span className="text-[15px] font-bold underline" style={{ color: UI.ink }}>
-            اقرأ الآراء ↓
-          </span>
-        </a>
       </main>
-
-      <div style={{ backgroundColor: UI.sand }}>
-        <Reviews reviews={displayedReviews} />
-      </div>
 
       <SiteFooter />
     </div>
