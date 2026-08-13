@@ -1,13 +1,13 @@
 import type { Challenge } from '../types'
-import { themeFor, toArabicDigits, ACTION_THEMES } from '../lib/theme'
+import { themeFor, toArabicDigits, ACTION_THEMES, UI } from '../lib/theme'
 import LevelTest from './LevelTest'
 
 interface ChallengesProps {
   challenges: Challenge[]
-  onSelect: (challenge: Challenge) => void
+  onTask: (challenge: Challenge) => void
   onFeedback: (challenge: Challenge) => void
   onSpeak: (challenge: Challenge) => void
-  onWatch: (challenge: Challenge) => void
+  onLesson: (challenge: Challenge) => void
   onSource: (challenge: Challenge) => void
   onFile: (challenge: Challenge) => void
   onUpgrade: () => void
@@ -16,17 +16,9 @@ interface ChallengesProps {
   lockLabelFor?: (challenge: Challenge) => string | null
 }
 
-function PlayIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 h-5 w-5" aria-hidden="true">
-      <path d="M8 5.5v13l11-6.5-11-6.5Z" />
-    </svg>
-  )
-}
-
 function LinkIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-[15px] w-[15px]" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]" aria-hidden="true">
       <path
         d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 1 0-5.66-5.66l-1.5 1.5M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 1 0 5.66 5.66l1.5-1.5"
         stroke="currentColor"
@@ -38,9 +30,27 @@ function LinkIcon() {
   )
 }
 
+function TargetIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="2" />
+      <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="2" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+    </svg>
+  )
+}
+
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-[18px] w-[18px]" aria-hidden="true">
+      <path d="M8 5.5v13l11-6.5-11-6.5Z" />
+    </svg>
+  )
+}
+
 function MicIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-[15px] w-[15px]" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]" aria-hidden="true">
       <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
       <path d="M6 11a6 6 0 0 0 12 0M12 17v4M9 21h6" stroke="currentColor" strokeWidth="2" />
     </svg>
@@ -49,7 +59,7 @@ function MicIcon() {
 
 function ChartBarIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="h-[15px] w-[15px]" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-[18px] w-[18px]" aria-hidden="true">
       <rect x="4" y="12" width="4" height="8" rx="1.5" />
       <rect x="10" y="7" width="4" height="13" rx="1.5" />
       <rect x="16" y="3" width="4" height="17" rx="1.5" />
@@ -59,7 +69,7 @@ function ChartBarIcon() {
 
 function FileIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-[15px] w-[15px]" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]" aria-hidden="true">
       <path
         d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9l-6-6Z"
         stroke="currentColor"
@@ -71,128 +81,103 @@ function FileIcon() {
   )
 }
 
-function LockIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
-      <rect x="5" y="10" width="14" height="10" rx="2.5" fill="currentColor" />
-      <path d="M8 10V8a4 4 0 0 1 8 0v2" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  )
-}
-
-const ACTIONS = [
-  { key: 'source', label: 'المصدر', icon: <LinkIcon />, theme: ACTION_THEMES.source },
-  { key: 'speaking', label: 'تحدّث', icon: <MicIcon />, theme: ACTION_THEMES.speaking },
-  { key: 'feedback', label: 'تقييم', icon: <ChartBarIcon />, theme: ACTION_THEMES.feedback },
-  { key: 'file', label: 'ملف التحدي', icon: <FileIcon />, theme: ACTION_THEMES.file },
+/**
+ * The six objects every challenge is made of, in the order a student works
+ * through them: read the source, read the task, watch the lesson, record,
+ * get the feedback, then keep the file.
+ */
+const OBJECTS = [
+  { key: 'source', label: 'المصدر', hint: 'Source', icon: <LinkIcon />, theme: ACTION_THEMES.source },
+  { key: 'task', label: 'المهمة', hint: 'Task', icon: <TargetIcon />, theme: ACTION_THEMES.task },
+  { key: 'lesson', label: 'الدرس', hint: 'Lesson', icon: <PlayIcon />, theme: ACTION_THEMES.lesson },
+  { key: 'speaking', label: 'التحدّث', hint: 'Speaking', icon: <MicIcon />, theme: ACTION_THEMES.speaking },
+  { key: 'feedback', label: 'التقييم', hint: 'Feedback', icon: <ChartBarIcon />, theme: ACTION_THEMES.feedback },
+  { key: 'file', label: 'الملف', hint: 'File', icon: <FileIcon />, theme: ACTION_THEMES.file },
 ] as const
 
-function ChallengeRow({
+type ObjectKey = (typeof OBJECTS)[number]['key']
+
+function ChallengeSection({
   challenge,
   index,
   id,
   lockLabel,
-  onSelect,
-  onFeedback,
-  onSpeak,
-  onWatch,
-  onSource,
-  onFile,
+  onObject,
 }: {
   challenge: Challenge
   index: number
   id?: string
   lockLabel?: string | null
-  onSelect: () => void
-  onFeedback: () => void
-  onSpeak: () => void
-  onWatch: () => void
-  onSource: () => void
-  onFile: () => void
+  onObject: (key: ObjectKey) => void
 }) {
   const theme = themeFor(index)
-  const num = String(challenge.number).padStart(2, '0')
+  const num = toArabicDigits(String(challenge.number).padStart(2, '0'))
 
   return (
-    <div id={id} className="group grid min-h-[180px] grid-cols-[120px_1fr] overflow-hidden rounded-[24px] border-[1.5px] border-[#ede8ff] bg-white transition duration-300 hover:border-[#c4b8ff] hover:shadow-[0_8px_32px_rgba(139,92,246,0.12)] sm:grid-cols-[280px_1fr]">
-      {/* Thumbnail (left) */}
-      <button
-        onClick={onWatch}
-        className="relative overflow-hidden"
-        style={{ background: `linear-gradient(135deg, ${theme.soft} 0%, #ffffff 100%)` }}
-        aria-label={`التحدي ${num}`}
-      >
+    <section
+      id={id}
+      className="overflow-hidden rounded-[20px] border transition hover:border-[#14171F]"
+      style={{ borderColor: UI.line }}
+      dir="rtl"
+    >
+      {/* Section header — the challenge itself */}
+      <header className="flex flex-wrap items-center gap-4 px-6 py-5" style={{ backgroundColor: UI.sand }}>
         <span
-          className="pointer-events-none absolute -bottom-2 left-2 text-[80px] font-black leading-none tabular-nums"
-          style={{ color: theme.accent, opacity: 0.12 }}
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-[20px] font-black tabular-nums"
+          style={{ backgroundColor: theme.accent, color: '#fff' }}
         >
           {num}
         </span>
-        <span className="absolute inset-0 flex items-center justify-center">
-          <span
-            className="flex h-14 w-14 items-center justify-center rounded-full text-white transition group-hover:scale-110"
-            style={{ backgroundColor: theme.accent, boxShadow: `0 8px 24px ${theme.accent}66` }}
-          >
-            <PlayIcon />
-          </span>
-        </span>
-        {challenge.is_locked && (
-          <span className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-[#8b85a0]">
-            <LockIcon />
-          </span>
-        )}
-      </button>
-
-      {/* Info (right) */}
-      <div className="flex flex-col justify-center gap-3 px-7 py-6" dir="rtl">
-        <div className="flex flex-col gap-1">
-          <p className="text-[12px] font-bold" style={{ color: theme.accent }}>
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-bold" style={{ color: UI.muted }}>
             التحدي {toArabicDigits(challenge.number)}
           </p>
-          <h3 className="text-[22px] font-black leading-tight text-[#1b1730]">
+          <h3 className="text-[22px] font-black leading-tight tracking-tight" style={{ color: UI.ink }}>
             {challenge.title || `التحدي ${toArabicDigits(challenge.number)}`}
           </h3>
-          {lockLabel && (
-            <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-[#FEEFD2] px-3 py-1 text-[12px] font-bold text-[#A66A09]">
-              {lockLabel}
-            </span>
-          )}
         </div>
+        {lockLabel && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[12.5px] font-bold"
+            style={{ backgroundColor: '#fff', color: UI.muted }}
+          >
+            {lockLabel}
+          </span>
+        )}
+      </header>
 
-        <div className="flex flex-wrap gap-2.5">
-          {ACTIONS.map((a) => (
-            <button
-              key={a.key}
-              onClick={
-                a.key === 'feedback'
-                  ? onFeedback
-                  : a.key === 'speaking'
-                    ? onSpeak
-                    : a.key === 'source'
-                      ? onSource
-                      : a.key === 'file'
-                        ? onFile
-                        : onSelect
-              }
-              className="flex items-center gap-1.5 rounded-[30px] px-[18px] py-2.5 text-[13px] font-bold transition hover:brightness-95"
-              style={{ backgroundColor: a.theme.soft, color: a.theme.deep }}
+      {/* The six objects */}
+      <div className="grid grid-cols-2 gap-2.5 px-5 pb-5 pt-1 sm:grid-cols-3 lg:grid-cols-6">
+        {OBJECTS.map((o) => (
+          <button
+            key={o.key}
+            onClick={() => onObject(o.key)}
+            className="flex flex-col items-center gap-2 rounded-[20px] px-3 py-4 text-center transition hover:-translate-y-0.5 hover:brightness-95"
+            style={{ backgroundColor: o.theme.soft, color: o.theme.deep }}
+          >
+            <span
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-white"
+              style={{ backgroundColor: o.theme.accent }}
             >
-              {a.icon}
-              <span>{a.label}</span>
-            </button>
-          ))}
-        </div>
+              {o.icon}
+            </span>
+            <span className="text-[13.5px] font-extrabold leading-none">{o.label}</span>
+            <span dir="ltr" className="text-[10.5px] font-bold uppercase tracking-wide opacity-60">
+              {o.hint}
+            </span>
+          </button>
+        ))}
       </div>
-    </div>
+    </section>
   )
 }
 
 export default function Challenges({
   challenges,
-  onSelect,
+  onTask,
   onFeedback,
   onSpeak,
-  onWatch,
+  onLesson,
   onSource,
   onFile,
   onUpgrade,
@@ -200,35 +185,38 @@ export default function Challenges({
   levelTestDone,
   lockLabelFor,
 }: ChallengesProps) {
+  const handlers: Record<ObjectKey, (c: Challenge) => void> = {
+    source: onSource,
+    task: onTask,
+    lesson: onLesson,
+    speaking: onSpeak,
+    feedback: onFeedback,
+    file: onFile,
+  }
+
   return (
-    <section id="challenges">
-      {/* Challenge cards — white */}
-      <div className="bg-white">
-        <div className="mx-auto flex max-w-3xl flex-col gap-3 px-5 py-14 sm:px-8">
-          <div className="mb-2 text-center" dir="rtl">
-            <span className="mb-3 inline-block rounded-full bg-[#f1edff] px-4 py-1.5 text-[12px] font-bold tracking-wide text-[#8B5CF6]">
-              نظام التحدي
-            </span>
-            <h2 className="text-[28px] font-black text-[#1b1730] sm:text-[34px]">التحديات</h2>
-          </div>
-          <LevelTest onUpgrade={onUpgrade} onComplete={onLevelTestComplete} done={levelTestDone} />
-          {challenges.map((c, i) => (
-            <ChallengeRow
-              key={c.id}
-              challenge={c}
-              index={i}
-              id={i === 0 ? 'challenge-1' : undefined}
-              lockLabel={lockLabelFor?.(c)}
-              onSelect={() => onSelect(c)}
-              onFeedback={() => onFeedback(c)}
-              onSpeak={() => onSpeak(c)}
-              onWatch={() => onWatch(c)}
-              onSource={() => onSource(c)}
-              onFile={() => onFile(c)}
-            />
-          ))}
+    <div id="challenges" className="bg-white">
+      <div className="mx-auto flex max-w-3xl flex-col gap-4 px-5 py-14 sm:px-8">
+        <div className="mb-4 text-center" dir="rtl">
+          <h2 className="text-[32px] font-black leading-tight tracking-tight sm:text-[40px]" style={{ color: UI.ink }}>
+            التحديات
+          </h2>
+          <p className="mx-auto mt-3 max-w-lg text-[16px] leading-relaxed" style={{ color: UI.muted }}>
+            كل تحدي فيه ٦ خطوات: المصدر · المهمة · الدرس · التحدّث · التقييم · الملف
+          </p>
         </div>
+        <LevelTest onUpgrade={onUpgrade} onComplete={onLevelTestComplete} done={levelTestDone} />
+        {challenges.map((c, i) => (
+          <ChallengeSection
+            key={c.id}
+            challenge={c}
+            index={i}
+            id={i === 0 ? 'challenge-1' : undefined}
+            lockLabel={lockLabelFor?.(c)}
+            onObject={(key) => handlers[key](c)}
+          />
+        ))}
       </div>
-    </section>
+    </div>
   )
 }

@@ -41,7 +41,7 @@ function SpeakingInner() {
     if (status === 'used') { setCodeError('هذا الكود مستخدم بالفعل'); return }
     if (status === 'error') { setCodeError('تعذّر التحقق الآن، حاول لاحقاً'); return }
     if (status === 'invalid') { setCodeError('كود غير صحيح'); return }
-    navigate(`/?code=${encodeURIComponent(value)}`)
+    navigate(`/challenge?code=${encodeURIComponent(value)}`)
   }
   const question = params.get('q') || DEFAULT_QUESTION
   const num = params.get('n')

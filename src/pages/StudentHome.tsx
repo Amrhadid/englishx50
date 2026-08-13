@@ -5,34 +5,36 @@ import { challengeVideos } from '../lib/challenge'
 import { challengeLockState, allVideosWatched, type LockState } from '../lib/completion'
 import { levelTestTaskId, getAttempt, fetchServerTrials, hasLevelTestSubmission } from '../lib/progress'
 import { loadUserNotes, countNotes, REQUIRED_NOTES } from '../lib/notes'
+import { Link } from 'react-router-dom'
 import ChallengeLockedModal from '../components/ChallengeLockedModal'
 import LevelTestRequiredModal from '../components/LevelTestRequiredModal'
 import SourceModal from '../components/SourceModal'
 import NotesModal from '../components/NotesModal'
 import NoticeModal from '../components/NoticeModal'
 import type { Challenge } from '../types'
-import Navbar from '../components/Navbar'
 import Challenges from '../components/Challenges'
 import Countdown from '../components/Countdown'
 import ComingSoonModal from '../components/ComingSoonModal'
 import FeedbackModal from '../components/FeedbackModal'
 import SpeakingModal from '../components/SpeakingModal'
 import LessonModal from '../components/LessonModal'
+import TaskModal from '../components/TaskModal'
 import DaysLeftBadge from '../components/DaysLeftBadge'
+import SiteHeader from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { useAuth } from '../hooks/useAuth'
 import { isAdminEmail } from '../lib/admin'
-import { toArabicDigits } from '../lib/theme'
+import { toArabicDigits, UI } from '../lib/theme'
 
 /**
- * The homepage a PAID (premium / admin) user sees: their program dashboard.
- * No marketing hero, no "learn about the program" banner, no upgrade gate —
- * just a personalized header, the level test, the challenges with their
- * progress / cooldown state, and every product modal (lesson, speaking,
- * source, notes, …). This is the "after purchase" surface.
+ * «ابدأ التحدي» — what a subscribed (premium / admin) account sees behind the
+ * gate on /challenge. No marketing, no upgrade path: a personalized header,
+ * the level test, and the challenges as sections of six objects each, with
+ * every product modal (source, task, lesson, speaking, feedback, notes).
  *
- * Assumes an <OnboardingProvider> ancestor. Only rendered for premium/admin
- * accounts, so the "not premium" gate paths from the old Landing are gone.
+ * Assumes an <OnboardingProvider> ancestor, and that the caller (Challenge)
+ * has already established the account is subscribed.
  */
 export default function StudentHome() {
   const { progress, student, daysLeft } = useOnboardingContext()
@@ -43,6 +45,7 @@ export default function StudentHome() {
   const [feedbackFor, setFeedbackFor] = useState<Challenge | null>(null)
   const [speakingFor, setSpeakingFor] = useState<Challenge | null>(null)
   const [lessonFor, setLessonFor] = useState<Challenge | null>(null)
+  const [taskFor, setTaskFor] = useState<Challenge | null>(null)
   const [comingSoonFor, setComingSoonFor] = useState<Challenge | null>(null)
   const [lockedFor, setLockedFor] = useState<{
     challenge: Challenge
@@ -149,33 +152,69 @@ export default function StudentHome() {
 
   const displayedChallenges = useMemo(() => mergeWithPlaceholders(challenges), [challenges])
 
+  // Speaking is reachable from two places (the Speaking object and the "start
+  // recording" button inside the task brief), so its prerequisites — notes,
+  // then the lesson videos — live in one place.
+  const openSpeaking = (c: Challenge) =>
+    gateChallenge(c, () => {
+      if (!notesDone(c)) return setNotesFor(c)
+      if (!isAdmin && !allVideosWatched(user?.id, c)) {
+        return setNotice({
+          title: 'أكمل الدرس أولاً',
+          message: 'شاهد كل فيديوهات الدرس كاملةً حتى تُفتح مهمة التحدّث.',
+        })
+      }
+      setSpeakingFor(c)
+    })
+
   const firstName = (student?.name ?? '').trim().split(/\s+/)[0]
 
   return (
     <div className="min-h-screen bg-white">
-      <Navbar onStart={scrollToChallenges} onRedeem={undefined} />
+      <SiteHeader>
+        {isAdmin && (
+          <Link
+            to="/admin"
+            className="rounded-xl px-4 py-2 text-[14px] font-bold text-white"
+            style={{ backgroundColor: UI.ink }}
+          >
+            Admin
+          </Link>
+        )}
+        <Link to="/" className="text-[14px] font-bold underline" style={{ color: UI.muted }}>
+          الرئيسية
+        </Link>
+      </SiteHeader>
 
       {/* Dashboard header — replaces the marketing hero for paid users. */}
-      <section className="bg-[#ECEAFF] px-5 pb-9 pt-10" dir="rtl">
-        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-4">
+      <section className="px-5 pb-12 pt-14 sm:px-8" dir="rtl">
+        <div className="mx-auto flex max-w-3xl flex-wrap items-end justify-between gap-5">
           <div>
-            <span className="mb-2 inline-block rounded-full bg-white px-4 py-1.5 text-[12px] font-bold tracking-wide text-[#8B5CF6]">
-              لوحة المتابعة
-            </span>
-            <h1 className="text-[30px] font-black leading-tight text-[#1b1730] sm:text-[38px]">
-              {firstName ? `أهلاً ${firstName} 👋` : 'أهلاً بعودتك 👋'}
+            <h1
+              className="text-[36px] font-black leading-[1.12] tracking-tight sm:text-[46px]"
+              style={{ color: UI.ink }}
+            >
+              {firstName ? (
+                <>
+                  أهلاً <span style={{ color: UI.pinkInk }}>{firstName}</span> 👋
+                </>
+              ) : (
+                'أهلاً بعودتك 👋'
+              )}
             </h1>
-            <p className="mt-1.5 text-[15px] font-semibold text-[#6b6685]">
-              تابع تقدّمك في تحدي ٥٠ يوم وواصل من حيث توقفت.
+            <p className="mt-3 text-[17px] leading-relaxed" style={{ color: UI.muted }}>
+              تابع تقدّمك وواصل من حيث توقفت.
             </p>
           </div>
           <div className="flex flex-col items-start gap-3">
             {student?.code && <DaysLeftBadge daysLeft={daysLeft} />}
             <button
               onClick={scrollToChallenges}
-              className="rounded-full bg-[#1b1730] px-6 py-3 text-[14px] font-extrabold text-white transition hover:-translate-y-0.5 hover:bg-[#8B5CF6]"
+              className="flex items-center gap-2 rounded-[14px] px-6 py-4 text-[16px] font-bold transition hover:brightness-95"
+              style={{ backgroundColor: UI.pink, color: UI.ink }}
             >
-              أكمل التحدي ←
+              أكمل التحدي
+              <span aria-hidden="true">←</span>
             </button>
           </div>
         </div>
@@ -183,21 +222,10 @@ export default function StudentHome() {
 
       <Challenges
         challenges={displayedChallenges}
-        onSelect={(c) => gateChallenge(c, () => setLessonFor(c))}
+        onTask={(c) => gateChallenge(c, () => setTaskFor(c))}
         onFeedback={(c) => gateChallenge(c, () => setFeedbackFor(c))}
-        onSpeak={(c) =>
-          gateChallenge(c, () => {
-            if (!notesDone(c)) return setNotesFor(c)
-            if (!isAdmin && !allVideosWatched(user?.id, c)) {
-              return setNotice({
-                title: 'أكمل الدرس أولاً',
-                message: 'شاهد كل فيديوهات الدرس كاملةً حتى تُفتح مهمة التحدّث.',
-              })
-            }
-            setSpeakingFor(c)
-          })
-        }
-        onWatch={(c) =>
+        onSpeak={openSpeaking}
+        onLesson={(c) =>
           gateChallenge(c, () => {
             if (!challengeVideos(c).length) return setComingSoonFor(c)
             if (!notesDone(c)) return setNotesFor(c)
@@ -219,22 +247,7 @@ export default function StudentHome() {
       />
       <Countdown onStart={scrollToChallenges} />
 
-      <footer className="border-t border-[#f0ecf8] bg-white py-10 text-center" dir="rtl">
-        <div className="mx-auto mb-3 flex items-center justify-center gap-2">
-          <span
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-[13px] font-extrabold text-white"
-            style={{ background: 'linear-gradient(135deg, #7C6FF0 0%, #A964F0 45%, #F25C8A 100%)' }}
-          >
-            50
-          </span>
-          <span className="text-base font-extrabold text-[#1b1730]">
-            English<span className="text-[#7C6FF0]">X50</span>
-          </span>
-        </div>
-        <p className="text-sm text-[#9a9aa2]">
-          © {new Date().getFullYear()} EnglishX50 — تحدي ٥٠ يوم لتتحدّث الإنجليزية
-        </p>
-      </footer>
+      <SiteFooter />
 
       {showLevelTestRequired && (
         <LevelTestRequiredModal
@@ -259,6 +272,17 @@ export default function StudentHome() {
       )}
       {feedbackFor && <FeedbackModal challenge={feedbackFor} onClose={() => setFeedbackFor(null)} />}
       {speakingFor && <SpeakingModal challenge={speakingFor} onClose={() => setSpeakingFor(null)} />}
+      {taskFor && (
+        <TaskModal
+          challenge={taskFor}
+          onClose={() => setTaskFor(null)}
+          onStartSpeaking={() => {
+            const c = taskFor
+            setTaskFor(null)
+            openSpeaking(c)
+          }}
+        />
+      )}
       {lessonFor && <LessonModal challenge={lessonFor} onClose={() => setLessonFor(null)} />}
       {sourceFor && <SourceModal challenge={sourceFor} onClose={() => setSourceFor(null)} />}
       {notesFor && user && (

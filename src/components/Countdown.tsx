@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { toArabicDigits } from '../lib/theme'
+import { toArabicDigits, UI } from '../lib/theme'
 import urgent from '../assets/Urgent-amico.svg'
 
 interface CountdownProps {
@@ -37,7 +37,7 @@ export default function Countdown({ onStart }: CountdownProps) {
   }, [])
 
   return (
-    <section className="bg-[#ECEAFF]" dir="rtl">
+    <section style={{ backgroundColor: UI.sand }} dir="rtl">
       <div className="mx-auto grid max-w-5xl items-center gap-10 px-5 py-16 sm:px-8 md:grid-cols-[1fr_1.1fr]">
         {/* Illustration — left */}
         <div className="flex items-center justify-center md:order-1">
@@ -46,13 +46,14 @@ export default function Countdown({ onStart }: CountdownProps) {
 
         {/* Copy — right */}
         <div className="md:order-2">
-          <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-white px-4 py-1.5 text-[13px] font-extrabold text-[#8B5CF6] shadow-sm">
+          <span className="mb-4 inline-flex items-center gap-2 rounded-full border bg-white px-4 py-1.5 text-[13px] font-bold"
+            style={{ borderColor: UI.line, color: UI.ink }}>
             ⏳ التحدي القادم
           </span>
           <h2 className="mb-1.5 text-[28px] font-black text-[#1b1730] sm:text-[36px]">
             يبدأ التحدي القادم
           </h2>
-          <p className="mb-7 text-[17px] font-extrabold text-[#8B5CF6]">
+          <p className="mb-7 text-[17px] font-bold" style={{ color: UI.pinkInk }}>
             ١٠ يونيو · June 10th
           </p>
 
@@ -79,7 +80,8 @@ export default function Countdown({ onStart }: CountdownProps) {
 
           <button
             onClick={onStart}
-            className="rounded-full bg-[#8B5CF6] px-10 py-4 text-base font-extrabold text-white transition hover:-translate-y-0.5 hover:bg-[#1b1730]"
+            className="rounded-[14px] px-10 py-4 text-[17px] font-bold transition hover:brightness-95"
+            style={{ backgroundColor: UI.pink, color: UI.ink }}
           >
             اضمن مكانك الآن ←
           </button>

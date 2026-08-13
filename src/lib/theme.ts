@@ -35,9 +35,40 @@ export function themeFor(index: number): PastelTheme {
 /** Signature brand gradient used on primary CTAs and highlights. */
 export const BRAND_GRADIENT = 'linear-gradient(135deg, #7C6FF0 0%, #A964F0 45%, #F25C8A 100%)'
 
-/** Consistent colours for the action types on every card. */
+/**
+ * The site-wide UI palette: white canvas, near-black type, one vivid pink
+ * accent, and a warm sand tint for the sections that need separating. Kept as
+ * tokens so the whole surface can be re-tuned from one place instead of
+ * chasing hex literals through the JSX.
+ */
+export const UI = {
+  /** Page canvas. */
+  bg: '#FFFFFF',
+  /** Warm tint for alternating sections and cards. */
+  sand: '#F7F4F0',
+  /** Headings and primary text. */
+  ink: '#14171F',
+  /** Secondary/body text. */
+  muted: '#5A6172',
+  /** Hairline borders. */
+  line: '#E7E3DE',
+  /** Vivid accent — primary buttons and highlighted words. */
+  pink: '#FF5C9E',
+  /** Darker accent for pink text on white (contrast). */
+  pinkInk: '#D6006E',
+  /** Pale accent wash for badges. */
+  pinkSoft: '#FFE7F1',
+} as const
+
+/**
+ * Consistent colours for the six objects every challenge is made of
+ * (Source · Task · Lesson · Speaking · Feedback · File). Each keeps its colour
+ * everywhere so students learn them by sight.
+ */
 export const ACTION_THEMES = {
   source: { accent: '#7C6FF0', soft: '#EDEBFF', deep: '#473BBE' },
+  task: { accent: '#A964F0', soft: '#F2E6FE', deep: '#6B27A8' },
+  lesson: { accent: '#F25C8A', soft: '#FFE1EC', deep: '#B11D54' },
   speaking: { accent: '#23C4A0', soft: '#D8FAF0', deep: '#0C7C62' },
   feedback: { accent: '#F5B23C', soft: '#FEEFD2', deep: '#A66A09' },
   file: { accent: '#37AEF0', soft: '#DAF1FE', deep: '#0B6FA8' },

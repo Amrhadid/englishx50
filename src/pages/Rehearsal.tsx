@@ -4,26 +4,21 @@ import { useOnboardingContext } from '../hooks/useOnboardingContext'
 import { useAuth } from '../hooks/useAuth'
 import { isAdminEmail } from '../lib/admin'
 import Splash from '../components/Splash'
-import MarketingHome from './MarketingHome'
+import Home from './Home'
 import StudentHome from './StudentHome'
+import RedeemPanel from '../components/RedeemPanel'
 
 /**
  * PREVIEW-ONLY route (`/rehearsal`).
  *
- * A staging surface for the "separate the homepage for new vs. paid users"
- * work. Real users only ever hit `/` (the untouched Landing), so nothing here
- * is visible to them. This route renders exactly the split we intend to ship
- * on `/`:
+ * Renders the shipped UI, not a separate copy of it — the homepage hub, the
+ * subscriber's challenges, and the code gate — with a toggle so the site owner
+ * (who is an admin, and therefore always counts as subscribed) can look at any
+ * of them on demand:
  *
- *   - loading                → <Splash/>        (no wrong-page flash)
- *   - premiumActive || admin → <StudentHome/>   (paid dashboard)
- *   - otherwise              → <MarketingHome/> (new-user marketing)
- *
- * Because the site owner is an admin (auto-treated as premium), a `?view=`
- * override lets them preview either side on demand:
- *   /rehearsal              → auto (by real status)
- *   /rehearsal?view=marketing
+ *   /rehearsal            → auto (the homepage hub, exactly like `/`)
  *   /rehearsal?view=student
+ *   /rehearsal?view=redeem
  */
 export default function Rehearsal() {
   return (
@@ -36,11 +31,10 @@ export default function Rehearsal() {
 function RehearsalInner() {
   const { premiumActive, loading } = useOnboardingContext()
   const { user } = useAuth()
-  const isAdmin = isAdminEmail(user?.email)
+  const isPaid = premiumActive || isAdminEmail(user?.email)
   const [params] = useSearchParams()
 
-  const forced = params.get('view') // 'marketing' | 'student' | null
-  const isPaid = premiumActive || isAdmin
+  const forced = params.get('view') // 'student' | 'redeem' | null
 
   // Only wait on `loading` when we're auto-deciding — a forced view can render
   // immediately.
@@ -53,12 +47,10 @@ function RehearsalInner() {
     )
   }
 
-  const showStudent = forced ? forced === 'student' : isPaid
-
   return (
     <>
-      {showStudent ? <StudentHome /> : <MarketingHome />}
-      <RehearsalToggle current={forced ? (showStudent ? 'student' : 'marketing') : 'auto'} isPaid={isPaid} />
+      {forced === 'student' ? <StudentHome /> : forced === 'redeem' ? <RedeemPanel /> : <Home />}
+      <RehearsalToggle current={forced === 'student' ? 'student' : forced === 'redeem' ? 'redeem' : 'auto'} isPaid={isPaid} />
     </>
   )
 }
@@ -67,7 +59,7 @@ function RehearsalToggle({
   current,
   isPaid,
 }: {
-  current: 'auto' | 'marketing' | 'student'
+  current: 'auto' | 'student' | 'redeem'
   isPaid: boolean
 }) {
   const pill = (active: boolean) =>
@@ -84,13 +76,13 @@ function RehearsalToggle({
       <div className="flex items-center gap-1.5 rounded-full border border-[#ece7fb] bg-white/95 p-1.5 shadow-2xl backdrop-blur">
         <span className="px-2.5 text-[11px] font-black text-[#8B5CF6]">👀 معاينة</span>
         <Link to="/rehearsal" className={pill(current === 'auto')}>
-          تلقائي{isPaid ? ' (مشترك)' : ' (زائر)'}
-        </Link>
-        <Link to="/rehearsal?view=marketing" className={pill(current === 'marketing')}>
-          زائر جديد
+          الرئيسية{isPaid ? ' (مشترك)' : ' (زائر)'}
         </Link>
         <Link to="/rehearsal?view=student" className={pill(current === 'student')}>
-          مشترك
+          التحديات
+        </Link>
+        <Link to="/rehearsal?view=redeem" className={pill(current === 'redeem')}>
+          تفعيل الكود
         </Link>
       </div>
     </div>

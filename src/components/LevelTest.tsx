@@ -74,7 +74,7 @@ export default function LevelTest({
       {/* Card — matches the challenge card size/style, sits before Challenge 1 */}
       <div
         id="level-test"
-        className="group grid min-h-[180px] grid-cols-[120px_1fr] overflow-hidden rounded-[24px] border-[1.5px] border-[#ede8ff] bg-white transition duration-300 hover:border-[#c4b8ff] hover:shadow-[0_8px_32px_rgba(83,74,183,0.14)] sm:grid-cols-[280px_1fr]"
+        className="group grid min-h-[180px] grid-cols-[120px_1fr] overflow-hidden rounded-[20px] border border-[#E7E3DE] bg-white transition duration-300 hover:border-[#14171F] sm:grid-cols-[280px_1fr]"
       >
         <button
           onClick={handleStart}
