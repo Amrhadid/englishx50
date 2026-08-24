@@ -56,7 +56,7 @@ function CloseIcon() {
 
 export default function LessonModal({ challenge, onClose }: LessonModalProps) {
   const { premiumActive, refetch } = useOnboardingContext()
-  const { user } = useAuth()
+  const { user, authReady } = useAuth()
   const isAdmin = isAdminEmail(user?.email)
   const videos = premiumActive ? challengeVideos(challenge) : []
   const [selected, setSelected] = useState(0)
@@ -93,23 +93,31 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
     return Math.min(99, Math.round(((progressPct[vUid] ?? 0) / VIDEO_WATCHED_PCT) * 100))
   }
 
-  // Resume the selected part where the student left off. Captured only when the
-  // selected video changes (not during playback) so the iframe never reloads
-  // mid-watch. A finished part restarts from the beginning.
-  const [resume, setResume] = useState(() => ({
-    uid,
-    at: getVideoPosition(user?.id, challenge.id, uid),
-  }))
-  if (resume.uid !== uid) {
+  // Resume the selected part where the student left off.
+  //
+  // The saved position is keyed by account, so it can only be read once auth
+  // has resolved — reading it earlier looks up the anonymous key, finds
+  // nothing, and silently restarts the video from the beginning (the reason
+  // reopening a lesson used to lose the student's place). The player is held
+  // back until then, and the position is captured once per (account, video) so
+  // the iframe never reloads mid-watch. A finished part restarts from zero.
+  const resumeKey = authReady && uid ? `${user?.id ?? 'anon'}:${uid}` : ''
+  const [resume, setResume] = useState<{ key: string; at: number } | null>(null)
+  if (resumeKey && resume?.key !== resumeKey) {
+    // Read storage directly rather than the watched/progress state, which may
+    // not have caught up with the just-resolved account yet.
+    const finished = getWatchedVideos(user?.id, challenge.id).includes(uid)
     setResume({
-      uid,
-      at: watchedUids.includes(uid) ? 0 : getVideoPosition(user?.id, challenge.id, uid),
+      key: resumeKey,
+      at: finished ? 0 : getVideoPosition(user?.id, challenge.id, uid),
     })
   }
+  // null while the resume point is still unknown — nothing is mounted yet.
+  const resumeAt = resumeKey && resume?.key === resumeKey ? resume.at : null
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const rowIdRef = useRef<string | null>(null)
-  // Latest user id, read inside the player effect (whose closure captures the
-  // initial — often still null — value from this component's own useAuth).
+  // Latest user id, read inside the player effect rather than through its
+  // closure (which captures the value from the render that started it).
   const userIdRef = useRef<string | undefined>(user?.id)
   userIdRef.current = user?.id
   const maxPctRef = useRef(0)
@@ -120,13 +128,12 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
   const pollRef = useRef<number | null>(null)
 
   useEffect(() => {
-    if (!uid) return
+    if (!uid || resumeAt === null) return
     // Resume accounting from the saved position (matches the iframe startTime),
     // so continuing a half-watched part keeps the bar moving forward instead
     // of restarting the watched-seconds tally from zero.
-    const startPos = watchedUids.includes(uid) ? 0 : getVideoPosition(user?.id, challenge.id, uid)
     maxPctRef.current = 0
-    maxReachedRef.current = startPos
+    maxReachedRef.current = resumeAt
     rowIdRef.current = null
     let player: any = null
 
@@ -168,6 +175,17 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
         .eq('id', rowIdRef.current)
     }
 
+    // Store the current position outside the poll (pause, tab hidden, unmount).
+    const persistPosition = () => {
+      const dur = player?.duration
+      const cur = player?.currentTime
+      if (typeof cur !== 'number' || cur <= 0) return
+      saveVideoPosition(userIdRef.current, challenge.id, uid, dur > 0 && dur - cur <= 2 ? 0 : cur)
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') persistPosition()
+    }
+
     const setup = async () => {
       await recordOpen()
       await loadStreamSdk()
@@ -184,8 +202,10 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
         const dur = player?.duration
         const cur = player?.currentTime
         if (!(dur > 0) || typeof cur !== 'number' || cur < 0) return
-        // Remember where they are so the part resumes here next time.
-        saveVideoPosition(userIdRef.current, challenge.id, uid, cur)
+        // Remember where they are so the part resumes here next time. A part
+        // played to the end resumes from the beginning instead of its last
+        // second.
+        saveVideoPosition(userIdRef.current, challenge.id, uid, dur - cur <= 2 ? 0 : cur)
         const rate = player?.playbackRate || 1
         // Extend the watched frontier for contiguous playback (backstop in case
         // timeupdate is sparse); forward seeks are snapped so cur can't run
@@ -233,21 +253,32 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
         }
       })
       // Reaching the end marks the part fully watched even if the last frames
-      // weren't sampled by a poll.
+      // weren't sampled by a poll, and clears the resume point.
       player.addEventListener?.('ended', () => {
         const dur = player?.duration
         if (dur > 0) {
           maxReachedRef.current = dur
           savePercent(100)
         }
+        saveVideoPosition(userIdRef.current, challenge.id, uid, 0)
       })
+
+      // The 3s poll can miss the last few seconds before the student pauses,
+      // switches tabs or closes the page, so persist the position on those too.
+      player.addEventListener?.('pause', persistPosition)
+      window.addEventListener('pagehide', persistPosition)
+      document.addEventListener('visibilitychange', onVisibility)
     }
     setup()
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)
+      // Closing the modal or switching parts keeps the student's place.
+      persistPosition()
+      window.removeEventListener('pagehide', persistPosition)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [uid])
+  }, [uid, resumeKey, resumeAt])
 
   return (
     <div
@@ -275,16 +306,22 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
         {uid ? (
           <>
             <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
-              <iframe
-                ref={iframeRef}
-                src={`https://iframe.cloudflarestream.com/${uid}?autoplay=true&preload=auto${
-                  resume.uid === uid && resume.at > 3 ? `&startTime=${Math.floor(resume.at)}s` : ''
-                }`}
-                title={challenge.title}
-                className="absolute inset-0 h-full w-full"
-                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-                allowFullScreen
-              />
+              {resumeAt === null ? (
+                <div className="absolute inset-0 flex items-center justify-center text-[13px] font-bold text-white/70">
+                  جارٍ تحميل الفيديو…
+                </div>
+              ) : (
+                <iframe
+                  ref={iframeRef}
+                  src={`https://iframe.cloudflarestream.com/${uid}?autoplay=true&preload=auto${
+                    resumeAt > 3 ? `&startTime=${Math.floor(resumeAt)}s` : ''
+                  }`}
+                  title={challenge.title}
+                  className="absolute inset-0 h-full w-full"
+                  allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                  allowFullScreen
+                />
+              )}
             </div>
             {videos.length > 1 && (
               <div className="mt-3 flex flex-col gap-2">
