@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { isPlaceholderChallenge, mergeWithPlaceholders } from '../lib/placeholders'
 import { challengeVideos } from '../lib/challenge'
-import { challengeLockState, allVideosWatched, type LockState } from '../lib/completion'
+import {
+  challengeLockState,
+  allVideosWatched,
+  recordCompletionIfDone,
+  type LockState,
+} from '../lib/completion'
+import { restoreProgressFromServer } from '../lib/restore'
 import { levelTestTaskId, getAttempt, fetchServerTrials, hasLevelTestSubmission } from '../lib/progress'
 import { loadUserNotes, countNotes, REQUIRED_NOTES } from '../lib/notes'
 import { Link } from 'react-router-dom'
@@ -37,7 +43,7 @@ import { toArabicDigits, UI } from '../lib/theme'
  * has already established the account is subscribed.
  */
 export default function StudentHome() {
-  const { progress, student, daysLeft } = useOnboardingContext()
+  const { progress, student, daysLeft, refetch } = useOnboardingContext()
   const { user } = useAuth()
   const isAdmin = isAdminEmail(user?.email)
 
@@ -73,6 +79,26 @@ export default function StudentHome() {
       active = false
     }
   }, [user])
+
+  // Completed speaking tasks and watched videos are cached per browser, so a
+  // cleared cache / new device would show a student's finished challenges as
+  // untouched. Every graded attempt is on the server, so rebuild the cache
+  // from this account's own submissions, then record any completion that was
+  // missed because the cache was already gone when the last task finished.
+  useEffect(() => {
+    if (!user || challenges.length === 0) return
+    let active = true
+    restoreProgressFromServer(user.id, challenges).then(async (restored) => {
+      if (!active || restored === 0) return
+      const recorded = await Promise.all(
+        challenges.map((c) => recordCompletionIfDone(user.id, c)),
+      )
+      if (active && recorded.some(Boolean)) refetch()
+    })
+    return () => {
+      active = false
+    }
+  }, [user, challenges, refetch])
 
   const hasSourceLink = (c: Challenge): boolean => Boolean(c.pdf_url && c.pdf_url.trim())
   const notesDone = (c: Challenge): boolean =>
