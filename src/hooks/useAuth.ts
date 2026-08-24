@@ -1,23 +1,54 @@
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 import { supabase } from '../lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
+interface AuthState {
+  user: User | null
+  /** False until the session has been resolved (or there is no Supabase client). */
+  ready: boolean
+}
+
+// The session is resolved once per page load and shared by every useAuth()
+// caller. Previously each caller kept its own state, so a component mounting
+// later — a modal opened mid-session, say — started at `user = null` and only
+// learned the real account a tick later. Anything reading user-scoped data at
+// mount (localStorage keys such as the video resume position) therefore looked
+// up the anonymous key and came back empty.
+let state: AuthState = { user: null, ready: !supabase }
+const subscribers = new Set<() => void>()
+let started = false
+
+function publish(next: AuthState) {
+  state = next
+  subscribers.forEach((notify) => notify())
+}
+
+function startAuth() {
+  if (started || !supabase) return
+  started = true
+  supabase.auth.getSession().then(({ data }) => {
+    publish({ user: data.session?.user ?? null, ready: true })
+  })
+  // Kept for the lifetime of the page: the state is a module-level singleton,
+  // so there is no per-component subscription to tear down.
+  supabase.auth.onAuthStateChange((_event, session) => {
+    publish({ user: session?.user ?? null, ready: true })
+  })
+}
+
+function subscribe(notify: () => void): () => void {
+  startAuth()
+  subscribers.add(notify)
+  return () => {
+    subscribers.delete(notify)
+  }
+}
+
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null)
-
-  useEffect(() => {
-    if (!supabase) return
-
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null)
-    })
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-
-    return () => listener.subscription.unsubscribe()
-  }, [])
+  // Subscribing to the shared store (rather than keeping per-component state)
+  // means a component mounting after the session resolved sees the account on
+  // its very first render.
+  const snapshot = useSyncExternalStore(subscribe, () => state)
 
   // Start Google OAuth. `next` is an optional post-sign-in intent (e.g.
   // '?redeem=1') used to bring the user back to a specific spot — e.g. reopen
@@ -56,8 +87,8 @@ export function useAuth() {
     } catch {
       /* ignore */
     }
-    setUser(null)
+    publish({ user: null, ready: true })
   }
 
-  return { user, signInWithGoogle, signOut }
+  return { user: snapshot.user, authReady: snapshot.ready, signInWithGoogle, signOut }
 }
