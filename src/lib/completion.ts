@@ -171,19 +171,30 @@ export async function recordCompletionIfDone(userId: string, c: Challenge): Prom
   return !error
 }
 
+/** Challenge numbers listed for this account in one of the admin grant tables. */
+async function fetchGrantedNumbers(table: string, userId: string): Promise<number[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase.from(table).select('challenge_number').eq('user_id', userId)
+  if (error) return []
+  return ((data as { challenge_number: number }[] | null) ?? []).map((r) => r.challenge_number)
+}
+
 /**
  * Challenge numbers an admin has waived the cooldown for on this account
  * (x50_cooldown_skips). Only the wait is waived — the student still has to
  * finish the previous challenge.
  */
-export async function fetchCooldownSkips(userId: string): Promise<number[]> {
-  if (!supabase) return []
-  const { data, error } = await supabase
-    .from('x50_cooldown_skips')
-    .select('challenge_number')
-    .eq('user_id', userId)
-  if (error) return []
-  return ((data as { challenge_number: number }[] | null) ?? []).map((r) => r.challenge_number)
+export function fetchCooldownSkips(userId: string): Promise<number[]> {
+  return fetchGrantedNumbers('x50_cooldown_skips', userId)
+}
+
+/**
+ * Challenge numbers an admin has opened outright for this account
+ * (x50_challenge_unlocks). Unlike a cooldown skip this clears every sequential
+ * gate: the challenge opens even if the one before it was never finished.
+ */
+export function fetchChallengeUnlocks(userId: string): Promise<number[]> {
+  return fetchGrantedNumbers('x50_challenge_unlocks', userId)
 }
 
 export type LockState =
@@ -195,18 +206,24 @@ export type LockState =
  * Sequential lock with cooldown: the first added challenge is open; each later
  * one needs the previous challenge completed AND 5 days passed since.
  *
- * `skips` holds the challenge numbers an admin granted a cooldown skip for
- * (Students tab → "Skip the cooldown"): those open as soon as the previous
- * challenge is done, with no wait.
+ * Two admin overrides, both granted per (student, challenge) from the Students
+ * tab and deliberately different in strength:
+ *
+ * - `unlocks` ("Unlock now") opens the challenge outright — the previous
+ *   challenge does not have to be finished.
+ * - `skips` ("Skip the cooldown") only drops the wait: the challenge opens as
+ *   soon as the previous one is done, instead of 5 days later.
  */
 export function challengeLockState(
   challenge: Challenge,
   realNumbers: number[],
   progress: Record<number, string>,
   skips: number[] = [],
+  unlocks: number[] = [],
 ): LockState {
   const idx = realNumbers.indexOf(challenge.number)
   if (idx <= 0) return { locked: false }
+  if (unlocks.includes(challenge.number)) return { locked: false }
   const prevNumber = realNumbers[idx - 1]
   const prevDone = progress[prevNumber]
   if (!prevDone) return { locked: true, reason: 'prev' }

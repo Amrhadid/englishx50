@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, REVIEWS_BUCKET, FILES_BUCKET } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import type { Challenge, Review, Code } from '../types'
@@ -1494,6 +1494,7 @@ function StudentsSection() {
       </div>
       <LevelTestBypass />
       <CooldownSkips />
+      <ChallengeUnlocks />
       {view === 'overview' ? <StudentsDashboard /> : <StudentsAdmin />}
     </div>
   )
@@ -1627,53 +1628,77 @@ function LevelTestBypass() {
   )
 }
 
-interface CooldownSkipRow {
+interface GrantRow {
   user_id: string
   challenge_number: number
-  created_at: string
+  granted_at: string
 }
 
 /**
- * Waives the 5-day cooldown for one student on one challenge. Writes a row to
- * x50_cooldown_skips, which challengeLockState() reads: the challenge opens as
- * soon as the previous one is finished, with no wait. The "finish the previous
- * challenge first" rule still applies — this only removes the gap.
+ * Shared UI for the two per-(student, challenge) admin grants: pick a student
+ * and a challenge, save a row, and list/revoke what's been granted. The two
+ * tables differ only in name and timestamp column, so they share this panel.
  */
-function CooldownSkips() {
+function StudentChallengeGrants({
+  title,
+  description,
+  table,
+  timestampColumn,
+  actionLabel,
+  listLabel,
+  emptyLabel,
+  granted,
+}: {
+  title: string
+  description: string
+  table: string
+  timestampColumn: string
+  actionLabel: string
+  listLabel: string
+  emptyLabel: string
+  /** Confirmation line shown after a successful grant. */
+  granted: (student: string, challenge: string) => string
+}) {
   const [students, setStudents] = useState<StudentLite[]>([])
   const [challenges, setChallenges] = useState<Challenge[]>([])
-  const [skips, setSkips] = useState<CooldownSkipRow[]>([])
+  const [rows, setRows] = useState<GrantRow[]>([])
   const [userId, setUserId] = useState('')
   const [challengeNumber, setChallengeNumber] = useState('')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!supabase) {
       setLoading(false)
       return
     }
-    const [studentsRes, challengesRes, skipsRes] = await Promise.all([
+    const [studentsRes, challengesRes, rowsRes] = await Promise.all([
       supabase
         .from('x50_students')
         .select('user_id, name, phone, code')
         .order('created_at', { ascending: false }),
       supabase.from('x50_challenges').select('*').order('number', { ascending: true }),
       supabase
-        .from('x50_cooldown_skips')
-        .select('user_id, challenge_number, created_at')
-        .order('created_at', { ascending: false }),
+        .from(table)
+        .select(`user_id, challenge_number, ${timestampColumn}`)
+        .order(timestampColumn, { ascending: false }),
     ])
     setStudents((studentsRes.data as StudentLite[]) ?? [])
     setChallenges((challengesRes.data as Challenge[]) ?? [])
-    setSkips((skipsRes.data as CooldownSkipRow[]) ?? [])
+    setRows(
+      ((rowsRes.data as Record<string, unknown>[] | null) ?? []).map((r) => ({
+        user_id: r.user_id as string,
+        challenge_number: r.challenge_number as number,
+        granted_at: r[timestampColumn] as string,
+      })),
+    )
     setLoading(false)
-  }
+  }, [table, timestampColumn])
 
   useEffect(() => {
     load()
-  }, [])
+  }, [load])
 
   const studentName = (id: string) => {
     const s = students.find((x) => x.user_id === id)
@@ -1697,7 +1722,7 @@ function CooldownSkips() {
     setBusy(true)
     setMsg(null)
     const { error } = await supabase
-      .from('x50_cooldown_skips')
+      .from(table)
       .upsert(
         { user_id: userId, challenge_number: Number(challengeNumber) },
         { onConflict: 'user_id,challenge_number' },
@@ -1707,16 +1732,14 @@ function CooldownSkips() {
       setMsg(`Error: ${error.message}`)
       return
     }
-    setMsg(
-      `${studentName(userId)} can open ${challengeLabel(Number(challengeNumber))} without the wait ✓`,
-    )
+    setMsg(granted(studentName(userId), challengeLabel(Number(challengeNumber))))
     load()
   }
 
-  const revoke = async (row: CooldownSkipRow) => {
+  const revoke = async (row: GrantRow) => {
     if (!supabase) return
     await supabase
-      .from('x50_cooldown_skips')
+      .from(table)
       .delete()
       .eq('user_id', row.user_id)
       .eq('challenge_number', row.challenge_number)
@@ -1730,12 +1753,8 @@ function CooldownSkips() {
 
   return (
     <div className="rounded-2xl border border-[#f0ecf8] p-5">
-      <h3 className="mb-1 font-bold text-[#111]">Skip the cooldown</h3>
-      <p className="mb-3 text-xs text-[#9a9aa2]">
-        Challenges normally unlock {COOLDOWN_DAYS} days after the previous one is finished. Pick a
-        student and a challenge to drop that wait for them — the challenge opens as soon as they
-        finish the one before it. Everything else stays the same.
-      </p>
+      <h3 className="mb-1 font-bold text-[#111]">{title}</h3>
+      <p className="mb-3 text-xs text-[#9a9aa2]">{description}</p>
       <div className="grid gap-2 sm:grid-cols-2">
         <select value={userId} onChange={(e) => setUserId(e.target.value)} className={fieldCls}>
           <option value="">Select student…</option>
@@ -1765,16 +1784,16 @@ function CooldownSkips() {
         disabled={busy || !userId || !challengeNumber}
         className="mt-2 rounded-xl bg-[#534AB7] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#46409c] disabled:opacity-60"
       >
-        {busy ? 'Saving…' : 'Skip the cooldown'}
+        {busy ? 'Saving…' : actionLabel}
       </button>
       {msg && <p className="mt-2 text-xs text-[#5b5670]">{msg}</p>}
 
       <div className="mt-5">
         <p className="mb-2 text-sm font-bold text-[#111]">
-          Active skips <span className="text-[#9a9aa2]">({skips.length})</span>
+          {listLabel} <span className="text-[#9a9aa2]">({rows.length})</span>
         </p>
-        {skips.length === 0 ? (
-          <p className="text-sm text-[#9a9aa2]">No cooldown skips granted.</p>
+        {rows.length === 0 ? (
+          <p className="text-sm text-[#9a9aa2]">{emptyLabel}</p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-[#f0ecf8]">
             <table className="w-full text-left text-sm">
@@ -1787,7 +1806,7 @@ function CooldownSkips() {
                 </tr>
               </thead>
               <tbody>
-                {skips.map((row) => (
+                {rows.map((row) => (
                   <tr
                     key={`${row.user_id}-${row.challenge_number}`}
                     className="border-b border-[#f5f2fb] last:border-0"
@@ -1796,7 +1815,7 @@ function CooldownSkips() {
                     <td className="px-4 py-3 text-[#5b5670]">
                       {challengeLabel(row.challenge_number)}
                     </td>
-                    <td className="px-4 py-3 text-[#5b5670]">{fmtDate(row.created_at)}</td>
+                    <td className="px-4 py-3 text-[#5b5670]">{fmtDate(row.granted_at)}</td>
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => revoke(row)}
@@ -1813,6 +1832,48 @@ function CooldownSkips() {
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * Waives the cooldown for one student on one challenge: it opens as soon as
+ * they finish the previous challenge, instead of {COOLDOWN_DAYS} days later.
+ * The "finish the previous challenge first" rule still applies — use
+ * ChallengeUnlocks to clear that too.
+ */
+function CooldownSkips() {
+  return (
+    <StudentChallengeGrants
+      title="Skip the cooldown"
+      description={`Challenges normally unlock ${COOLDOWN_DAYS} days after the previous one is finished. Pick a student and a challenge to drop that wait for them — the challenge opens as soon as they finish the one before it. They still have to finish the previous challenge.`}
+      table="x50_cooldown_skips"
+      timestampColumn="created_at"
+      actionLabel="Skip the cooldown"
+      listLabel="Active skips"
+      emptyLabel="No cooldown skips granted."
+      granted={(student, challenge) => `${student} can open ${challenge} without the wait ✓`}
+    />
+  )
+}
+
+/**
+ * Opens one challenge for one student outright, ignoring both sequential
+ * gates: they don't need to have finished the previous challenge, and there's
+ * no cooldown. The level test is a separate gate — use "Bypass the level test"
+ * for that.
+ */
+function ChallengeUnlocks() {
+  return (
+    <StudentChallengeGrants
+      title="Unlock a challenge now"
+      description="Opens a challenge for a student straight away, even if they haven't finished the one before it. Stronger than a cooldown skip: it ignores the order entirely. The level test is a separate gate — use “Bypass the level test” above if they haven't taken it."
+      table="x50_challenge_unlocks"
+      timestampColumn="unlocked_at"
+      actionLabel="Unlock now"
+      listLabel="Unlocked challenges"
+      emptyLabel="No challenges unlocked."
+      granted={(student, challenge) => `${challenge} is now open for ${student} ✓`}
+    />
   )
 }
 

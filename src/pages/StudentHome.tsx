@@ -37,7 +37,8 @@ import { toArabicDigits, UI } from '../lib/theme'
  * has already established the account is subscribed.
  */
 export default function StudentHome() {
-  const { progress, student, daysLeft, cooldownSkips } = useOnboardingContext()
+  const { progress, student, daysLeft, cooldownSkips, challengeUnlocks } =
+    useOnboardingContext()
   const { user } = useAuth()
   const isAdmin = isAdminEmail(user?.email)
 
@@ -135,7 +136,7 @@ export default function StudentHome() {
     }
     if (!levelTestDone) return setShowLevelTestRequired(true)
     if (isPlaceholderChallenge(c)) return setComingSoonFor(c)
-    const lock = challengeLockState(c, realNumbers, progress, cooldownSkips)
+    const lock = challengeLockState(c, realNumbers, progress, cooldownSkips, challengeUnlocks)
     if (lock.locked) return setLockedFor({ challenge: c, lock })
     run()
   }
@@ -143,7 +144,7 @@ export default function StudentHome() {
   const lockLabelFor = (c: Challenge): string | null => {
     if (isAdmin || isPlaceholderChallenge(c)) return null
     if (!levelTestDone) return '🎤 أكمل اختبار المستوى أولاً'
-    const lock = challengeLockState(c, realNumbers, progress, cooldownSkips)
+    const lock = challengeLockState(c, realNumbers, progress, cooldownSkips, challengeUnlocks)
     if (!lock.locked) return null
     return lock.reason === 'cooldown'
       ? `🔒 متاح بعد ${toArabicDigits(lock.daysLeft)} يوم`

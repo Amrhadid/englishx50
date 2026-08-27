@@ -11,6 +11,8 @@ export interface OnboardingContextValue {
   progress: Record<number, string>
   /** Challenge numbers an admin let this student skip the cooldown on. */
   cooldownSkips: number[]
+  /** Challenge numbers an admin opened outright for this student. */
+  challengeUnlocks: number[]
   refetch: () => Promise<void>
   loading: boolean
 }
