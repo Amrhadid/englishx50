@@ -171,6 +171,21 @@ export async function recordCompletionIfDone(userId: string, c: Challenge): Prom
   return !error
 }
 
+/**
+ * Challenge numbers an admin has waived the cooldown for on this account
+ * (x50_cooldown_skips). Only the wait is waived — the student still has to
+ * finish the previous challenge.
+ */
+export async function fetchCooldownSkips(userId: string): Promise<number[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('x50_cooldown_skips')
+    .select('challenge_number')
+    .eq('user_id', userId)
+  if (error) return []
+  return ((data as { challenge_number: number }[] | null) ?? []).map((r) => r.challenge_number)
+}
+
 export type LockState =
   | { locked: false }
   | { locked: true; reason: 'prev' }
@@ -179,17 +194,23 @@ export type LockState =
 /**
  * Sequential lock with cooldown: the first added challenge is open; each later
  * one needs the previous challenge completed AND 5 days passed since.
+ *
+ * `skips` holds the challenge numbers an admin granted a cooldown skip for
+ * (Students tab → "Skip the cooldown"): those open as soon as the previous
+ * challenge is done, with no wait.
  */
 export function challengeLockState(
   challenge: Challenge,
   realNumbers: number[],
   progress: Record<number, string>,
+  skips: number[] = [],
 ): LockState {
   const idx = realNumbers.indexOf(challenge.number)
   if (idx <= 0) return { locked: false }
   const prevNumber = realNumbers[idx - 1]
   const prevDone = progress[prevNumber]
   if (!prevDone) return { locked: true, reason: 'prev' }
+  if (skips.includes(challenge.number)) return { locked: false }
   const elapsedDays = Math.floor((Date.now() - new Date(prevDone).getTime()) / 86_400_000)
   const daysLeft = COOLDOWN_DAYS - elapsedDays
   if (daysLeft > 0) return { locked: true, reason: 'cooldown', daysLeft }

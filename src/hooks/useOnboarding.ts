@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from './useAuth'
 import { supabase } from '../lib/supabase'
+import { fetchCooldownSkips } from '../lib/completion'
 import type { Student } from '../types'
 
 const PROGRAM_DAYS = 100
@@ -23,24 +24,29 @@ export function useOnboarding() {
   const { user } = useAuth()
   const [student, setStudent] = useState<Student | null>(null)
   const [progress, setProgress] = useState<Record<number, string>>({})
+  // Challenge numbers whose cooldown an admin waived for this account.
+  const [cooldownSkips, setCooldownSkips] = useState<number[]>([])
   const [loading, setLoading] = useState(true)
 
   const refetch = useCallback(async () => {
     if (!supabase || !user) {
       setStudent(null)
       setProgress({})
+      setCooldownSkips([])
       setLoading(false)
       return
     }
     setLoading(true)
-    const [{ data }, { data: prog }] = await Promise.all([
+    const [{ data }, { data: prog }, skips] = await Promise.all([
       supabase.from('x50_students').select('*').eq('user_id', user.id).maybeSingle(),
       supabase
         .from('x50_challenge_progress')
         .select('challenge_number, completed_at')
         .eq('user_id', user.id),
+      fetchCooldownSkips(user.id),
     ])
     setStudent((data as Student | null) ?? null)
+    setCooldownSkips(skips)
     setProgress(
       Object.fromEntries(
         ((prog as { challenge_number: number; completed_at: string }[] | null) ?? []).map((r) => [
@@ -80,5 +86,15 @@ export function useOnboarding() {
   // shareable (a used code can't be redeemed by another account).
   const premiumActive = !!student?.code && daysLeft > 0
 
-  return { needsOnboarding, needsCode, daysLeft, premiumActive, student, progress, refetch, loading }
+  return {
+    needsOnboarding,
+    needsCode,
+    daysLeft,
+    premiumActive,
+    student,
+    progress,
+    cooldownSkips,
+    refetch,
+    loading,
+  }
 }

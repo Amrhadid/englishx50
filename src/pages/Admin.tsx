@@ -10,6 +10,7 @@ import { challengeVideos } from '../lib/challenge'
 import { audioUrl } from '../lib/audio'
 import { isAdminEmail } from '../lib/admin'
 import { MAX_TRIALS } from '../lib/progress'
+import { COOLDOWN_DAYS } from '../lib/completion'
 
 type Tab = 'challenges' | 'reviews' | 'codes' | 'leads' | 'students' | 'trials' | 'grading'
 
@@ -1492,6 +1493,7 @@ function StudentsSection() {
         ))}
       </div>
       <LevelTestBypass />
+      <CooldownSkips />
       {view === 'overview' ? <StudentsDashboard /> : <StudentsAdmin />}
     </div>
   )
@@ -1621,6 +1623,195 @@ function LevelTestBypass() {
         </button>
       </div>
       {msg && <p className="mt-2 text-xs text-[#5b5670]">{msg}</p>}
+    </div>
+  )
+}
+
+interface CooldownSkipRow {
+  user_id: string
+  challenge_number: number
+  created_at: string
+}
+
+/**
+ * Waives the 5-day cooldown for one student on one challenge. Writes a row to
+ * x50_cooldown_skips, which challengeLockState() reads: the challenge opens as
+ * soon as the previous one is finished, with no wait. The "finish the previous
+ * challenge first" rule still applies — this only removes the gap.
+ */
+function CooldownSkips() {
+  const [students, setStudents] = useState<StudentLite[]>([])
+  const [challenges, setChallenges] = useState<Challenge[]>([])
+  const [skips, setSkips] = useState<CooldownSkipRow[]>([])
+  const [userId, setUserId] = useState('')
+  const [challengeNumber, setChallengeNumber] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  const load = async () => {
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+    const [studentsRes, challengesRes, skipsRes] = await Promise.all([
+      supabase
+        .from('x50_students')
+        .select('user_id, name, phone, code')
+        .order('created_at', { ascending: false }),
+      supabase.from('x50_challenges').select('*').order('number', { ascending: true }),
+      supabase
+        .from('x50_cooldown_skips')
+        .select('user_id, challenge_number, created_at')
+        .order('created_at', { ascending: false }),
+    ])
+    setStudents((studentsRes.data as StudentLite[]) ?? [])
+    setChallenges((challengesRes.data as Challenge[]) ?? [])
+    setSkips((skipsRes.data as CooldownSkipRow[]) ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    load()
+  }, [])
+
+  const studentName = (id: string) => {
+    const s = students.find((x) => x.user_id === id)
+    return s ? s.name || s.phone || id.slice(0, 8) : id.slice(0, 8)
+  }
+
+  const challengeLabel = (n: number) => {
+    const c = challenges.find((ch) => ch.number === n)
+    return `Challenge ${n}${c?.title ? ` · ${c.title}` : ''}`
+  }
+
+  const grant = async () => {
+    if (!supabase) {
+      setMsg('Supabase is not configured.')
+      return
+    }
+    if (!userId || !challengeNumber) {
+      setMsg('Pick a student and a challenge first.')
+      return
+    }
+    setBusy(true)
+    setMsg(null)
+    const { error } = await supabase
+      .from('x50_cooldown_skips')
+      .upsert(
+        { user_id: userId, challenge_number: Number(challengeNumber) },
+        { onConflict: 'user_id,challenge_number' },
+      )
+    setBusy(false)
+    if (error) {
+      setMsg(`Error: ${error.message}`)
+      return
+    }
+    setMsg(
+      `${studentName(userId)} can open ${challengeLabel(Number(challengeNumber))} without the wait ✓`,
+    )
+    load()
+  }
+
+  const revoke = async (row: CooldownSkipRow) => {
+    if (!supabase) return
+    await supabase
+      .from('x50_cooldown_skips')
+      .delete()
+      .eq('user_id', row.user_id)
+      .eq('challenge_number', row.challenge_number)
+    load()
+  }
+
+  const fieldCls =
+    'w-full rounded-xl border border-[#e8e0f0] px-3 py-2 text-sm outline-none focus:border-[#534AB7]'
+
+  if (loading) return null
+
+  return (
+    <div className="rounded-2xl border border-[#f0ecf8] p-5">
+      <h3 className="mb-1 font-bold text-[#111]">Skip the cooldown</h3>
+      <p className="mb-3 text-xs text-[#9a9aa2]">
+        Challenges normally unlock {COOLDOWN_DAYS} days after the previous one is finished. Pick a
+        student and a challenge to drop that wait for them — the challenge opens as soon as they
+        finish the one before it. Everything else stays the same.
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <select value={userId} onChange={(e) => setUserId(e.target.value)} className={fieldCls}>
+          <option value="">Select student…</option>
+          {students.map((s) => (
+            <option key={s.user_id} value={s.user_id}>
+              {(s.name || 'Unnamed') +
+                (s.phone ? ` · ${s.phone}` : '') +
+                (s.code ? ` · ${s.code}` : '')}
+            </option>
+          ))}
+        </select>
+        <select
+          value={challengeNumber}
+          onChange={(e) => setChallengeNumber(e.target.value)}
+          className={fieldCls}
+        >
+          <option value="">Select challenge…</option>
+          {challenges.map((c) => (
+            <option key={c.id} value={c.number}>
+              {challengeLabel(c.number)}
+            </option>
+          ))}
+        </select>
+      </div>
+      <button
+        onClick={grant}
+        disabled={busy || !userId || !challengeNumber}
+        className="mt-2 rounded-xl bg-[#534AB7] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#46409c] disabled:opacity-60"
+      >
+        {busy ? 'Saving…' : 'Skip the cooldown'}
+      </button>
+      {msg && <p className="mt-2 text-xs text-[#5b5670]">{msg}</p>}
+
+      <div className="mt-5">
+        <p className="mb-2 text-sm font-bold text-[#111]">
+          Active skips <span className="text-[#9a9aa2]">({skips.length})</span>
+        </p>
+        {skips.length === 0 ? (
+          <p className="text-sm text-[#9a9aa2]">No cooldown skips granted.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-[#f0ecf8]">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-[#f0ecf8] bg-[#faf9ff] text-xs uppercase text-[#9a9aa2]">
+                  <th className="px-4 py-3 font-bold">Student</th>
+                  <th className="px-4 py-3 font-bold">Challenge</th>
+                  <th className="px-4 py-3 font-bold">Granted</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {skips.map((row) => (
+                  <tr
+                    key={`${row.user_id}-${row.challenge_number}`}
+                    className="border-b border-[#f5f2fb] last:border-0"
+                  >
+                    <td className="px-4 py-3 font-medium text-[#111]">{studentName(row.user_id)}</td>
+                    <td className="px-4 py-3 text-[#5b5670]">
+                      {challengeLabel(row.challenge_number)}
+                    </td>
+                    <td className="px-4 py-3 text-[#5b5670]">{fmtDate(row.created_at)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => revoke(row)}
+                        className="rounded-lg bg-[#FEE2E2] px-2.5 py-1.5 text-xs font-bold text-[#DC2626]"
+                      >
+                        Revoke
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

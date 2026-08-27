@@ -9,6 +9,8 @@ export interface OnboardingContextValue {
   premiumActive: boolean
   student: ReturnType<typeof useOnboarding>['student']
   progress: Record<number, string>
+  /** Challenge numbers an admin let this student skip the cooldown on. */
+  cooldownSkips: number[]
   refetch: () => Promise<void>
   loading: boolean
 }
