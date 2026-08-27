@@ -1721,11 +1721,15 @@ function StudentChallengeGrants({
     }
     setBusy(true)
     setMsg(null)
+    // ignoreDuplicates → INSERT ... ON CONFLICT DO NOTHING. Re-granting an
+    // existing (student, challenge) pair is a no-op: the grant is already
+    // there and there's nothing to change. A plain upsert would UPDATE the
+    // row instead, which these tables have no RLS policy for.
     const { error } = await supabase
       .from(table)
       .upsert(
         { user_id: userId, challenge_number: Number(challengeNumber) },
-        { onConflict: 'user_id,challenge_number' },
+        { onConflict: 'user_id,challenge_number', ignoreDuplicates: true },
       )
     setBusy(false)
     if (error) {
