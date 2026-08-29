@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { dialCountries, arabNationalities } from '../lib/countries'
-import type { YesNo } from '../lib/form'
+import { ERROR_COLOR, type YesNo } from '../lib/form'
 
 /**
  * The shared form controls for the join form and the activation panel.
@@ -15,6 +15,19 @@ function ChevronIcon() {
     <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 opacity-60" aria-hidden="true">
       <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  )
+}
+
+/**
+ * The red message under a field that failed validation. Renders nothing when
+ * there is no error, so callers can pass the error straight through.
+ */
+export function FieldError({ children }: { children?: string | null }) {
+  if (!children) return null
+  return (
+    <p role="alert" className="mt-1.5 text-[13px] font-bold" style={{ color: ERROR_COLOR }}>
+      {children}
+    </p>
   )
 }
 
@@ -102,7 +115,15 @@ export function PhoneCodeSelect({ value, onChange }: { value: string; onChange: 
 }
 
 /** Arab-only nationality picker. */
-export function NationalitySelect({ value, onChange }: { value: string; onChange: (code: string) => void }) {
+export function NationalitySelect({
+  value,
+  onChange,
+  invalid = false,
+}: {
+  value: string
+  onChange: (code: string) => void
+  invalid?: boolean
+}) {
   const { open, setOpen, ref } = useDropdown()
   const selected = arabNationalities.find((n) => n.code === value)
   return (
@@ -110,7 +131,12 @@ export function NationalitySelect({ value, onChange }: { value: string; onChange
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between rounded-2xl border border-[#ece7fb] bg-[#faf9ff] px-4 py-3 text-[14px] outline-none transition hover:border-[#cfc6f5]"
+        aria-invalid={invalid}
+        className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-[14px] outline-none transition ${
+          invalid
+            ? 'border-[#E11D48] bg-[#FFF1F2]'
+            : 'border-[#ece7fb] bg-[#faf9ff] hover:border-[#cfc6f5]'
+        }`}
       >
         {selected ? (
           <span className="flex items-center gap-2 text-[#1b1730]">
@@ -118,7 +144,9 @@ export function NationalitySelect({ value, onChange }: { value: string; onChange
             {selected.label}
           </span>
         ) : (
-          <span className="text-[#8a85a0]">الجنسية</span>
+          <span style={invalid ? { color: ERROR_COLOR } : undefined} className={invalid ? '' : 'text-[#8a85a0]'}>
+            الجنسية
+          </span>
         )}
         <ChevronIcon />
       </button>
@@ -148,28 +176,38 @@ export function NationalitySelect({ value, onChange }: { value: string; onChange
   )
 }
 
-const optionClass = (active: boolean) =>
-  active
-    ? 'cursor-pointer rounded-2xl border-2 border-[#7C6FF0] bg-[#f1edff] p-3 text-center text-[14px] font-bold text-[#7C6FF0]'
-    : 'cursor-pointer rounded-2xl border border-[#ece7fb] bg-white p-3 text-center text-[14px] font-semibold text-[#9a95ad] transition hover:border-[#cfc6f5]'
+const optionClass = (active: boolean, invalid = false) => {
+  if (active)
+    return 'cursor-pointer rounded-2xl border-2 border-[#7C6FF0] bg-[#f1edff] p-3 text-center text-[14px] font-bold text-[#7C6FF0]'
+  if (invalid)
+    return 'cursor-pointer rounded-2xl border border-[#E11D48] bg-[#FFF1F2] p-3 text-center text-[14px] font-semibold text-[#E11D48] transition'
+  return 'cursor-pointer rounded-2xl border border-[#ece7fb] bg-white p-3 text-center text-[14px] font-semibold text-[#9a95ad] transition hover:border-[#cfc6f5]'
+}
 
 export function ChoiceSelector({
   label,
   options,
   value,
   onChange,
+  invalid = false,
 }: {
   label: string
   options: { value: string; label: string }[]
   value: string | null
   onChange: (v: string) => void
+  invalid?: boolean
 }) {
   return (
     <div>
       <p className="mb-2 text-[14px] font-bold text-[#1b1730]">{label}</p>
       <div className="grid grid-cols-2 gap-2.5">
         {options.map((o) => (
-          <button type="button" key={o.value} onClick={() => onChange(o.value)} className={optionClass(value === o.value)}>
+          <button
+            type="button"
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            className={optionClass(value === o.value, invalid)}
+          >
             {o.label}
           </button>
         ))}
@@ -182,19 +220,29 @@ export function YesNoSelector({
   label,
   value,
   onChange,
+  invalid = false,
 }: {
   label: string
   value: YesNo
   onChange: (v: 'yes' | 'no') => void
+  invalid?: boolean
 }) {
   return (
     <div>
       <p className="mb-2 text-[14px] font-bold text-[#1b1730]">{label}</p>
       <div className="flex gap-2.5">
-        <button type="button" className={`flex-1 ${optionClass(value === 'yes')}`} onClick={() => onChange('yes')}>
+        <button
+          type="button"
+          className={`flex-1 ${optionClass(value === 'yes', invalid)}`}
+          onClick={() => onChange('yes')}
+        >
           نعم
         </button>
-        <button type="button" className={`flex-1 ${optionClass(value === 'no')}`} onClick={() => onChange('no')}>
+        <button
+          type="button"
+          className={`flex-1 ${optionClass(value === 'no', invalid)}`}
+          onClick={() => onChange('no')}
+        >
           لا
         </button>
       </div>
