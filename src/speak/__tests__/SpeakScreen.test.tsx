@@ -70,7 +70,7 @@ const status = () => screen.getByRole('status').textContent ?? ''
 async function recordOnce() {
   await waitFor(() => expect(mic().hasAttribute('disabled')).toBe(false))
   fireEvent.click(mic())
-  await waitFor(() => expect(status()).toContain('جارٍ التسجيل'))
+  await waitFor(() => expect(status()).toContain('بسمعك دلوقتي'))
   await act(async () => {
     vi.advanceTimersByTime(1200)
   })
@@ -99,17 +99,15 @@ describe('SpeakScreen', () => {
 
   it('renders the required Arabic copy and the LTR English opener', async () => {
     renderScreen(api())
-    expect(screen.getByText('جاهز للمحادثة')).toBeTruthy()
+    expect(screen.getByText('جاهزة للمحادثة')).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'اتكلم إنجليزي من غير توتر' })).toBeTruthy()
     expect(screen.getByText('هدف اليوم: 5 دقائق')).toBeTruthy()
     expect(screen.getByText('Emma')).toBeTruthy()
-    expect(screen.getByText('Online')).toBeTruthy()
-    expect(screen.getByText('شريكتك في المحادثة')).toBeTruthy()
     for (const label of ['محادثة يومية', 'مقابلة عمل', 'في المطار', 'اجتماع', 'مطعم وتسوق', 'محادثة حرة']) {
       expect(screen.getByRole('radio', { name: new RegExp(label) })).toBeTruthy()
     }
     const opener = await screen.findByText('Hi! What was the best part of your day?')
-    await waitFor(() => expect(status()).toContain('اضغط وتكلم — سيظهر رد Emma بعد الانتهاء'))
+    await waitFor(() => expect(status()).toContain('اضغط وابدأ الكلام'))
     // English text renders LTR inside the RTL page.
     expect(opener.className).toContain('spk-en')
     expect(opener.closest('[dir="ltr"]')).not.toBeNull()
@@ -142,7 +140,7 @@ describe('SpeakScreen', () => {
     await waitFor(() => expect(screen.getByText('That sounds lovely! What do you teach?')).toBeTruthy())
     // Emma's audio is playing → the stop-audio control replaces the mic.
     await waitFor(() => expect(screen.getByRole('button', { name: 'إيقاف الصوت' })).toBeTruthy())
-    expect(status()).toContain('Emma بتتكلم')
+    expect(status()).toContain('Emma بترد عليك')
 
     // Compact feedback under the learner's turn.
     expect(screen.getAllByText('إجابة واضحة وطبيعية').length).toBeGreaterThan(0)
@@ -260,7 +258,7 @@ describe('SpeakScreen', () => {
     await screen.findByText('Hi! What was the best part of your day?')
     await waitFor(() => expect(mic().hasAttribute('disabled')).toBe(false))
     fireEvent.click(mic())
-    await waitFor(() => expect(status()).toContain('جارٍ التسجيل'))
+    await waitFor(() => expect(status()).toContain('بسمعك دلوقتي'))
     fireEvent.click(screen.getByRole('button', { name: 'إلغاء التسجيل' }))
     await waitFor(() => expect(mic()).toBeTruthy())
     expect(track.stop).toHaveBeenCalled()
@@ -297,8 +295,8 @@ describe('SpeakScreen', () => {
     await recordOnce()
     await waitFor(() => expect(a.transcribe).toHaveBeenCalledTimes(1))
     // The primary button is disabled while transcribing; extra clicks do nothing.
+    await waitFor(() => expect(mic().hasAttribute('disabled')).toBe(true))
     const busyBtn = screen.getByRole('button', { name: 'ابدأ التسجيل' })
-    expect(busyBtn.hasAttribute('disabled')).toBe(true)
     fireEvent.click(busyBtn)
     fireEvent.click(busyBtn)
     await act(async () => {
@@ -314,7 +312,7 @@ describe('SpeakScreen', () => {
     await screen.findByText('Hi! What was the best part of your day?')
     await waitFor(() => expect(mic().hasAttribute('disabled')).toBe(false))
     fireEvent.click(mic())
-    await waitFor(() => expect(status()).toContain('جارٍ التسجيل'))
+    await waitFor(() => expect(status()).toContain('بسمعك دلوقتي'))
     view.unmount()
     expect(track.stop).toHaveBeenCalled()
     expect(a.transcribe).not.toHaveBeenCalled()

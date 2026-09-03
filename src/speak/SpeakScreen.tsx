@@ -107,30 +107,28 @@ export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
   }
 
   const busy = session.phase !== 'ready' && session.phase !== 'speaking' && session.phase !== 'idle'
-  const speaking = session.phase === 'speaking'
+  const latestEmmaPrompt = [...session.turns].reverse().find((t) => t.role === 'ai')?.text
+  const transcriptTurns = session.turns.length > 0 && session.turns.at(-1)?.role === 'ai' ? session.turns.slice(0, -1) : session.turns
   const latestFeedback = [...session.turns].reverse().find((t) => t.role === 'user' && t.feedback)?.feedback ?? null
 
   return (
     <div className="spk" dir="rtl">
       <SpeakHeader onSettings={() => setShowSettings(true)} />
 
-      <main className="mx-auto max-w-5xl px-4 pb-[calc(190px+env(safe-area-inset-bottom,0px))] pt-5 sm:px-6 min-[900px]:grid min-[900px]:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] min-[900px]:gap-8 min-[900px]:pb-12">
+      <main className="spk-layout">
         {/* Column 1 — partner, scenarios, controls */}
-        <div className="flex flex-col gap-4">
-          <section aria-labelledby="spk-title">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#f4f2fc] px-3 py-1 text-[12px] font-extrabold text-[#534AB7]">
-              <span className="h-2 w-2 rounded-full bg-[#23C4A0]" aria-hidden="true" />
-              {T.statusPill}
-            </span>
-            <h1 id="spk-title" className="mt-3 text-[26px] font-black leading-tight text-[#1b1730] sm:text-[30px]">
-              {T.heading}
-            </h1>
-            <p className="mt-2 text-[14px] leading-relaxed text-[#7a7596]">{T.intro}</p>
-          </section>
-
-          <DailyProgress seconds={todaySeconds} />
-          <PartnerCard level={level} speaking={speaking} />
+        <div className="spk-primary-column">
+          <h1 id="spk-title" className="sr-only">{T.heading}</h1>
+          <PartnerCard
+            level={level}
+            scenario={scenario}
+            phase={session.phase}
+            prompt={latestEmmaPrompt}
+            onReplay={session.replay}
+            canReplay={player.canReplay}
+          />
           <ScenarioChips value={scenario} onChange={changeScenario} disabled={busy || session.phase === 'recording'} />
+          <DailyProgress seconds={todaySeconds} />
 
           {!recorder.supported && (
             <p className="rounded-[18px] bg-[#FEEFD2] px-4 py-3 text-[13px] font-semibold leading-relaxed text-[#A66A09]" role="note">
@@ -139,8 +137,8 @@ export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
           )}
 
           {/* Desktop: the controls live here; on mobile the same element is a fixed bottom bar. */}
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#ece7fb] bg-white/95 backdrop-blur min-[900px]:static min-[900px]:mt-2 min-[900px]:rounded-[28px] min-[900px]:border min-[900px]:bg-white min-[900px]:shadow-[0_10px_30px_-22px_rgba(83,74,183,0.5)]">
-            <div className="spk-safe-bottom mx-auto flex max-w-5xl flex-col gap-3 px-4 pt-4 min-[900px]:px-6 min-[900px]:py-6">
+          <div className="spk-controls-dock">
+            <div className="spk-safe-bottom spk-controls-inner">
               {showKeyboard && session.canSpeak && (
                 <KeyboardInput
                   disabled={!session.canSpeak}
@@ -169,19 +167,19 @@ export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
         </div>
 
         {/* Column 2 — conversation + feedback */}
-        <div className="mt-5 flex flex-col gap-4 min-[900px]:mt-0">
+        <aside className="spk-secondary-column">
           {session.error && (
             <StatusNotice error={session.error} onRetry={session.retry} onDismiss={session.dismissError} />
           )}
-          <h2 className="text-[15px] font-extrabold text-[#1b1730]">{T.conversationLabel}</h2>
-          <ConversationLog turns={session.turns} phase={session.phase} inlineFeedback />
+          <div className="spk-section-title"><div><span>سجل الجلسة</span><h2>{T.conversationLabel}</h2></div><span className="spk-turn-count">{session.turns.length} رسائل</span></div>
+          <ConversationLog turns={transcriptTurns} phase={session.phase} inlineFeedback />
           {latestFeedback && (
             <div className="hidden min-[900px]:block">
               <h2 className="mb-2 text-[15px] font-extrabold text-[#1b1730]">{T.feedbackTitle}</h2>
               <FeedbackCard feedback={latestFeedback} />
             </div>
           )}
-        </div>
+        </aside>
       </main>
 
       {showSettings && (
