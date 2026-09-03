@@ -8,12 +8,11 @@ interface Props {
   voice: boolean
   onLevel: (l: LevelId) => void
   onVoice: (on: boolean) => void
-  onNewChat: () => void
   onClose: () => void
 }
 
 /** Bottom sheet (dialog) with the session settings. */
-export default function SettingsSheet({ level, voice, onLevel, onVoice, onNewChat, onClose }: Props) {
+export default function SettingsSheet({ level, voice, onLevel, onVoice, onClose }: Props) {
   const firstRef = useRef<HTMLButtonElement | null>(null)
   useEffect(() => {
     firstRef.current?.focus()
@@ -77,13 +76,6 @@ export default function SettingsSheet({ level, voice, onLevel, onVoice, onNewCha
         </label>
 
         <div className="mt-5 flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={onNewChat}
-            className="h-12 rounded-2xl border-2 border-[#7C6FF0] text-[14px] font-bold text-[#534AB7] transition hover:bg-[#f4f2fc]"
-          >
-            {T.settingsNewChat}
-          </button>
           <button
             type="button"
             onClick={onClose}

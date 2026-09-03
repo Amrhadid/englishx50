@@ -5,6 +5,8 @@ import type { SessionPhase } from '../types'
 interface Props {
   phase: SessionPhase
   canSpeak: boolean
+  /** Idle only: the learner has picked a scenario and may start. */
+  onStart: () => void
   supported: boolean
   recordingSeconds: number
   maxSeconds: number
@@ -55,6 +57,13 @@ function SpeakerOffIcon() {
     </svg>
   )
 }
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-8 w-8" aria-hidden="true">
+      <path d="M8 5.5v13l11-6.5z" fill="currentColor" />
+    </svg>
+  )
+}
 function Spinner() {
   return (
     <span className="h-8 w-8 animate-spin rounded-full border-[3px] border-white/40 border-t-white" aria-hidden="true" />
@@ -63,6 +72,10 @@ function Spinner() {
 
 function statusText(phase: SessionPhase, seconds: number): string {
   switch (phase) {
+    case 'loading':
+      return T.loadingSession
+    case 'idle':
+      return T.emptyConversation
     case 'starting':
       return T.starting
     case 'requesting_mic':
@@ -88,6 +101,7 @@ export default function MicControls(props: Props) {
   const requesting = phase === 'requesting_mic'
   const working = phase === 'transcribing' || phase === 'thinking' || phase === 'starting'
   const speaking = phase === 'speaking'
+  const idle = phase === 'idle' || phase === 'loading'
   const micDisabled = !supported || working || requesting || (!canSpeak && !recording)
   const micLabel = recording ? T.stopRecording : T.startRecording
 
@@ -111,7 +125,18 @@ export default function MicControls(props: Props) {
         </button>
 
         {/* Primary control */}
-        {speaking ? (
+        {idle ? (
+          <button
+            type="button"
+            onClick={props.onStart}
+            disabled={phase === 'loading'}
+            className="flex h-20 min-w-20 items-center justify-center gap-2 rounded-full bg-[#534AB7] px-6 text-[16px] font-extrabold text-white shadow-[0_14px_30px_-12px_rgba(83,74,183,0.8)] transition hover:bg-[#46409c] disabled:opacity-60"
+            aria-label={T.startConversation}
+          >
+            {phase === 'loading' ? <Spinner /> : <PlayIcon />}
+            <span className="hidden sm:inline">{T.startConversation}</span>
+          </button>
+        ) : speaking ? (
           <button
             type="button"
             onClick={props.onStopAudio}
