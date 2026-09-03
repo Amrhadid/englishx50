@@ -129,14 +129,14 @@ async function startConversation(scenario?: string) {
   await waitFor(() => expect(startBtn().hasAttribute('disabled')).toBe(false))
   if (scenario) fireEvent.click(screen.getByRole('radio', { name: new RegExp(scenario) }))
   fireEvent.click(startBtn())
-  await screen.findByText(scenario === 'في المطار' ? OPENERS.airport : OPENERS.daily)
+  await screen.findAllByText(scenario === 'في المطار' ? OPENERS.airport : OPENERS.daily)
 }
 
 /** Press the mic, wait ~1s of fake time, press again — one full recording. */
 async function recordOnce() {
   await waitFor(() => expect(mic().hasAttribute('disabled')).toBe(false))
   fireEvent.click(mic())
-  await waitFor(() => expect(status()).toContain('جارٍ التسجيل'))
+  await waitFor(() => expect(status()).toContain('بسمعك دلوقتي'))
   await act(async () => {
     vi.advanceTimersByTime(1200)
   })
@@ -173,12 +173,10 @@ describe('SpeakScreen', () => {
   it('renders the required Arabic copy, loads the session, and waits for the learner to start', async () => {
     const a = api()
     renderScreen(a)
-    expect(screen.getByText('جاهز للمحادثة')).toBeTruthy()
+    expect(screen.getByText('جاهزة للمحادثة')).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'اتكلم إنجليزي من غير توتر' })).toBeTruthy()
     expect(screen.getByText('هدف اليوم: 5 دقائق')).toBeTruthy()
     expect(screen.getByText('Emma')).toBeTruthy()
-    expect(screen.getByText('Online')).toBeTruthy()
-    expect(screen.getByText('شريكتك في المحادثة')).toBeTruthy()
     for (const label of ['محادثة يومية', 'مقابلة عمل', 'في المطار', 'اجتماع', 'مطعم وتسوق', 'محادثة حرة']) {
       expect(screen.getByRole('radio', { name: new RegExp(label) })).toBeTruthy()
     }
@@ -189,11 +187,11 @@ describe('SpeakScreen', () => {
     expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled()
 
     await startConversation()
-    const opener = screen.getByText(OPENERS.daily)
+    const [opener] = screen.getAllByText(OPENERS.daily)
     expect(opener.className).toContain('spk-en')
     expect(opener.closest('[dir="ltr"]')).not.toBeNull()
     expect(opener.closest('[dir="rtl"]')).not.toBeNull()
-    await waitFor(() => expect(status()).toContain('اضغط وتكلم — سيظهر رد Emma بعد الانتهاء'))
+    await waitFor(() => expect(status()).toContain('اضغط وابدأ الكلام'))
     expect(mic().className).toMatch(/h-20 w-20/)
   })
 
@@ -219,7 +217,7 @@ describe('SpeakScreen', () => {
     expect(a.respond.mock.calls[0][0]).toMatchObject({ conversationId: 'conv-1', level: 'intermediate' })
     expect(a.respond.mock.calls[0][0].text).toBe('The best part of my day is teaching my class.')
 
-    await waitFor(() => expect(screen.getByText('That sounds lovely! What do you teach?')).toBeTruthy())
+    await waitFor(() => expect(screen.getAllByText('That sounds lovely! What do you teach?').length).toBeGreaterThan(0))
     await stopAudioWhenPlaying()
     await waitFor(() => expect(mic()).toBeTruthy())
     expect(track.stop).toHaveBeenCalled()
@@ -261,7 +259,7 @@ describe('SpeakScreen', () => {
     })
     const a = api({}, { current })
     renderScreen(a)
-    await screen.findByText('Nice! Is it a holiday?')
+    await screen.findAllByText('Nice! Is it a holiday?')
     expect(screen.getByText(OPENERS.airport)).toBeTruthy()
     expect(screen.getByText('I am flying to Cairo.')).toBeTruthy()
     expect(screen.getByText('واصلنا محادثتك من حيث توقفت 👋')).toBeTruthy()
@@ -343,7 +341,7 @@ describe('SpeakScreen', () => {
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('تعذّر الحصول على رد Emma'))
     expect(screen.getByText('The best part of my day is teaching my class.')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'حاول مرة أخرى' }))
-    await waitFor(() => expect(screen.getByText('That sounds lovely! What do you teach?')).toBeTruthy())
+    await waitFor(() => expect(screen.getAllByText('That sounds lovely! What do you teach?').length).toBeGreaterThan(0))
     expect(a.respond).toHaveBeenCalledTimes(2)
     expect(screen.getAllByText('The best part of my day is teaching my class.')).toHaveLength(1)
   })
@@ -415,7 +413,7 @@ describe('SpeakScreen', () => {
     await startConversation()
     await waitFor(() => expect(mic().hasAttribute('disabled')).toBe(false))
     fireEvent.click(mic())
-    await waitFor(() => expect(status()).toContain('جارٍ التسجيل'))
+    await waitFor(() => expect(status()).toContain('بسمعك دلوقتي'))
     fireEvent.click(screen.getByRole('button', { name: 'إلغاء التسجيل' }))
     await waitFor(() => expect(mic()).toBeTruthy())
     expect(track.stop).toHaveBeenCalled()
@@ -468,7 +466,7 @@ describe('SpeakScreen', () => {
     await startConversation()
     await waitFor(() => expect(mic().hasAttribute('disabled')).toBe(false))
     fireEvent.click(mic())
-    await waitFor(() => expect(status()).toContain('جارٍ التسجيل'))
+    await waitFor(() => expect(status()).toContain('بسمعك دلوقتي'))
     view.unmount()
     expect(track.stop).toHaveBeenCalled()
     expect(a.transcribe).not.toHaveBeenCalled()

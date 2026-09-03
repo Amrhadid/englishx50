@@ -1,4 +1,5 @@
 import { T } from '../text'
+import EmmaAvatar from './EmmaAvatar'
 import type { SpeakFeedback } from '../types'
 
 function CheckIcon() {
@@ -9,39 +10,44 @@ function CheckIcon() {
   )
 }
 
-/** Compact feedback on one learner answer: a positive, one fix, a short why. */
+/** Feedback on one learner answer, shown once the conversation is reviewed. */
 export default function FeedbackCard({ feedback, compact = false }: { feedback: SpeakFeedback; compact?: boolean }) {
   return (
-    <section
-      className={`rounded-[20px] border border-[#ece7fb] bg-white ${compact ? 'p-3.5' : 'p-4'}`}
-      aria-label={T.feedbackTitle}
-    >
-      <p className="flex items-center gap-2 text-[14px] font-extrabold text-[#0C7C62]">
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#D8FAF0] text-[#0C7C62]">
+    <section className={`spk-feedback ${compact ? 'is-compact' : ''}`} aria-label={T.feedbackTitle}>
+      <header className="spk-feedback-header">
+        <EmmaAvatar size={38} />
+        <div>
+          <strong>{T.feedbackTitle}</strong>
+          <span>بعد إجابتك</span>
+        </div>
+        <span className="spk-feedback-check">
           <CheckIcon />
         </span>
-        {feedback.positive}
-      </p>
+      </header>
+      <div className="spk-feedback-good">
+        <p className="spk-feedback-label">{T.feedbackPositive}</p>
+        <p>{feedback.positive}</p>
+      </div>
       {feedback.correction && (
-        <dl className="mt-3 space-y-2">
+        <dl className="spk-feedback-sections">
           {feedback.original && (
-            <div className="flex items-start gap-2">
-              <dt className="w-12 shrink-0 pt-0.5 text-[12px] font-bold text-[#a39ec0]">{T.feedbackOriginal}</dt>
-              <dd className="spk-en flex-1 rounded-xl bg-[#FFE7F1] px-3 py-1.5 text-[14px] leading-relaxed text-[#B11D54]">
+            <div className="spk-feedback-original">
+              <dt>{T.feedbackOriginal}</dt>
+              <dd className="spk-en" dir="ltr">
                 {feedback.original}
               </dd>
             </div>
           )}
-          <div className="flex items-start gap-2">
-            <dt className="w-12 shrink-0 pt-0.5 text-[12px] font-bold text-[#a39ec0]">{T.feedbackSuggested}</dt>
-            <dd className="spk-en flex-1 rounded-xl bg-[#D8FAF0] px-3 py-1.5 text-[14px] font-semibold leading-relaxed text-[#0C7C62]">
+          <div className="spk-feedback-correction">
+            <dt>{T.feedbackSuggested}</dt>
+            <dd className="spk-en" dir="ltr">
               {feedback.correction}
             </dd>
           </div>
           {feedback.explanationArabic && (
-            <div className="flex items-start gap-2">
-              <dt className="w-12 shrink-0 pt-0.5 text-[12px] font-bold text-[#a39ec0]">{T.feedbackWhy}</dt>
-              <dd className="flex-1 text-[13px] leading-relaxed text-[#3a3550]">{feedback.explanationArabic}</dd>
+            <div className="spk-feedback-why">
+              <dt>{T.feedbackWhy}</dt>
+              <dd>{feedback.explanationArabic}</dd>
             </div>
           )}
         </dl>

@@ -127,9 +127,11 @@ export default function SpeakScreen({
   )
 
   const busy = session.phase === 'starting' || session.phase === 'transcribing' || session.phase === 'thinking' || session.phase === 'loading'
-  const speaking = session.phase === 'speaking'
   const goalDone = session.speakingSeconds >= session.goalSeconds && session.goalSeconds > 0
   const reviewing = session.phase === 'completed' || session.phase === 'locked'
+  // The big stage always shows Emma's latest line, even while it's also the
+  // most recent bubble in the log below — a permanent record either way.
+  const latestEmmaPrompt = [...session.turns].reverse().find((t) => t.role === 'ai')?.text
 
   const rightColumn = viewing ? (
     <ConversationReview
@@ -162,7 +164,13 @@ export default function SpeakScreen({
           {T.resumeHint}
         </p>
       )}
-      <h2 className="text-[15px] font-extrabold text-[#1b1730]">{T.conversationLabel}</h2>
+      <div className="spk-section-title">
+        <div>
+          <span>سجل الجلسة</span>
+          <h2>{T.conversationLabel}</h2>
+        </div>
+        <span className="spk-turn-count">{session.turns.length} رسائل</span>
+      </div>
       <ConversationLog turns={session.turns} phase={session.phase} />
     </>
   )
@@ -171,28 +179,28 @@ export default function SpeakScreen({
     <div className="spk" dir="rtl">
       <SpeakHeader onSettings={() => setShowSettings(true)} />
 
-      <main className="mx-auto max-w-5xl px-4 pb-[calc(190px+env(safe-area-inset-bottom,0px))] pt-5 sm:px-6 min-[900px]:grid min-[900px]:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] min-[900px]:gap-8 min-[900px]:pb-12">
+      <main className="spk-layout">
         {/* Column 1 — partner, scenarios, controls */}
-        <div className="flex flex-col gap-4">
-          <section aria-labelledby="spk-title">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#f4f2fc] px-3 py-1 text-[12px] font-extrabold text-[#534AB7]">
-              <span className="h-2 w-2 rounded-full bg-[#23C4A0]" aria-hidden="true" />
-              {goalDone ? T.goalDone : T.statusPill}
-            </span>
-            <h1 id="spk-title" className="mt-3 text-[26px] font-black leading-tight text-[#1b1730] sm:text-[30px]">
-              {T.heading}
-            </h1>
-            <p className="mt-2 text-[14px] leading-relaxed text-[#7a7596]">{T.intro}</p>
-          </section>
-
-          <DailyProgress seconds={session.speakingSeconds} goalSeconds={session.goalSeconds} />
-          <PartnerCard level={level} speaking={speaking} />
+        <div className="spk-primary-column">
+          <h1 id="spk-title" className="sr-only">
+            {T.heading}
+          </h1>
+          <PartnerCard
+            level={level}
+            scenario={activeScenario}
+            phase={session.phase}
+            prompt={latestEmmaPrompt}
+            onReplay={session.replay}
+            canReplay={player.canReplay}
+            statusLabel={goalDone ? T.goalDone : undefined}
+          />
           <ScenarioChips
             value={activeScenario}
             onChange={setScenario}
             // Locked to the conversation's scenario once one exists.
             disabled={session.phase !== 'idle'}
           />
+          <DailyProgress seconds={session.speakingSeconds} goalSeconds={session.goalSeconds} />
 
           {!recorder.supported && (
             <p className="rounded-[18px] bg-[#FEEFD2] px-4 py-3 text-[13px] font-semibold leading-relaxed text-[#A66A09]" role="note">
@@ -202,8 +210,8 @@ export default function SpeakScreen({
 
           {/* Desktop: the controls live here; on mobile the same element is a fixed bottom bar. */}
           {!reviewing && !viewing && (
-            <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#ece7fb] bg-white/95 backdrop-blur min-[900px]:static min-[900px]:mt-2 min-[900px]:rounded-[28px] min-[900px]:border min-[900px]:bg-white min-[900px]:shadow-[0_10px_30px_-22px_rgba(83,74,183,0.5)]">
-              <div className="spk-safe-bottom mx-auto flex max-w-5xl flex-col gap-3 px-4 pt-4 min-[900px]:px-6 min-[900px]:py-6">
+            <div className="spk-controls-dock">
+              <div className="spk-safe-bottom spk-controls-inner">
                 {showKeyboard && session.canSpeak && (
                   <KeyboardInput
                     disabled={!session.canSpeak}
@@ -239,13 +247,13 @@ export default function SpeakScreen({
         </div>
 
         {/* Column 2 — conversation, or the review */}
-        <div className="mt-5 flex flex-col gap-4 min-[900px]:mt-0">
+        <aside className="spk-secondary-column">
           {session.error && <StatusNotice error={session.error} onRetry={session.retry} onDismiss={session.dismissError} />}
           {rightColumn}
           <div className="min-[900px]:hidden">
             <HistoryList history={session.history} onOpen={openHistory} loadingId={loadingHistoryId} />
           </div>
-        </div>
+        </aside>
       </main>
 
       {showSettings && (

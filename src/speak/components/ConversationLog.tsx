@@ -37,7 +37,7 @@ export default function ConversationLog({ turns, phase }: Props) {
       aria-label={T.conversationLabel}
       aria-live="polite"
       aria-relevant="additions"
-      className="flex flex-col gap-3"
+      className="spk-conversation-log"
     >
       {turns.length === 0 && !busyAi && (
         <p className="rounded-[20px] border border-dashed border-[#ece7fb] bg-white/60 p-5 text-center text-[14px] font-semibold text-[#7a7596]">
@@ -47,19 +47,20 @@ export default function ConversationLog({ turns, phase }: Props) {
 
       {turns.map((t) =>
         t.role === 'ai' ? (
-          <div key={t.id} className="flex items-end gap-2" dir="ltr">
+          <article key={t.id} className="spk-turn spk-turn-emma" dir="ltr">
             <EmmaAvatar size={30} />
-            <div className="max-w-[85%] rounded-[20px] rounded-bl-md border border-[#ece7fb] bg-white px-4 py-2.5 shadow-[0_6px_20px_-16px_rgba(83,74,183,0.5)]">
-              <p className="spk-en text-[11px] font-extrabold text-[#7C6FF0]">{T.partnerName}</p>
-              <p className="spk-en text-[15px] leading-relaxed text-[#1b1730]">{t.text}</p>
+            <div className="spk-turn-bubble">
+              <p className="spk-en spk-turn-name">{T.partnerName}</p>
+              <p className="spk-en spk-turn-text">{t.text}</p>
             </div>
-          </div>
+          </article>
         ) : (
-          <div key={t.id} className="flex flex-col items-end gap-2">
-            <div className="max-w-[85%] rounded-[20px] rounded-br-md bg-[#534AB7] px-4 py-2.5 text-white" dir="ltr">
-              <p className="spk-en text-[15px] leading-relaxed">{t.text}</p>
+          <article key={t.id} className="spk-turn spk-turn-user">
+            <div className="spk-turn-bubble" dir="ltr">
+              <p className="spk-en spk-turn-name">أنت</p>
+              <p className="spk-en spk-turn-text">{t.text}</p>
             </div>
-          </div>
+          </article>
         ),
       )}
 

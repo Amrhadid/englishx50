@@ -26,8 +26,8 @@ function GearIcon() {
 /** Local header: wordmark, back to the dashboard, session settings. */
 export default function SpeakHeader({ onSettings }: { onSettings: () => void }) {
   return (
-    <header className="spk-safe-top sticky top-0 z-30 border-b border-[#ece7fb] bg-white/90 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 py-3 sm:px-6">
+    <header className="spk-safe-top spk-header">
+      <div className="spk-header-inner">
         <div className="flex items-center gap-1">
           <Link
             to="/challenge"
@@ -37,10 +37,8 @@ export default function SpeakHeader({ onSettings }: { onSettings: () => void }) 
           >
             <BackIcon />
           </Link>
-          <Link to="/" className="flex items-center gap-2" aria-label="EnglishX50">
-            <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[#534AB7] text-[12px] font-black text-white">
-              50
-            </span>
+          <Link to="/" className="spk-wordmark" aria-label="EnglishX50">
+            <span className="spk-wordmark-mark">50</span>
             <span className="text-[17px] font-black tracking-tight text-[#1b1730]">
               English<span className="text-[#534AB7]">X50</span>
             </span>

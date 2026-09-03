@@ -121,7 +121,7 @@ describe('SpeakPage access control', () => {
     startBtn.click()
     await waitFor(() => expect(api.start).toHaveBeenCalledTimes(1))
     expect(api.start.mock.calls[0][0]).toMatchObject({ scenario: 'daily', level: 'intermediate' })
-    await waitFor(() => expect(screen.getByText('Hi! What was the best part of your day?')).toBeTruthy())
+    await waitFor(() => expect(screen.getAllByText('Hi! What was the best part of your day?').length).toBeGreaterThan(0))
   })
 
   it('lets the admin in without premium', async () => {
