@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.audio]
 verify_jwt = false
+
+[functions.speak-turn]
+verify_jwt = false

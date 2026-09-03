@@ -1,0 +1,113 @@
+// @vitest-environment jsdom
+import { render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SpeakApi } from '../types'
+
+// The page reads the same two signals the rest of the site uses; stub them.
+const auth = { user: null as null | { id: string; email?: string }, authReady: true }
+const onboarding = { premiumActive: false, loading: false }
+
+vi.mock('../../hooks/useAuth', () => ({ useAuth: () => auth }))
+vi.mock('../../hooks/useOnboardingContext', () => ({ useOnboardingContext: () => onboarding }))
+vi.mock('../../context/OnboardingContext', () => ({
+  OnboardingProvider: ({ children }: { children: React.ReactNode }) => children,
+}))
+vi.mock('../../lib/supabase', () => ({ supabase: null, isSupabaseConfigured: false }))
+
+import SpeakPage from '../SpeakPage'
+
+function fakeApi(): SpeakApi & { start: ReturnType<typeof vi.fn> } {
+  return {
+    start: vi.fn(async () => ({ ok: true as const, reply: 'Hi! What was the best part of your day?', audio: null })),
+    transcribe: vi.fn(async () => ({ ok: true as const, transcript: 'x' })),
+    respond: vi.fn(async () => ({ ok: true as const, reply: 'y', feedback: { positive: 'z' }, audio: null })),
+  }
+}
+
+function renderPage(api: SpeakApi) {
+  return render(
+    <MemoryRouter initialEntries={['/speak']}>
+      <Routes>
+        <Route path="/speak" element={<SpeakPage api={api} />} />
+        <Route path="/challenge" element={<h1>challenge sign-in page</h1>} />
+        <Route path="/join" element={<h1>join</h1>} />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
+describe('SpeakPage access control', () => {
+  beforeEach(() => {
+    auth.user = null
+    auth.authReady = true
+    onboarding.premiumActive = false
+    onboarding.loading = false
+    sessionStorage.clear()
+  })
+
+  it('shows the auth loading state while the session is unresolved and calls nothing', () => {
+    auth.authReady = false
+    const api = fakeApi()
+    renderPage(api)
+    expect(screen.getByRole('status').textContent).toContain('جارٍ التحقق من حسابك')
+    expect(api.start).not.toHaveBeenCalled()
+  })
+
+  it('redirects an unauthenticated visitor to the existing sign-in page and remembers /speak', async () => {
+    const api = fakeApi()
+    renderPage(api)
+    await waitFor(() => expect(screen.getByText('challenge sign-in page')).toBeTruthy())
+    expect(sessionStorage.getItem('x50_post_signin')).toBe('/speak')
+    expect(api.start).not.toHaveBeenCalled()
+  })
+
+  it('shows the entitlement loading state for a signed-in user whose subscription is unresolved', () => {
+    auth.user = { id: 'u1', email: 'a@b.c' }
+    onboarding.loading = true
+    const api = fakeApi()
+    renderPage(api)
+    expect(screen.getByRole('status').textContent).toContain('جارٍ التحقق من اشتراكك')
+    expect(api.start).not.toHaveBeenCalled()
+  })
+
+  it('shows the premium gate to a free user and never initialises a session', async () => {
+    auth.user = { id: 'u1', email: 'free@example.com' }
+    const api = fakeApi()
+    renderPage(api)
+    expect(screen.getByRole('heading', { name: 'تدريب المحادثة متاح للمشتركين' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /اشترك الآن/ }).getAttribute('href')).toBe('/join')
+    expect(screen.getByRole('link', { name: 'الرجوع للتحدي' }).getAttribute('href')).toBe('/challenge')
+    // No microphone button, no API call.
+    expect(screen.queryByRole('button', { name: 'ابدأ التسجيل' })).toBeNull()
+    await new Promise((r) => setTimeout(r, 10))
+    expect(api.start).not.toHaveBeenCalled()
+  })
+
+  it('lets a paid user in and initialises the session', async () => {
+    auth.user = { id: 'u1', email: 'paid@example.com' }
+    onboarding.premiumActive = true
+    const api = fakeApi()
+    renderPage(api)
+    expect(screen.getByRole('heading', { name: 'اتكلم إنجليزي من غير توتر' })).toBeTruthy()
+    await waitFor(() => expect(api.start).toHaveBeenCalledTimes(1))
+    expect(api.start.mock.calls[0][0]).toMatchObject({ scenario: 'daily', level: 'intermediate' })
+    await waitFor(() => expect(screen.getByText('Hi! What was the best part of your day?')).toBeTruthy())
+  })
+
+  it('lets the admin in without premium', async () => {
+    auth.user = { id: 'admin', email: 'siramrhadid@gmail.com' }
+    const api = fakeApi()
+    renderPage(api)
+    await waitFor(() => expect(api.start).toHaveBeenCalledTimes(1))
+  })
+
+  it('falls back to the gate when the server says the entitlement is gone', async () => {
+    auth.user = { id: 'u1', email: 'paid@example.com' }
+    onboarding.premiumActive = true
+    const api = fakeApi()
+    api.start.mockResolvedValue({ ok: false, code: 'not_premium', status: 403 })
+    renderPage(api)
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'تدريب المحادثة متاح للمشتركين' })).toBeTruthy())
+  })
+})

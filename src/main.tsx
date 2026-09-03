@@ -10,6 +10,7 @@ import Admin from './pages/Admin'
 import Speaking from './pages/Speaking'
 import Rehearsal from './pages/Rehearsal'
 import ReviewsPage from './pages/ReviewsPage'
+import SpeakPage from './speak/SpeakPage'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -26,6 +27,8 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/program" element={<Navigate to="/join" replace />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/speaking" element={<Speaking />} />
+        {/* Premium AI speaking partner (Emma); gated inside the page. */}
+        <Route path="/speak" element={<SpeakPage />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,
