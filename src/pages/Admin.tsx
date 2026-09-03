@@ -5,6 +5,7 @@ import type { Challenge, Review, Code } from '../types'
 import { TrashIcon } from '../components/icons'
 import FeedbackView from '../components/FeedbackView'
 import StudentsDashboard from '../components/StudentsDashboard'
+import EmmaAdmin from '../components/EmmaAdmin'
 import { parseSubmission } from '../lib/grading'
 import { challengeVideos } from '../lib/challenge'
 import { audioUrl } from '../lib/audio'
@@ -12,7 +13,7 @@ import { isAdminEmail } from '../lib/admin'
 import { MAX_TRIALS } from '../lib/progress'
 import { COOLDOWN_DAYS, VIDEO_WATCHED_PCT } from '../lib/completion'
 
-type Tab = 'challenges' | 'reviews' | 'codes' | 'leads' | 'students' | 'trials' | 'grading'
+type Tab = 'challenges' | 'reviews' | 'codes' | 'leads' | 'students' | 'trials' | 'grading' | 'emma'
 
 type ChallengeForm = {
   number: string
@@ -115,7 +116,7 @@ export default function Admin() {
 
       <div className="mx-auto max-w-4xl px-5 py-6">
         <div className="mb-6 -mx-5 flex gap-2 overflow-x-auto px-5 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {(['challenges', 'reviews', 'codes', 'leads', 'students', 'trials', 'grading'] as Tab[]).map((t) => (
+          {(['challenges', 'reviews', 'codes', 'leads', 'students', 'trials', 'grading', 'emma'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -135,6 +136,7 @@ export default function Admin() {
         {tab === 'students' && <StudentsSection />}
         {tab === 'trials' && <TrialsAdmin />}
         {tab === 'grading' && <GradingAdmin />}
+        {tab === 'emma' && <EmmaAdmin />}
       </div>
     </div>
   )

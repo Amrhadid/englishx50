@@ -4,7 +4,9 @@ import PartnerCard from './components/PartnerCard'
 import ScenarioChips from './components/ScenarioChips'
 import DailyProgress from './components/DailyProgress'
 import ConversationLog from './components/ConversationLog'
-import FeedbackCard from './components/FeedbackCard'
+import ConversationReview from './components/ConversationReview'
+import LockedNotice from './components/LockedNotice'
+import HistoryList from './components/HistoryList'
 import MicControls from './components/MicControls'
 import KeyboardInput from './components/KeyboardInput'
 import StatusNotice from './components/StatusNotice'
@@ -12,11 +14,11 @@ import SettingsSheet from './components/SettingsSheet'
 import { useRecorder } from './hooks/useRecorder'
 import { useAudioPlayer } from './hooks/useAudioPlayer'
 import { useSpeakSession } from './hooks/useSpeakSession'
-import { useDailyProgress } from './hooks/useDailyProgress'
-import { DEFAULT_LEVEL, DEFAULT_SCENARIO, isLevelId, isScenarioId } from './scenarios'
+import { DEFAULT_LEVEL, DEFAULT_SCENARIO, isLevelId } from './scenarios'
 import { LEVEL_STORAGE_PREFIX, MAX_RECORDING_SECONDS, VOICE_STORAGE_PREFIX } from './constants'
+import { downloadBytes, feedbackFileName, renderFeedbackPdf } from './feedbackPdf'
 import { T } from './text'
-import type { LevelId, ScenarioId, SpeakApi } from './types'
+import type { Conversation, LevelId, ScenarioId, SpeakApi } from './types'
 import './speak.css'
 
 interface Props {
@@ -24,6 +26,9 @@ interface Props {
   userId: string
   /** Called when the server says the account is no longer entitled. */
   onEntitlementLost?: () => void
+  /** Test seam for the PDF generator (defaults to the canvas renderer). */
+  makePdf?: (c: Conversation) => Promise<Uint8Array>
+  download?: (bytes: Uint8Array, fileName: string) => void
 }
 
 function readStored<Tv>(key: string, guard: (v: unknown) => v is Tv, fallback: Tv): Tv {
@@ -46,37 +51,50 @@ function writeStored(key: string, value: string) {
 /**
  * The speaking interface. Mounted only once the page has confirmed the
  * account is entitled; the server re-checks on every call.
+ *
+ * Lifecycle: load the learner's conversation → pick a scenario and start (or
+ * resume) → push-to-talk until the 5-minute speaking goal → review + PDF →
+ * locked until the next day.
  */
-export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
+export default function SpeakScreen({
+  api,
+  userId,
+  onEntitlementLost,
+  makePdf = renderFeedbackPdf,
+  download = downloadBytes,
+}: Props) {
   const [scenario, setScenario] = useState<ScenarioId>(DEFAULT_SCENARIO)
-  const [level, setLevel] = useState<LevelId>(() =>
-    readStored(LEVEL_STORAGE_PREFIX + userId, isLevelId, DEFAULT_LEVEL),
-  )
-  const [voice, setVoice] = useState<boolean>(() =>
-    readStored(VOICE_STORAGE_PREFIX + userId, (v): v is 'on' | 'off' => v === 'on' || v === 'off', 'on') === 'on',
+  const [level, setLevel] = useState<LevelId>(() => readStored(LEVEL_STORAGE_PREFIX + userId, isLevelId, DEFAULT_LEVEL))
+  const [voice, setVoice] = useState<boolean>(
+    () => readStored(VOICE_STORAGE_PREFIX + userId, (v): v is 'on' | 'off' => v === 'on' || v === 'off', 'on') === 'on',
   )
   const [showSettings, setShowSettings] = useState(false)
   const [showKeyboard, setShowKeyboard] = useState(false)
+  // A past conversation opened from the history list.
+  const [viewing, setViewing] = useState<Conversation | null>(null)
+  const [loadingHistoryId, setLoadingHistoryId] = useState<string | null>(null)
 
   const recorder = useRecorder({ maxSeconds: MAX_RECORDING_SECONDS })
   const endedRef = useRef<() => void>(() => {})
   const player = useAudioPlayer({ onEnded: () => endedRef.current() })
-  const session = useSpeakSession({ api, recorder, player, scenario, level, voice })
+  const session = useSpeakSession({ api, recorder, player, level, voice })
   useEffect(() => {
     endedRef.current = session.onPlaybackEnded
   }, [session.onPlaybackEnded])
 
-  const daily = useDailyProgress(userId)
-  const todaySeconds = daily.baseSeconds + session.speakingSeconds
-
-  // First session on mount (no autoplay: browsers block audio before a gesture).
-  const startRef = useRef(session.start)
+  // Load the learner's current conversation once.
+  const loadRef = useRef(session.load)
   useEffect(() => {
-    startRef.current = session.start
-  }, [session.start])
+    loadRef.current = session.load
+  }, [session.load])
   useEffect(() => {
-    startRef.current({ autoplay: false })
+    loadRef.current()
   }, [])
+
+  // The active conversation's scenario is the one that counts.
+  const activeScenario = session.conversation?.scenario ?? scenario
+  const conversationOpen =
+    session.phase !== 'idle' && session.phase !== 'loading' && session.phase !== 'locked' && session.phase !== 'completed'
 
   // A 401/403 mid-session means the subscription ended: leave the screen.
   useEffect(() => {
@@ -84,17 +102,6 @@ export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
       onEntitlementLost?.()
     }
   }, [session.error, onEntitlementLost])
-
-  const changeScenario = useCallback(
-    (id: ScenarioId) => {
-      if (id === scenario || !isScenarioId(id)) return
-      setScenario(id)
-      setShowKeyboard(false)
-      // `session.start` reads the new scenario after this render commits.
-      queueMicrotask(() => startRef.current({ autoplay: true }))
-    },
-    [scenario],
-  )
 
   const changeLevel = (l: LevelId) => {
     setLevel(l)
@@ -106,10 +113,70 @@ export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
     if (!on) session.stopSpeaking()
   }
 
-  const busy = session.phase !== 'ready' && session.phase !== 'speaking' && session.phase !== 'idle'
+  const openHistory = useCallback(
+    async (c: Conversation) => {
+      setLoadingHistoryId(c.id)
+      const res = await api.conversation({ conversationId: c.id })
+      setLoadingHistoryId(null)
+      if (res.ok) {
+        setViewing(res.conversation)
+        window.scrollTo({ top: 0 })
+      }
+    },
+    [api],
+  )
+
+  const busy = session.phase === 'starting' || session.phase === 'transcribing' || session.phase === 'thinking' || session.phase === 'loading'
+  const goalDone = session.speakingSeconds >= session.goalSeconds && session.goalSeconds > 0
+  const reviewing = session.phase === 'completed' || session.phase === 'locked'
+
+  // Emma's latest line is shown large on the stage (PartnerCard); the log
+  // below it is the history that came before that line, so nothing repeats.
   const latestEmmaPrompt = [...session.turns].reverse().find((t) => t.role === 'ai')?.text
-  const transcriptTurns = session.turns.length > 0 && session.turns.at(-1)?.role === 'ai' ? session.turns.slice(0, -1) : session.turns
-  const latestFeedback = [...session.turns].reverse().find((t) => t.role === 'user' && t.feedback)?.feedback ?? null
+  const transcriptTurns =
+    session.turns.length > 0 && session.turns.at(-1)?.role === 'ai' ? session.turns.slice(0, -1) : session.turns
+
+  const rightColumn = viewing ? (
+    <ConversationReview
+      conversation={viewing}
+      title={T.reviewTitle}
+      intro={T.reviewIntro}
+      makePdf={makePdf}
+      download={download}
+      fileName={feedbackFileName}
+      onBack={() => setViewing(null)}
+    />
+  ) : reviewing ? (
+    <>
+      {session.phase === 'locked' && <LockedNotice nextAvailableAt={session.nextAvailableAt} />}
+      {session.conversation && (
+        <ConversationReview
+          conversation={session.conversation}
+          title={session.phase === 'completed' ? T.completedTitle : T.reviewTitle}
+          intro={session.phase === 'completed' ? T.completedBody : T.reviewIntro}
+          makePdf={makePdf}
+          download={download}
+          fileName={feedbackFileName}
+        />
+      )}
+    </>
+  ) : (
+    <>
+      {session.resumed && conversationOpen && (
+        <p className="rounded-[18px] bg-[#f4f2fc] px-4 py-2.5 text-[13px] font-bold text-[#534AB7]" role="status">
+          {T.resumeHint}
+        </p>
+      )}
+      <div className="spk-section-title">
+        <div>
+          <span>سجل الجلسة</span>
+          <h2>{T.conversationLabel}</h2>
+        </div>
+        <span className="spk-turn-count">{session.turns.length} رسائل</span>
+      </div>
+      <ConversationLog turns={transcriptTurns} phase={session.phase} />
+    </>
+  )
 
   return (
     <div className="spk" dir="rtl">
@@ -121,14 +188,19 @@ export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
           <h1 id="spk-title" className="sr-only">{T.heading}</h1>
           <PartnerCard
             level={level}
-            scenario={scenario}
+            scenario={activeScenario}
             phase={session.phase}
             prompt={latestEmmaPrompt}
             onReplay={session.replay}
             canReplay={player.canReplay}
           />
-          <ScenarioChips value={scenario} onChange={changeScenario} disabled={busy || session.phase === 'recording'} />
-          <DailyProgress seconds={todaySeconds} />
+          <ScenarioChips
+            value={activeScenario}
+            onChange={setScenario}
+            // Locked to the conversation's scenario once one exists.
+            disabled={session.phase !== 'idle'}
+          />
+          <DailyProgress seconds={session.speakingSeconds} goalSeconds={session.goalSeconds} />
 
           {!recorder.supported && (
             <p className="rounded-[18px] bg-[#FEEFD2] px-4 py-3 text-[13px] font-semibold leading-relaxed text-[#A66A09]" role="note">
@@ -137,48 +209,50 @@ export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
           )}
 
           {/* Desktop: the controls live here; on mobile the same element is a fixed bottom bar. */}
-          <div className="spk-controls-dock">
-            <div className="spk-safe-bottom spk-controls-inner">
-              {showKeyboard && session.canSpeak && (
-                <KeyboardInput
-                  disabled={!session.canSpeak}
-                  onSend={(t) => {
-                    setShowKeyboard(false)
-                    session.sendText(t)
-                  }}
-                  onClose={() => setShowKeyboard(false)}
+          {!reviewing && !viewing && (
+            <div className="spk-controls-dock">
+              <div className="spk-safe-bottom spk-controls-inner">
+                {showKeyboard && session.canSpeak && (
+                  <KeyboardInput
+                    disabled={!session.canSpeak}
+                    onSend={(t) => {
+                      setShowKeyboard(false)
+                      session.sendText(t)
+                    }}
+                    onClose={() => setShowKeyboard(false)}
+                  />
+                )}
+                <MicControls
+                  phase={session.phase}
+                  canSpeak={session.canSpeak}
+                  supported={recorder.supported}
+                  recordingSeconds={session.recordingSeconds}
+                  maxSeconds={MAX_RECORDING_SECONDS}
+                  canReplay={player.canReplay}
+                  onStart={() => session.start(scenario)}
+                  onMic={session.toggleMic}
+                  onCancel={session.cancelRecording}
+                  onStopAudio={session.stopSpeaking}
+                  onReplay={session.replay}
+                  onKeyboard={() => setShowKeyboard((s) => !s)}
                 />
-              )}
-              <MicControls
-                phase={session.phase}
-                canSpeak={session.canSpeak}
-                supported={recorder.supported}
-                recordingSeconds={session.recordingSeconds}
-                maxSeconds={MAX_RECORDING_SECONDS}
-                canReplay={player.canReplay}
-                onMic={session.toggleMic}
-                onCancel={session.cancelRecording}
-                onStopAudio={session.stopSpeaking}
-                onReplay={session.replay}
-                onKeyboard={() => setShowKeyboard((s) => !s)}
-              />
+              </div>
             </div>
+          )}
+
+          {/* History (desktop: under the controls; mobile: after the conversation) */}
+          <div className="hidden min-[900px]:block">
+            <HistoryList history={session.history} onOpen={openHistory} loadingId={loadingHistoryId} />
           </div>
         </div>
 
-        {/* Column 2 — conversation + feedback */}
+        {/* Column 2 — conversation, or the review */}
         <aside className="spk-secondary-column">
-          {session.error && (
-            <StatusNotice error={session.error} onRetry={session.retry} onDismiss={session.dismissError} />
-          )}
-          <div className="spk-section-title"><div><span>سجل الجلسة</span><h2>{T.conversationLabel}</h2></div><span className="spk-turn-count">{session.turns.length} رسائل</span></div>
-          <ConversationLog turns={transcriptTurns} phase={session.phase} inlineFeedback />
-          {latestFeedback && (
-            <div className="hidden min-[900px]:block">
-              <h2 className="mb-2 text-[15px] font-extrabold text-[#1b1730]">{T.feedbackTitle}</h2>
-              <FeedbackCard feedback={latestFeedback} />
-            </div>
-          )}
+          {session.error && <StatusNotice error={session.error} onRetry={session.retry} onDismiss={session.dismissError} />}
+          {rightColumn}
+          <div className="min-[900px]:hidden">
+            <HistoryList history={session.history} onOpen={openHistory} loadingId={loadingHistoryId} />
+          </div>
         </aside>
       </main>
 
@@ -188,14 +262,12 @@ export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
           voice={voice}
           onLevel={changeLevel}
           onVoice={changeVoice}
-          onNewChat={() => {
-            setShowSettings(false)
-            setShowKeyboard(false)
-            session.start({ autoplay: true })
-          }}
           onClose={() => setShowSettings(false)}
         />
       )}
+      <span className="sr-only" aria-live="polite">
+        {busy ? '' : goalDone ? T.goalDone : ''}
+      </span>
     </div>
   )
 }

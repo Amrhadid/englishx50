@@ -6,6 +6,7 @@ export const T = {
   heading: 'اتكلم إنجليزي من غير توتر',
   intro: 'محادثة قصيرة مع شريك AI يصحح لك بعد ما تخلص—من غير ما يقاطعك كل شوية.',
   dailyGoal: 'هدف اليوم: 5 دقائق',
+  goalDone: 'اكتمل هدف اليوم',
   partnerName: 'Emma',
   partnerStatus: 'متصلة الآن',
   partnerRole: 'شريكتك في المحادثة',
@@ -13,7 +14,27 @@ export const T = {
   scenariosLabel: 'اختر موقف المحادثة',
   micInstruction: 'اضغط وابدأ الكلام',
   conversationLabel: 'المحادثة',
-  emptyConversation: 'اختر موقفاً واضغط على الميكروفون لتبدأ.',
+  emptyConversation: 'اختر موقفاً ثم اضغط «ابدأ المحادثة».',
+  startConversation: 'ابدأ المحادثة',
+  resumeHint: 'واصلنا محادثتك من حيث توقفت 👋',
+  loadingSession: 'جارٍ تجهيز محادثتك…',
+  completedTitle: 'أكملت محادثة اليوم 🎉',
+  completedBody: 'تكلمت 5 دقائق مع Emma. دي ملاحظاتها على كل إجابة قلتها.',
+  lockedTitle: 'محادثة اليوم مكتملة',
+  lockedBody: 'بتقدر تبدأ محادثة جديدة كل 24 ساعة. المحادثة التالية متاحة بعد:',
+  lockedNow: 'المحادثة التالية متاحة الآن — أعد تحميل الصفحة.',
+  hour: 'س',
+  minute: 'د',
+  download: 'تحميل الملاحظات (PDF)',
+  downloading: 'جارٍ تجهيز الملف…',
+  downloadFailed: 'تعذّر إنشاء الملف. جرّب متصفحاً آخر.',
+  historyTitle: 'محادثاتك السابقة',
+  historyEmpty: 'لسه مفيش محادثات مكتملة.',
+  historyOpen: 'عرض الملاحظات',
+  historyLoading: 'جارٍ التحميل…',
+  backToToday: 'الرجوع لمحادثة اليوم',
+  minutesSpoken: 'دقائق كلام',
+  answers: 'إجابات',
   loadingAuth: 'جارٍ التحقق من حسابك…',
   loadingPremium: 'جارٍ التحقق من اشتراكك…',
   starting: 'Emma بتجهّز أول سؤال…',
@@ -40,6 +61,11 @@ export const T = {
   feedbackOriginal: 'جملتك',
   feedbackSuggested: 'قولها بشكل أفضل',
   feedbackPositive: 'إيه اللي كان حلو؟',
+  endConversation: 'أنهِ المحادثة',
+  reviewTitle: 'ملاحظات Emma على محادثتك',
+  reviewIntro: 'أحسنت! دي أهم الملاحظات على كل إجابة قلتها.',
+  reviewEmpty: 'لم تُسجّل أي إجابة في هذه المحادثة بعد.',
+  reviewTurn: 'إجابتك',
   feedbackWhy: 'ليه؟',
   retry: 'حاول مرة أخرى',
   dismiss: 'حسناً',
@@ -90,6 +116,14 @@ export function errorMessage(code: SpeakErrorCode): string {
     case 'not_premium':
     case 'unauthenticated':
       return 'انتهت جلستك أو اشتراكك. أعد تحميل الصفحة.'
+    case 'storage_unavailable':
+      return 'تعذّر الوصول لسجل المحادثات الآن. حاول بعد قليل.'
+    case 'conversation_not_found':
+      return 'لم نجد هذه المحادثة.'
+    case 'conversation_completed':
+      return 'هذه المحادثة اكتملت بالفعل. أعد تحميل الصفحة.'
+    case 'daily_limit':
+      return 'أكملت محادثة اليوم. بتقدر تبدأ محادثة جديدة بعد 24 ساعة.'
     case 'invalid_request':
     case 'server':
     default:

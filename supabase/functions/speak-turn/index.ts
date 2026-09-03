@@ -26,6 +26,7 @@
 
 import { createSpeakHandler } from './handler.ts'
 import { anthropicModel, mockProviders, openAiSynthesizer, openAiTranscriber, type Providers } from './providers.ts'
+import { createStore } from './store.ts'
 
 const env = (name: string, fallback = '') => Deno.env.get(name) ?? fallback
 
@@ -64,6 +65,7 @@ const handler = createSpeakHandler({
   },
   fetch,
   providers: mockMode ? mockProviders() : realProviders(),
+  store: createStore({ supabaseUrl: env('SUPABASE_URL'), serviceRoleKey: env('SUPABASE_SERVICE_ROLE_KEY') }, fetch),
 })
 
 Deno.serve(handler)

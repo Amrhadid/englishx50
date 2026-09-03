@@ -2,29 +2,38 @@
 // Function, written against web-standard Request/Response only so it runs in
 // Deno on the edge and in Vitest under Node (see __tests__/handler.test.ts).
 //
-// One endpoint, three actions (POST JSON, `action` field):
+// One endpoint, five actions (POST JSON, `action` field):
 //
-//   start       → the scenario's opening question (+ its audio)
-//   transcribe  → learner audio (base64) → transcript
-//   respond     → transcript + history → Emma's reply, compact feedback, audio;
-//                 the turn is persisted to x50_speaking_turns
+//   session       → the learner's current conversation (active, or completed
+//                   inside the 24 h window), when the next one may start, and
+//                   the list of past conversations
+//   conversation  → one past conversation with its turns (for review/download)
+//   start         → create today's conversation (or resume the active one) and
+//                   return the scenario's opening question (+ audio)
+//   transcribe    → learner audio (base64) → transcript
+//   respond       → transcript → Emma's reply, compact feedback, audio; the turn
+//                   is persisted, speaking time accumulates, and the
+//                   conversation completes once it reaches the goal
 //
 // Every action first resolves the caller through the fail-closed entitlement
 // check (access.ts), then the per-minute limiter, and only then touches a paid
 // provider. Nothing about the caller beyond the user id reaches a provider.
 
 import { bearerToken, resolveAccess, type AccessEnv, type FetchLike } from './access.ts'
-import { buildSystemPrompt, openerFor } from './prompt.ts'
+import { buildSystemPrompt, openerFor, isScenarioId, isLevelId, type LevelId, type ScenarioId } from './prompt.ts'
 import { MinuteLimiter, countTurnsToday } from './ratelimit.ts'
 import {
+  CONVERSATION_WINDOW_MS,
+  GOAL_SECONDS,
+  HISTORY_TURN_PAIRS,
   LIMITS,
   parseSpeakRequest,
   validateModelOutput,
-  type HistoryMessage,
   type SpeakRequest,
   type SpeakingTurnResponse,
 } from './validate.ts'
 import { ProviderError, type ModelMessage, type Providers, type SpeechAudio } from './providers.ts'
+import { estimateSpokenSeconds, type ConversationRow, type Store, type TurnRow } from './store.ts'
 
 export interface SpeakEnv extends AccessEnv {
   /** Explicit dev switch: canned providers, no paid calls. Never inferred. */
@@ -35,6 +44,7 @@ export interface SpeakDeps {
   env: SpeakEnv
   fetch: FetchLike
   providers: Providers
+  store: Store
   now?: () => number
   limiter?: MinuteLimiter
 }
@@ -47,6 +57,10 @@ export type SpeakErrorCode =
   | 'invalid_request'
   | 'empty_transcript'
   | 'provider_unavailable'
+  | 'storage_unavailable'
+  | 'conversation_not_found'
+  | 'conversation_completed'
+  | 'daily_limit'
   | 'transcription_failed'
   | 'ai_failed'
   | 'ai_malformed'
@@ -67,8 +81,8 @@ function json(body: unknown, status = 200, extra: Record<string, string> = {}): 
   })
 }
 
-function fail(code: SpeakErrorCode, status: number, error: string, extra: Record<string, string> = {}) {
-  return json({ ok: false, code, error }, status, extra)
+function fail(code: SpeakErrorCode, status: number, error: string, extra: Record<string, unknown> = {}) {
+  return json({ ok: false, code, error, ...extra }, status)
 }
 
 function decodeBase64(b64: string): Uint8Array {
@@ -98,7 +112,9 @@ function providerFailure(e: unknown, fallback: SpeakErrorCode): Response {
   if (e instanceof ProviderError) {
     switch (e.kind) {
       case 'rate_limited':
-        return fail('rate_limited', 429, 'The AI service is busy, try again in a moment', { 'Retry-After': '20' })
+        return json({ ok: false, code: 'rate_limited', error: 'The AI service is busy, try again in a moment' }, 429, {
+          'Retry-After': '20',
+        })
       case 'timeout':
         return fail('timeout', 504, 'The AI service took too long')
       case 'refused':
@@ -112,20 +128,16 @@ function providerFailure(e: unknown, fallback: SpeakErrorCode): Response {
   return fail(fallback, 502, 'Unexpected provider failure')
 }
 
-/** History → model messages: alternate roles, and the first message must be `user`. */
-export function toModelMessages(history: HistoryMessage[], latestUserText: string): ModelMessage[] {
-  const out: ModelMessage[] = []
-  for (const m of history) {
-    const role = m.role === 'assistant' ? 'assistant' : 'user'
-    const last = out[out.length - 1]
-    if (last && last.role === role) {
-      last.content = `${last.content}\n${m.text}`
-    } else {
-      out.push({ role, content: m.text })
-    }
-  }
-  if (out.length === 0 || out[0].role !== 'user') {
-    out.unshift({ role: 'user', content: '[The learner has joined and is ready to practise.]' })
+/** Stored turns → model messages: opener first, then each (learner, Emma) pair, then the new text. */
+export function toModelMessages(opener: string, turns: TurnRow[], latestUserText: string): ModelMessage[] {
+  const recent = turns.slice(-HISTORY_TURN_PAIRS)
+  const out: ModelMessage[] = [
+    { role: 'user', content: '[The learner has joined and is ready to practise.]' },
+    { role: 'assistant', content: opener },
+  ]
+  for (const t of recent) {
+    if (t.transcript) out.push({ role: 'user', content: t.transcript })
+    if (t.reply) out.push({ role: 'assistant', content: t.reply })
   }
   const last = out[out.length - 1]
   if (last.role === 'user') last.content = `${last.content}\n${latestUserText}`
@@ -133,10 +145,44 @@ export function toModelMessages(history: HistoryMessage[], latestUserText: strin
   return out
 }
 
+/** Wire shape of a conversation, with its turns when requested. */
+export function serialiseConversation(row: ConversationRow, turns: TurnRow[] | null) {
+  const scenario: ScenarioId = isScenarioId(row.scenario) ? row.scenario : 'daily'
+  const level: LevelId = isLevelId(row.level) ? row.level : 'intermediate'
+  return {
+    id: row.id,
+    scenario,
+    level,
+    status: row.status,
+    speakingSeconds: row.speaking_seconds,
+    goalSeconds: row.goal_seconds,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    opener: openerFor(scenario),
+    turns: turns
+      ? turns.map((t) => ({
+          id: t.id,
+          transcript: t.transcript,
+          reply: t.reply,
+          feedback: t.feedback,
+          speakingSeconds: t.speaking_seconds,
+          createdAt: t.created_at,
+        }))
+      : undefined,
+  }
+}
+
+/** When the learner may start a new conversation: null = now. */
+export function nextAvailableAt(latest: ConversationRow | null, now: number): string | null {
+  if (!latest || latest.status !== 'completed' || !latest.completed_at) return null
+  const at = new Date(latest.completed_at).getTime() + CONVERSATION_WINDOW_MS
+  return at > now ? new Date(at).toISOString() : null
+}
+
 export function createSpeakHandler(deps: SpeakDeps): (req: Request) => Promise<Response> {
   const now = deps.now ?? Date.now
   const limiter = deps.limiter ?? new MinuteLimiter(LIMITS.perMinute)
-  const { env, providers } = deps
+  const { env, providers, store } = deps
 
   const synthesize = async (text: string): Promise<SpeechAudio | null> => {
     if (!providers.synthesizer) return null
@@ -144,39 +190,6 @@ export function createSpeakHandler(deps: SpeakDeps): (req: Request) => Promise<R
       return await withTimeout(LIMITS.ttsTimeoutMs, (signal) => providers.synthesizer!.synthesize(text, { signal }))
     } catch {
       // Speech is an enhancement: the text reply still goes out.
-      return null
-    }
-  }
-
-  const persistTurn = async (
-    userId: string,
-    req: SpeakRequest,
-    turn: SpeakingTurnResponse,
-  ): Promise<string | null> => {
-    if (!env.supabaseUrl || !env.serviceRoleKey) return null
-    try {
-      const resp = await deps.fetch(`${env.supabaseUrl}/rest/v1/x50_speaking_turns`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          apikey: env.serviceRoleKey,
-          authorization: `Bearer ${env.serviceRoleKey}`,
-          prefer: 'return=representation',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          scenario: req.scenario,
-          level: req.level,
-          transcript: req.text,
-          reply: turn.reply,
-          feedback: turn.feedback,
-          speaking_seconds: Math.round(req.speakingSeconds * 10) / 10,
-        }),
-      })
-      if (!resp.ok) return null
-      const rows = (await resp.json()) as { id?: string }[]
-      return rows?.[0]?.id ?? null
-    } catch {
       return null
     }
   }
@@ -202,31 +215,70 @@ export function createSpeakHandler(deps: SpeakDeps): (req: Request) => Promise<R
     }
     const parsed = parseSpeakRequest(body)
     if (!parsed.ok) return fail('invalid_request', 400, parsed.error)
-    const request = parsed.value
+    const request: SpeakRequest = parsed.value
 
     // --- 3. Limits ---
     if (!limiter.allow(access.userId, now())) {
-      return fail('rate_limited', 429, 'Too many requests, slow down a little', { 'Retry-After': '30' })
-    }
-    if (request.action === 'respond' && !access.isAdmin) {
-      const today = await countTurnsToday(access.userId, env, deps.fetch, now())
-      if (today != null && today >= LIMITS.perDay) {
-        return fail('rate_limited', 429, 'Daily practice limit reached', { 'Retry-After': '3600' })
-      }
+      return json({ ok: false, code: 'rate_limited', error: 'Too many requests, slow down a little' }, 429, {
+        'Retry-After': '30',
+      })
     }
 
     // --- 4. Actions ---
+    if (request.action === 'session') {
+      const latest = await store.latestConversation(access.userId)
+      if (latest === undefined) return fail('storage_unavailable', 503, 'Conversation storage is unavailable')
+      const history = (await store.listConversations(access.userId, 30)) ?? []
+      const next = access.isAdmin ? null : nextAvailableAt(latest, now())
+      // The current conversation: the active one, or a completed one still inside its window.
+      const current = latest && (latest.status === 'active' || next) ? latest : null
+      const turns = current ? await store.turns(current.id) : null
+      return json({
+        ok: true,
+        current: current ? serialiseConversation(current, turns ?? []) : null,
+        nextAvailableAt: next,
+        history: history.filter((c) => c.status === 'completed').map((c) => serialiseConversation(c, null)),
+      })
+    }
+
+    if (request.action === 'conversation') {
+      const row = await store.conversation(request.conversationId!, access.userId)
+      if (row === undefined) return fail('storage_unavailable', 503, 'Conversation storage is unavailable')
+      if (!row) return fail('conversation_not_found', 404, 'No such conversation')
+      const turns = (await store.turns(row.id)) ?? []
+      return json({ ok: true, conversation: serialiseConversation(row, turns) })
+    }
+
     if (request.action === 'start') {
-      const reply = openerFor(request.scenario)
+      const latest = await store.latestConversation(access.userId)
+      if (latest === undefined) return fail('storage_unavailable', 503, 'Conversation storage is unavailable')
+      let conversation: ConversationRow
+      let turns: TurnRow[] = []
+      if (latest?.status === 'active') {
+        // Resume rather than open a second one.
+        conversation = latest
+        turns = (await store.turns(latest.id)) ?? []
+      } else {
+        const next = access.isAdmin ? null : nextAvailableAt(latest, now())
+        if (next) return fail('daily_limit', 409, 'One conversation per 24 hours', { nextAvailableAt: next })
+        const created = await store.createConversation({
+          userId: access.userId,
+          scenario: request.scenario,
+          level: request.level,
+          goalSeconds: GOAL_SECONDS,
+        })
+        if (!created) return fail('storage_unavailable', 503, 'Could not create the conversation')
+        conversation = created
+      }
+      const reply = openerFor(isScenarioId(conversation.scenario) ? conversation.scenario : 'daily')
       const audio = request.wantAudio ? await synthesize(reply) : null
       return json({
         ok: true,
+        conversation: serialiseConversation(conversation, turns),
         reply,
         audio,
-        limits: {
-          maxRecordingSeconds: LIMITS.maxRecordingSeconds,
-          maxTranscriptChars: LIMITS.maxTranscriptChars,
-        },
+        resumed: latest?.status === 'active',
+        limits: { maxRecordingSeconds: LIMITS.maxRecordingSeconds, maxTranscriptChars: LIMITS.maxTranscriptChars },
         mock: env.mockMode,
       })
     }
@@ -257,8 +309,26 @@ export function createSpeakHandler(deps: SpeakDeps): (req: Request) => Promise<R
 
     // respond
     if (!providers.model) return fail('provider_unavailable', 503, 'The conversation model is not configured')
-    const system = buildSystemPrompt(request.scenario, request.level)
-    const messages = toModelMessages(request.history, request.text!)
+    const conversation = await store.conversation(request.conversationId!, access.userId)
+    if (conversation === undefined) return fail('storage_unavailable', 503, 'Conversation storage is unavailable')
+    if (!conversation) return fail('conversation_not_found', 404, 'No such conversation')
+    if (conversation.status !== 'active') return fail('conversation_completed', 409, 'This conversation is complete')
+
+    if (!access.isAdmin) {
+      const today = await countTurnsToday(access.userId, env, deps.fetch, now())
+      if (today != null && today >= LIMITS.perDay) {
+        return json({ ok: false, code: 'rate_limited', error: 'Daily practice limit reached' }, 429, {
+          'Retry-After': '3600',
+        })
+      }
+    }
+
+    const scenario: ScenarioId = isScenarioId(conversation.scenario) ? conversation.scenario : 'daily'
+    // The level may be changed mid-conversation from the settings sheet.
+    const level: LevelId = request.level
+    const stored = (await store.turns(conversation.id)) ?? []
+    const system = buildSystemPrompt(scenario, level)
+    const messages = toModelMessages(openerFor(scenario), stored, request.text!)
 
     let turn: SpeakingTurnResponse | null = null
     let lastError: unknown = null
@@ -277,8 +347,41 @@ export function createSpeakHandler(deps: SpeakDeps): (req: Request) => Promise<R
     }
     if (!turn) return providerFailure(lastError, 'ai_failed')
 
+    // Typed answers carry no recording time; credit them with an estimate so a
+    // keyboard-only learner can still complete the goal.
+    const seconds =
+      request.speakingSeconds > 0
+        ? request.speakingSeconds
+        : estimateSpokenSeconds(request.text!, LIMITS.maxRecordingSeconds)
+
     const audio = request.wantAudio ? await synthesize(turn.reply) : null
-    const turnId = await persistTurn(access.userId, request, turn)
-    return json({ ok: true, reply: turn.reply, feedback: turn.feedback, audio, turnId })
+    const turnId = await store.insertTurn({
+      userId: access.userId,
+      conversationId: conversation.id,
+      scenario,
+      level,
+      transcript: request.text!,
+      reply: turn.reply,
+      feedback: turn.feedback,
+      speakingSeconds: seconds,
+    })
+    const total = Math.round((conversation.speaking_seconds + seconds) * 10) / 10
+    const completed = total >= conversation.goal_seconds
+    const updated = await store.updateConversation(conversation.id, {
+      speaking_seconds: total,
+      ...(completed ? { status: 'completed', completed_at: new Date(now()).toISOString() } : {}),
+    })
+    return json({
+      ok: true,
+      reply: turn.reply,
+      feedback: turn.feedback,
+      audio,
+      turnId,
+      speakingSeconds: updated?.speaking_seconds ?? total,
+      goalSeconds: conversation.goal_seconds,
+      completed,
+      completedAt: completed ? (updated?.completed_at ?? new Date(now()).toISOString()) : null,
+      nextAvailableAt: completed && !access.isAdmin ? new Date(now() + CONVERSATION_WINDOW_MS).toISOString() : null,
+    })
   }
 }

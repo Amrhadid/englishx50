@@ -26,6 +26,10 @@ export type SpeakErrorCode =
   | 'invalid_request'
   | 'empty_transcript'
   | 'provider_unavailable'
+  | 'storage_unavailable'
+  | 'conversation_not_found'
+  | 'conversation_completed'
+  | 'daily_limit'
   | 'transcription_failed'
   | 'ai_failed'
   | 'ai_malformed'
@@ -45,33 +49,76 @@ export interface ApiFailure {
   ok: false
   code: SpeakErrorCode
   status?: number
+  /** For `daily_limit`: when the next conversation may start (ISO). */
+  nextAvailableAt?: string | null
 }
 
-export type StartResult = { ok: true; reply: string; audio: SpeakAudio | null } | ApiFailure
-export type TranscribeResult = { ok: true; transcript: string } | ApiFailure
-export type TurnResult =
-  | { ok: true; reply: string; feedback: SpeakFeedback; audio: SpeakAudio | null }
+/** One stored learner turn with Emma's answer and note. */
+export interface StoredTurn {
+  id: string
+  transcript: string
+  reply: string
+  feedback: SpeakFeedback | null
+  speakingSeconds: number
+  createdAt: string
+}
+
+export type ConversationStatus = 'active' | 'completed'
+
+export interface Conversation {
+  id: string
+  scenario: ScenarioId
+  level: LevelId
+  status: ConversationStatus
+  speakingSeconds: number
+  goalSeconds: number
+  startedAt: string
+  completedAt: string | null
+  /** Emma's fixed opening question for the scenario. */
+  opener: string
+  /** Present when the server returned the turns (current / single conversation). */
+  turns?: StoredTurn[]
+}
+
+export type SessionResult =
+  | {
+      ok: true
+      /** Active conversation, or a completed one still inside its 24 h window. */
+      current: Conversation | null
+      nextAvailableAt: string | null
+      history: Conversation[]
+    }
   | ApiFailure
 
-export interface HistoryMessage {
-  role: 'assistant' | 'user'
-  text: string
-}
+export type StartResult =
+  | { ok: true; conversation: Conversation; reply: string; audio: SpeakAudio | null; resumed: boolean }
+  | ApiFailure
+export type ConversationResult = { ok: true; conversation: Conversation } | ApiFailure
+export type TranscribeResult = { ok: true; transcript: string } | ApiFailure
+export type TurnResult =
+  | {
+      ok: true
+      reply: string
+      feedback: SpeakFeedback
+      audio: SpeakAudio | null
+      speakingSeconds: number
+      goalSeconds: number
+      completed: boolean
+      completedAt: string | null
+      nextAvailableAt: string | null
+    }
+  | ApiFailure
 
 /** The only door to the paid pipeline. Implemented by api.ts (real) and mockApi.ts (dev). */
 export interface SpeakApi {
+  session(): Promise<SessionResult>
+  conversation(input: { conversationId: string }): Promise<ConversationResult>
   start(input: { scenario: ScenarioId; level: LevelId; wantAudio: boolean }): Promise<StartResult>
-  transcribe(input: {
-    scenario: ScenarioId
-    level: LevelId
-    audio: Blob
-    speakingSeconds: number
-  }): Promise<TranscribeResult>
+  transcribe(input: { audio: Blob; speakingSeconds: number }): Promise<TranscribeResult>
   respond(input: {
-    scenario: ScenarioId
+    conversationId: string
     level: LevelId
     text: string
-    history: HistoryMessage[]
     speakingSeconds: number
     wantAudio: boolean
   }): Promise<TurnResult>
@@ -88,9 +135,14 @@ export interface ConversationTurn {
 /**
  * One phase at a time. `requesting_mic` and `recording` come from the
  * recorder; the rest from the round trip with the server.
+ *   idle       — no conversation yet: pick a scenario, press start
+ *   locked     — today's conversation is complete; the next one is not due yet
+ *   completed  — this conversation just reached its goal (review shown)
  */
 export type SessionPhase =
+  | 'loading'
   | 'idle'
+  | 'locked'
   | 'starting'
   | 'ready'
   | 'requesting_mic'
@@ -98,6 +150,7 @@ export type SessionPhase =
   | 'transcribing'
   | 'thinking'
   | 'speaking'
+  | 'completed'
 
 export interface SpeakError {
   code: SpeakErrorCode

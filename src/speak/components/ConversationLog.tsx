@@ -1,14 +1,11 @@
 import { useEffect, useRef } from 'react'
 import EmmaAvatar from './EmmaAvatar'
-import FeedbackCard from './FeedbackCard'
 import { T } from '../text'
 import type { ConversationTurn, SessionPhase } from '../types'
 
 interface Props {
   turns: ConversationTurn[]
   phase: SessionPhase
-  /** Show feedback under each learner turn (mobile) or leave it to the side column. */
-  inlineFeedback: boolean
 }
 
 function TypingDots() {
@@ -21,8 +18,10 @@ function TypingDots() {
   )
 }
 
-/** The transcript: Emma's lines on the left (LTR), the learner's on the right. */
-export default function ConversationLog({ turns, phase, inlineFeedback }: Props) {
+/** The transcript: Emma's lines on the left (LTR), the learner's on the right.
+ *  Feedback is deliberately not shown here — it comes after the learner ends
+ *  the conversation (see ConversationReview). */
+export default function ConversationLog({ turns, phase }: Props) {
   const endRef = useRef<HTMLDivElement | null>(null)
   const count = turns.length
   useEffect(() => {
@@ -61,11 +60,6 @@ export default function ConversationLog({ turns, phase, inlineFeedback }: Props)
               <p className="spk-en spk-turn-name">أنت</p>
               <p className="spk-en spk-turn-text">{t.text}</p>
             </div>
-            {inlineFeedback && t.feedback && (
-              <div className="w-full max-w-[92%] min-[900px]:hidden">
-                <FeedbackCard feedback={t.feedback} compact />
-              </div>
-            )}
           </article>
         ),
       )}

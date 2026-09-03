@@ -1,26 +1,28 @@
-// The conversation state machine for /speak. Owns the turns, the phase, the
-// current scenario/level and the round trips through SpeakApi. The recorder
-// and the player are injected so the machine is testable with fakes.
+// The conversation state machine for /speak. Owns the current conversation
+// (server-side object: one per learner per 24 h, complete at the 5-minute
+// speaking goal), the visible turns, the phase, and the round trips through
+// SpeakApi. The recorder and the player are injected so the machine is
+// testable with fakes.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Recorder, RecorderErrorCode } from './useRecorder'
 import type { AudioPlayer } from './useAudioPlayer'
 import type {
+  Conversation,
   ConversationTurn,
-  HistoryMessage,
   LevelId,
   ScenarioId,
   SessionPhase,
   SpeakApi,
   SpeakError,
   SpeakErrorCode,
+  StoredTurn,
 } from '../types'
 
 interface Options {
   api: SpeakApi
   recorder: Recorder
   player: AudioPlayer
-  scenario: ScenarioId
   level: LevelId
   /** Whether Emma's replies should be spoken aloud. */
   voice: boolean
@@ -30,13 +32,25 @@ export interface SpeakSession {
   phase: SessionPhase
   turns: ConversationTurn[]
   error: SpeakError | null
-  /** Seconds the learner has spoken in this session. */
+  /** The active or just-completed conversation (null before one starts). */
+  conversation: Conversation | null
+  /** Learner speaking time in the current conversation (seconds). */
   speakingSeconds: number
+  goalSeconds: number
+  /** When the next conversation may start (ISO), while locked. */
+  nextAvailableAt: string | null
+  /** Completed conversations, newest first. */
+  history: Conversation[]
+  /** True when the page picked up an unfinished conversation. */
+  resumed: boolean
   /** True when the current phase allows pressing the mic / typing. */
   canSpeak: boolean
   /** Elapsed seconds of the recording in progress. */
   recordingSeconds: number
-  start(opts?: { autoplay?: boolean }): Promise<void>
+  /** Fetch the learner's current conversation (called on mount). */
+  load(): Promise<void>
+  /** Start today's conversation with `scenario` (or resume the active one). */
+  start(scenario: ScenarioId): Promise<void>
   toggleMic(): Promise<void>
   cancelRecording(): void
   sendText(text: string): Promise<void>
@@ -61,29 +75,51 @@ const RECORDER_ERRORS: Record<Exclude<RecorderErrorCode, 'cancelled' | 'busy'>, 
 let idCounter = 0
 const nextId = () => `t${++idCounter}-${Date.now().toString(36)}`
 
+/** Stored conversation → visible turns (opener first, then each pair). */
+export function turnsOf(conversation: Conversation): ConversationTurn[] {
+  const out: ConversationTurn[] = [{ id: `opener-${conversation.id}`, role: 'ai', text: conversation.opener }]
+  for (const t of conversation.turns ?? []) {
+    if (t.transcript) out.push({ id: `${t.id}-u`, role: 'user', text: t.transcript, feedback: t.feedback ?? undefined })
+    if (t.reply) out.push({ id: `${t.id}-a`, role: 'ai', text: t.reply })
+  }
+  return out
+}
+
 export function useSpeakSession(opts: Options): SpeakSession {
-  const { api, recorder, player, scenario, level, voice } = opts
-  const [phase, setPhase] = useState<InternalPhase>('idle')
+  const { api, recorder, player, level, voice } = opts
+  const [phase, setPhase] = useState<InternalPhase>('loading')
   const [turns, setTurns] = useState<ConversationTurn[]>([])
   const [error, setError] = useState<SpeakError | null>(null)
-  const [speakingSeconds, setSpeakingSeconds] = useState(0)
+  const [conversation, setConversation] = useState<Conversation | null>(null)
+  const [nextAvailableAt, setNextAvailableAt] = useState<string | null>(null)
+  const [history, setHistory] = useState<Conversation[]>([])
+  const [resumed, setResumed] = useState(false)
 
   // Everything async checks `sessionRef` so a response from a previous
-  // scenario (or from before unmount) can never land in the wrong session.
+  // conversation (or from before unmount) can never land in the wrong one.
   const sessionRef = useRef(0)
   const mountedRef = useRef(true)
   const busyRef = useRef(false)
   const turnsRef = useRef<ConversationTurn[]>([])
+  const conversationRef = useRef<Conversation | null>(null)
   /** The learner turn Emma has not answered yet (resent by `retry()`). */
   const pendingRef = useRef<ConversationTurn | null>(null)
-  const optsRef = useRef({ scenario, level, voice })
+  const lastScenarioRef = useRef<ScenarioId | null>(null)
+  /** Set when the last reply completed the conversation: review after playback. */
+  const completeAfterSpeechRef = useRef(false)
+  const optsRef = useRef({ level, voice })
   useEffect(() => {
-    optsRef.current = { scenario, level, voice }
+    optsRef.current = { level, voice }
   })
 
   const commitTurns = useCallback((updater: (prev: ConversationTurn[]) => ConversationTurn[]) => {
     turnsRef.current = updater(turnsRef.current)
     setTurns(turnsRef.current)
+  }, [])
+
+  const commitConversation = useCallback((c: Conversation | null) => {
+    conversationRef.current = c
+    setConversation(c)
   }, [])
 
   const alive = useCallback((session: number) => mountedRef.current && sessionRef.current === session, [])
@@ -93,89 +129,174 @@ export function useSpeakSession(opts: Options): SpeakSession {
     setPhase('ready')
   }, [])
 
+  /**
+   * Leave the speaking phase. `force` moves to ready from any phase (used
+   * right after a reply when there is nothing to play); otherwise only a
+   * genuine end of playback changes the phase.
+   */
+  const finishSpeech = useCallback((force: boolean) => {
+    if (completeAfterSpeechRef.current) {
+      completeAfterSpeechRef.current = false
+      setPhase('completed')
+    } else if (force) {
+      setPhase('ready')
+    } else {
+      setPhase((p) => (p === 'speaking' ? 'ready' : p))
+    }
+  }, [])
+
   const speak = useCallback(
     async (session: number, audio: { base64: string; mime: string } | null, autoplay: boolean) => {
-      if (!audio) {
-        setPhase('ready')
-        return
-      }
-      if (!autoplay || !optsRef.current.voice) {
-        player.load(audio)
-        setPhase('ready')
+      if (!audio || !autoplay || !optsRef.current.voice) {
+        if (audio) player.load(audio)
+        finishSpeech(true)
         return
       }
       setPhase('speaking')
       const started = await player.play(audio)
       if (!alive(session)) return
-      if (!started) setPhase('ready')
-      // Otherwise `onPlaybackEnded` moves us back to ready.
+      if (!started) finishSpeech(true)
+      // Otherwise `onPlaybackEnded` finishes.
     },
-    [alive, player],
+    [alive, finishSpeech, player],
   )
 
+  const adopt = useCallback(
+    (c: Conversation) => {
+      commitConversation(c)
+      commitTurns(() => turnsOf(c))
+    },
+    [commitConversation, commitTurns],
+  )
+
+  const load = useCallback(async () => {
+    const session = ++sessionRef.current
+    setPhase('loading')
+    setError(null)
+    const res = await api.session()
+    if (!alive(session)) return
+    if (!res.ok) {
+      setError({ code: res.code, retryable: true })
+      setPhase('idle')
+      return
+    }
+    setHistory(res.history)
+    setNextAvailableAt(res.nextAvailableAt)
+    if (res.current) {
+      adopt(res.current)
+      if (res.current.status === 'active') {
+        setResumed((res.current.turns?.length ?? 0) > 0)
+        setPhase('ready')
+      } else {
+        setPhase('locked')
+      }
+    } else {
+      commitConversation(null)
+      commitTurns(() => [])
+      setPhase('idle')
+    }
+  }, [adopt, alive, api, commitConversation, commitTurns])
+
   const start = useCallback(
-    async ({ autoplay = false }: { autoplay?: boolean } = {}) => {
+    async (scenario: ScenarioId) => {
+      if (busyRef.current) return
       recorder.cancel()
       player.stop()
       const session = ++sessionRef.current
-      busyRef.current = false
+      busyRef.current = true
+      lastScenarioRef.current = scenario
       pendingRef.current = null
-      commitTurns(() => [])
-      setSpeakingSeconds(0)
+      completeAfterSpeechRef.current = false
       setError(null)
+      setResumed(false)
       setPhase('starting')
-      const { scenario: sc, level: lv, voice: vc } = optsRef.current
-      const res = await api.start({ scenario: sc, level: lv, wantAudio: vc })
-      if (!alive(session)) return
-      if (!res.ok) {
-        setError({ code: res.code, retryable: true })
-        setPhase('idle')
-        return
+      try {
+        const { level: lv, voice: vc } = optsRef.current
+        const res = await api.start({ scenario, level: lv, wantAudio: vc })
+        if (!alive(session)) return
+        if (!res.ok) {
+          if (res.code === 'daily_limit') {
+            setNextAvailableAt(res.nextAvailableAt ?? null)
+            setPhase('locked')
+            return
+          }
+          setError({ code: res.code, retryable: true })
+          setPhase('idle')
+          return
+        }
+        adopt(res.conversation)
+        setResumed(res.resumed)
+        await speak(session, res.audio, true)
+      } finally {
+        busyRef.current = false
       }
-      commitTurns(() => [{ id: nextId(), role: 'ai', text: res.reply }])
-      await speak(session, res.audio, autoplay)
     },
-    [alive, api, commitTurns, player, recorder, speak],
+    [adopt, alive, api, player, recorder, speak],
   )
 
   /** Ask Emma to answer `userTurn` (already on screen) and play her reply. */
   const respond = useCallback(
     async (session: number, userTurn: ConversationTurn, seconds: number) => {
-      const history: HistoryMessage[] = turnsRef.current
-        .filter((t) => t.id !== userTurn.id)
-        .map((t) => ({ role: t.role === 'ai' ? 'assistant' : 'user', text: t.text }))
+      const current = conversationRef.current
+      if (!current) return
       pendingRef.current = userTurn
       setPhase('thinking')
-      const { scenario: sc, level: lv, voice: vc } = optsRef.current
+      const { level: lv, voice: vc } = optsRef.current
       const res = await api.respond({
-        scenario: sc,
+        conversationId: current.id,
         level: lv,
         text: userTurn.text,
-        history,
         speakingSeconds: seconds,
         wantAudio: vc,
       })
       if (!alive(session)) return
       if (!res.ok) {
+        if (res.code === 'conversation_completed') {
+          // Completed elsewhere (another tab): reload the state instead of retrying.
+          pendingRef.current = null
+          void load()
+          return
+        }
         // The learner's words stay on screen; `retry()` resends them.
         failWith(res.code, true)
         return
       }
       pendingRef.current = null
+      const stored: StoredTurn = {
+        id: nextId(),
+        transcript: userTurn.text,
+        reply: res.reply,
+        feedback: res.feedback,
+        speakingSeconds: seconds,
+        createdAt: new Date().toISOString(),
+      }
+      const updated: Conversation = {
+        ...current,
+        speakingSeconds: res.speakingSeconds,
+        goalSeconds: res.goalSeconds,
+        status: res.completed ? 'completed' : 'active',
+        completedAt: res.completedAt,
+        turns: [...(current.turns ?? []), stored],
+      }
+      commitConversation(updated)
       commitTurns((prev) => [
         ...prev.map((t) => (t.id === userTurn.id ? { ...t, feedback: res.feedback } : t)),
         { id: nextId(), role: 'ai', text: res.reply },
       ])
+      if (res.completed) {
+        setNextAvailableAt(res.nextAvailableAt)
+        setHistory((h) => [updated, ...h.filter((c) => c.id !== updated.id)])
+        completeAfterSpeechRef.current = true
+      }
       await speak(session, res.audio, true)
     },
-    [alive, api, commitTurns, failWith, speak],
+    [alive, api, commitConversation, commitTurns, failWith, load, speak],
   )
 
   const addUserTurn = useCallback(
-    (text: string, seconds: number): ConversationTurn => {
+    (text: string): ConversationTurn => {
       const userTurn: ConversationTurn = { id: nextId(), role: 'user', text }
       commitTurns((prev) => [...prev, userTurn])
-      if (seconds > 0) setSpeakingSeconds((s) => Math.round((s + seconds) * 10) / 10)
       return userTurn
     },
     [commitTurns],
@@ -184,14 +305,13 @@ export function useSpeakSession(opts: Options): SpeakSession {
   const submitRecording = useCallback(
     async (session: number, blob: Blob, seconds: number) => {
       setPhase('transcribing')
-      const { scenario: sc, level: lv } = optsRef.current
-      const res = await api.transcribe({ scenario: sc, level: lv, audio: blob, speakingSeconds: seconds })
+      const res = await api.transcribe({ audio: blob, speakingSeconds: seconds })
       if (!alive(session)) return
       if (!res.ok) {
         failWith(res.code, false)
         return
       }
-      await respond(session, addUserTurn(res.transcript, seconds), seconds)
+      await respond(session, addUserTurn(res.transcript), seconds)
     },
     [addUserTurn, alive, api, failWith, respond],
   )
@@ -236,7 +356,7 @@ export function useSpeakSession(opts: Options): SpeakSession {
       player.stop()
       setError(null)
       try {
-        await respond(session, addUserTurn(text, 0), 0)
+        await respond(session, addUserTurn(text), 0)
       } finally {
         busyRef.current = false
       }
@@ -248,7 +368,8 @@ export function useSpeakSession(opts: Options): SpeakSession {
     if (busyRef.current) return
     const session = sessionRef.current
     if (phase === 'idle') {
-      await start({ autoplay: true })
+      if (lastScenarioRef.current) await start(lastScenarioRef.current)
+      else await load()
       return
     }
     const pending = pendingRef.current
@@ -260,16 +381,16 @@ export function useSpeakSession(opts: Options): SpeakSession {
     } finally {
       busyRef.current = false
     }
-  }, [phase, respond, start])
+  }, [load, phase, respond, start])
 
   const stopSpeaking = useCallback(() => {
     player.stop()
-    setPhase((p) => (p === 'speaking' ? 'ready' : p))
-  }, [player])
+    finishSpeech(false)
+  }, [finishSpeech, player])
 
   const onPlaybackEnded = useCallback(() => {
-    setPhase((p) => (p === 'speaking' ? 'ready' : p))
-  }, [])
+    finishSpeech(false)
+  }, [finishSpeech])
 
   const replay = useCallback(async () => {
     if (phase !== 'ready' && phase !== 'speaking') return
@@ -305,9 +426,15 @@ export function useSpeakSession(opts: Options): SpeakSession {
       phase: effectivePhase,
       turns,
       error,
-      speakingSeconds,
+      conversation,
+      speakingSeconds: conversation?.speakingSeconds ?? 0,
+      goalSeconds: conversation?.goalSeconds ?? 300,
+      nextAvailableAt,
+      history,
+      resumed,
       canSpeak,
       recordingSeconds: recorder.seconds,
+      load,
       start,
       toggleMic,
       cancelRecording,
@@ -322,9 +449,13 @@ export function useSpeakSession(opts: Options): SpeakSession {
       effectivePhase,
       turns,
       error,
-      speakingSeconds,
+      conversation,
+      nextAvailableAt,
+      history,
+      resumed,
       canSpeak,
       recorder.seconds,
+      load,
       start,
       toggleMic,
       cancelRecording,

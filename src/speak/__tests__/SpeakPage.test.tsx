@@ -17,11 +17,35 @@ vi.mock('../../lib/supabase', () => ({ supabase: null, isSupabaseConfigured: fal
 
 import SpeakPage from '../SpeakPage'
 
-function fakeApi(): SpeakApi & { start: ReturnType<typeof vi.fn> } {
+function fakeApi(): SpeakApi & { session: ReturnType<typeof vi.fn>; start: ReturnType<typeof vi.fn> } {
+  const conversation = {
+    id: 'conv-1',
+    scenario: 'daily' as const,
+    level: 'intermediate' as const,
+    status: 'active' as const,
+    speakingSeconds: 0,
+    goalSeconds: 300,
+    startedAt: '2026-09-03T10:00:00Z',
+    completedAt: null,
+    opener: 'Hi! What was the best part of your day?',
+    turns: [],
+  }
   return {
-    start: vi.fn(async () => ({ ok: true as const, reply: 'Hi! What was the best part of your day?', audio: null })),
+    session: vi.fn(async () => ({ ok: true as const, current: null, nextAvailableAt: null, history: [] })),
+    conversation: vi.fn(async () => ({ ok: true as const, conversation })),
+    start: vi.fn(async () => ({ ok: true as const, conversation, reply: conversation.opener, audio: null, resumed: false })),
     transcribe: vi.fn(async () => ({ ok: true as const, transcript: 'x' })),
-    respond: vi.fn(async () => ({ ok: true as const, reply: 'y', feedback: { positive: 'z' }, audio: null })),
+    respond: vi.fn(async () => ({
+      ok: true as const,
+      reply: 'y',
+      feedback: { positive: 'z' },
+      audio: null,
+      speakingSeconds: 5,
+      goalSeconds: 300,
+      completed: false,
+      completedAt: null,
+      nextAvailableAt: null,
+    })),
   }
 }
 
@@ -59,7 +83,7 @@ describe('SpeakPage access control', () => {
     renderPage(api)
     await waitFor(() => expect(screen.getByText('challenge sign-in page')).toBeTruthy())
     expect(sessionStorage.getItem('x50_post_signin')).toBe('/speak')
-    expect(api.start).not.toHaveBeenCalled()
+    expect(api.session).not.toHaveBeenCalled()
   })
 
   it('shows the entitlement loading state for a signed-in user whose subscription is unresolved', () => {
@@ -68,7 +92,7 @@ describe('SpeakPage access control', () => {
     const api = fakeApi()
     renderPage(api)
     expect(screen.getByRole('status').textContent).toContain('جارٍ التحقق من اشتراكك')
-    expect(api.start).not.toHaveBeenCalled()
+    expect(api.session).not.toHaveBeenCalled()
   })
 
   it('shows the premium gate to a free user and never initialises a session', async () => {
@@ -81,15 +105,20 @@ describe('SpeakPage access control', () => {
     // No microphone button, no API call.
     expect(screen.queryByRole('button', { name: 'ابدأ التسجيل' })).toBeNull()
     await new Promise((r) => setTimeout(r, 10))
+    expect(api.session).not.toHaveBeenCalled()
     expect(api.start).not.toHaveBeenCalled()
   })
 
-  it('lets a paid user in and initialises the session', async () => {
+  it('lets a paid user in, loads their session, and starts on request', async () => {
     auth.user = { id: 'u1', email: 'paid@example.com' }
     onboarding.premiumActive = true
     const api = fakeApi()
     renderPage(api)
     expect(screen.getByRole('heading', { name: 'اتكلم إنجليزي من غير توتر' })).toBeTruthy()
+    await waitFor(() => expect(api.session).toHaveBeenCalledTimes(1))
+    const startBtn = await screen.findByRole('button', { name: 'ابدأ المحادثة' })
+    await waitFor(() => expect(startBtn.hasAttribute('disabled')).toBe(false))
+    startBtn.click()
     await waitFor(() => expect(api.start).toHaveBeenCalledTimes(1))
     expect(api.start.mock.calls[0][0]).toMatchObject({ scenario: 'daily', level: 'intermediate' })
     await waitFor(() => expect(screen.getByText('Hi! What was the best part of your day?')).toBeTruthy())
@@ -99,14 +128,14 @@ describe('SpeakPage access control', () => {
     auth.user = { id: 'admin', email: 'siramrhadid@gmail.com' }
     const api = fakeApi()
     renderPage(api)
-    await waitFor(() => expect(api.start).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(api.session).toHaveBeenCalledTimes(1))
   })
 
   it('falls back to the gate when the server says the entitlement is gone', async () => {
     auth.user = { id: 'u1', email: 'paid@example.com' }
     onboarding.premiumActive = true
     const api = fakeApi()
-    api.start.mockResolvedValue({ ok: false, code: 'not_premium', status: 403 })
+    api.session.mockResolvedValue({ ok: false, code: 'not_premium', status: 403 })
     renderPage(api)
     await waitFor(() => expect(screen.getByRole('heading', { name: 'تدريب المحادثة متاح للمشتركين' })).toBeTruthy())
   })

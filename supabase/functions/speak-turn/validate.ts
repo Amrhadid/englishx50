@@ -26,7 +26,15 @@ export const LIMITS = {
   ttsTimeoutMs: 20_000,
 } as const
 
-export type SpeakAction = 'start' | 'transcribe' | 'respond'
+export type SpeakAction = 'session' | 'conversation' | 'start' | 'transcribe' | 'respond'
+const ACTIONS: readonly string[] = ['session', 'conversation', 'start', 'transcribe', 'respond']
+
+/** Learner speaking time that completes one conversation (seconds). */
+export const GOAL_SECONDS = 300
+/** A learner may start one conversation per this window (ms). */
+export const CONVERSATION_WINDOW_MS = 24 * 60 * 60 * 1000
+/** Most turns Emma sees when continuing a conversation (assistant + user). */
+export const HISTORY_TURN_PAIRS = 6
 
 export interface HistoryMessage {
   role: 'assistant' | 'user'
@@ -37,6 +45,8 @@ export interface SpeakRequest {
   action: SpeakAction
   scenario: ScenarioId
   level: LevelId
+  /** The conversation a turn belongs to (respond, conversation). */
+  conversationId?: string
   /** Learner's typed or transcribed words (respond). */
   text?: string
   /** Base64 audio (transcribe). */
@@ -83,11 +93,12 @@ export function parseSpeakRequest(body: unknown): ParseResult {
   const b = body as Record<string, unknown>
 
   const action = b.action
-  if (action !== 'start' && action !== 'transcribe' && action !== 'respond') {
-    return { ok: false, error: 'Unknown action' }
-  }
-  if (!isScenarioId(b.scenario)) return { ok: false, error: 'Unknown scenario' }
-  if (!isLevelId(b.level)) return { ok: false, error: 'Unknown level' }
+  if (typeof action !== 'string' || !ACTIONS.includes(action)) return { ok: false, error: 'Unknown action' }
+  // Only `start` needs a scenario; the others fall back to a default that the
+  // stored conversation overrides anyway.
+  if (action === 'start' && !isScenarioId(b.scenario)) return { ok: false, error: 'Unknown scenario' }
+  if (b.scenario != null && !isScenarioId(b.scenario)) return { ok: false, error: 'Unknown scenario' }
+  if (b.level != null && !isLevelId(b.level)) return { ok: false, error: 'Unknown level' }
 
   const history = parseHistory(b.history)
   if (history === null) return { ok: false, error: 'Malformed history' }
@@ -97,12 +108,18 @@ export function parseSpeakRequest(body: unknown): ParseResult {
   const speakingSeconds = Math.min(Math.max(rawSeconds, 0), LIMITS.maxRecordingSeconds)
 
   const req: SpeakRequest = {
-    action,
-    scenario: b.scenario,
-    level: b.level,
+    action: action as SpeakAction,
+    scenario: isScenarioId(b.scenario) ? b.scenario : 'daily',
+    level: isLevelId(b.level) ? b.level : 'intermediate',
     history,
     speakingSeconds,
     wantAudio: b.wantAudio !== false,
+  }
+
+  if (action === 'respond' || action === 'conversation') {
+    const id = typeof b.conversationId === 'string' ? b.conversationId.trim() : ''
+    if (!/^[\w-]{4,64}$/.test(id)) return { ok: false, error: 'Missing conversationId' }
+    req.conversationId = id
   }
 
   if (action === 'transcribe') {
