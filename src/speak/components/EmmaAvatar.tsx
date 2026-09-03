@@ -13,7 +13,7 @@ export default function EmmaAvatar({ size = 64, speaking = false, decorative = t
       className={`spk-emma-avatar relative inline-flex shrink-0 items-center justify-center rounded-full ${speaking ? 'is-speaking' : ''}`}
     >
       <img
-        src="/speak/emma-tutor.svg"
+        src="/Emma.png"
         alt={decorative ? '' : 'Emma، مدرّبتك الرقمية للمحادثة الإنجليزية'}
         width={size}
         height={size}
