@@ -2,7 +2,7 @@
 // Function, written against web-standard Request/Response only so it runs in
 // Deno on the edge and in Vitest under Node (see __tests__/handler.test.ts).
 //
-// One endpoint, five actions (POST JSON, `action` field):
+// One endpoint, six actions (POST JSON, `action` field):
 //
 //   session       → the learner's current conversation (active, or completed
 //                   inside the 24 h window), when the next one may start, and
@@ -14,6 +14,10 @@
 //   respond       → transcript → Emma's reply, compact feedback, audio; the turn
 //                   is persisted, speaking time accumulates, and the
 //                   conversation completes once it reaches the goal
+//   end           → the learner ends the conversation early, before the
+//                   speaking goal is reached; marks it completed as-is so the
+//                   review/PDF and the 24 h window behave exactly as a normal
+//                   completion would
 //
 // Every action first resolves the caller through the fail-closed entitlement
 // check (access.ts), then the per-minute limiter, and only then touches a paid
@@ -247,6 +251,25 @@ export function createSpeakHandler(deps: SpeakDeps): (req: Request) => Promise<R
       if (!row) return fail('conversation_not_found', 404, 'No such conversation')
       const turns = (await store.turns(row.id)) ?? []
       return json({ ok: true, conversation: serialiseConversation(row, turns) })
+    }
+
+    if (request.action === 'end') {
+      const row = await store.conversation(request.conversationId!, access.userId)
+      if (row === undefined) return fail('storage_unavailable', 503, 'Conversation storage is unavailable')
+      if (!row) return fail('conversation_not_found', 404, 'No such conversation')
+      // Already completed (e.g. a double tap, or it just reached its goal):
+      // hand back the current row rather than erroring — ending is idempotent.
+      const updated =
+        row.status === 'active'
+          ? await store.updateConversation(row.id, { status: 'completed', completed_at: new Date(now()).toISOString() })
+          : row
+      if (!updated) return fail('storage_unavailable', 503, 'Could not end the conversation')
+      const turns = (await store.turns(updated.id)) ?? []
+      return json({
+        ok: true,
+        conversation: serialiseConversation(updated, turns),
+        nextAvailableAt: access.isAdmin ? null : nextAvailableAt(updated, now()),
+      })
     }
 
     if (request.action === 'start') {

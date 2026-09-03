@@ -239,5 +239,16 @@ export function createMockSpeakApi(opts: { fail?: MockFailure | string | null; d
         nextAvailableAt: completed ? iso(Date.now() + 86_400_000) : null,
       }
     },
+    async end({ conversationId }) {
+      await wait(delay)
+      if (fail === 'network') return { ok: false, code: 'network' }
+      if (!current || current.id !== conversationId) return { ok: false, code: 'conversation_not_found', status: 404 }
+      if (current.status === 'active') {
+        current.status = 'completed'
+        current.completedAt = iso(Date.now())
+        history.unshift(current)
+      }
+      return { ok: true, conversation: current, nextAvailableAt: iso(new Date(current.completedAt!).getTime() + 86_400_000) }
+    },
   }
 }

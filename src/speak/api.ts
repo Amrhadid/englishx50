@@ -216,5 +216,17 @@ export function createSupabaseSpeakApi(): SpeakApi {
         nextAvailableAt: typeof res.data.nextAvailableAt === 'string' ? res.data.nextAvailableAt : null,
       }
     },
+
+    async end({ conversationId }) {
+      const res = await call({ action: 'end', conversationId })
+      if (!res.ok) return res
+      const conversation = conversationOf(res.data.conversation)
+      if (!conversation) return { ok: false, code: 'server' }
+      return {
+        ok: true,
+        conversation,
+        nextAvailableAt: typeof res.data.nextAvailableAt === 'string' ? res.data.nextAvailableAt : null,
+      }
+    },
   }
 }

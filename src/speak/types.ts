@@ -94,6 +94,7 @@ export type StartResult =
   | { ok: true; conversation: Conversation; reply: string; audio: SpeakAudio | null; resumed: boolean }
   | ApiFailure
 export type ConversationResult = { ok: true; conversation: Conversation } | ApiFailure
+export type EndResult = { ok: true; conversation: Conversation; nextAvailableAt: string | null } | ApiFailure
 export type TranscribeResult = { ok: true; transcript: string } | ApiFailure
 export type TurnResult =
   | {
@@ -122,6 +123,8 @@ export interface SpeakApi {
     speakingSeconds: number
     wantAudio: boolean
   }): Promise<TurnResult>
+  /** End the active conversation early, before the speaking goal is reached. */
+  end(input: { conversationId: string }): Promise<EndResult>
 }
 
 export interface ConversationTurn {

@@ -26,8 +26,8 @@ export const LIMITS = {
   ttsTimeoutMs: 20_000,
 } as const
 
-export type SpeakAction = 'session' | 'conversation' | 'start' | 'transcribe' | 'respond'
-const ACTIONS: readonly string[] = ['session', 'conversation', 'start', 'transcribe', 'respond']
+export type SpeakAction = 'session' | 'conversation' | 'start' | 'transcribe' | 'respond' | 'end'
+const ACTIONS: readonly string[] = ['session', 'conversation', 'start', 'transcribe', 'respond', 'end']
 
 /** Learner speaking time that completes one conversation (seconds). */
 export const GOAL_SECONDS = 300
@@ -116,7 +116,7 @@ export function parseSpeakRequest(body: unknown): ParseResult {
     wantAudio: b.wantAudio !== false,
   }
 
-  if (action === 'respond' || action === 'conversation') {
+  if (action === 'respond' || action === 'conversation' || action === 'end') {
     const id = typeof b.conversationId === 'string' ? b.conversationId.trim() : ''
     if (!/^[\w-]{4,64}$/.test(id)) return { ok: false, error: 'Missing conversationId' }
     req.conversationId = id

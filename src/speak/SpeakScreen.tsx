@@ -202,6 +202,19 @@ export default function SpeakScreen({
           />
           <DailyProgress seconds={session.speakingSeconds} goalSeconds={session.goalSeconds} />
 
+          {conversationOpen && (
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(T.endConfirm)) session.endConversation()
+              }}
+              disabled={!session.canSpeak}
+              className="mx-auto block px-2 py-1 text-[13px] font-bold text-[#7a7596] transition hover:text-[#1b1730] hover:underline disabled:opacity-40"
+            >
+              {T.endConversation}
+            </button>
+          )}
+
           {!recorder.supported && (
             <p className="rounded-[18px] bg-[#FEEFD2] px-4 py-3 text-[13px] font-semibold leading-relaxed text-[#A66A09]" role="note">
               {T.unsupported}

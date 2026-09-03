@@ -54,6 +54,8 @@ export interface SpeakSession {
   toggleMic(): Promise<void>
   cancelRecording(): void
   sendText(text: string): Promise<void>
+  /** End the active conversation now, before the speaking goal is reached. */
+  endConversation(): Promise<void>
   stopSpeaking(): void
   replay(): Promise<void>
   retry(): Promise<void>
@@ -364,6 +366,32 @@ export function useSpeakSession(opts: Options): SpeakSession {
     [addUserTurn, phase, player, respond],
   )
 
+  const endConversation = useCallback(async () => {
+    const current = conversationRef.current
+    if (!current || current.status !== 'active' || busyRef.current) return
+    if (phase !== 'ready' && phase !== 'speaking') return
+    const session = sessionRef.current
+    busyRef.current = true
+    recorder.cancel()
+    player.stop()
+    setError(null)
+    try {
+      const res = await api.end({ conversationId: current.id })
+      if (!alive(session)) return
+      if (!res.ok) {
+        failWith(res.code, false)
+        return
+      }
+      completeAfterSpeechRef.current = false
+      adopt(res.conversation)
+      setNextAvailableAt(res.nextAvailableAt)
+      setHistory((h) => [res.conversation, ...h.filter((c) => c.id !== res.conversation.id)])
+      setPhase('completed')
+    } finally {
+      busyRef.current = false
+    }
+  }, [adopt, alive, api, failWith, phase, player, recorder])
+
   const retry = useCallback(async () => {
     if (busyRef.current) return
     const session = sessionRef.current
@@ -439,6 +467,7 @@ export function useSpeakSession(opts: Options): SpeakSession {
       toggleMic,
       cancelRecording,
       sendText,
+      endConversation,
       stopSpeaking,
       replay,
       retry,
@@ -460,6 +489,7 @@ export function useSpeakSession(opts: Options): SpeakSession {
       toggleMic,
       cancelRecording,
       sendText,
+      endConversation,
       stopSpeaking,
       replay,
       retry,

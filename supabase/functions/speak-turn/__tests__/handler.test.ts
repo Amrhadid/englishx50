@@ -301,6 +301,46 @@ describe('speak-turn handler — conversations', () => {
     expect(res.status).toBe(503)
     expect((await res.json()).code).toBe('storage_unavailable')
   })
+
+  it('end completes an active conversation early, below its speaking goal, and opens the 24 h window', async () => {
+    const row = activeRow({ speaking_seconds: 40 })
+    const seeded = memoryStore({ conversations: [row] })
+    const h = makeHandler(providers(), seeded.store)
+    const res = await h(post('paid', { action: 'end', conversationId: row.id }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.conversation.status).toBe('completed')
+    expect(body.conversation.speakingSeconds).toBe(40)
+    expect(body.nextAvailableAt).not.toBeNull()
+    expect(seeded.conversations[0].status).toBe('completed')
+    expect(seeded.conversations[0].completed_at).not.toBeNull()
+  })
+
+  it('end is idempotent: ending an already-completed conversation just returns it', async () => {
+    const row = activeRow({ status: 'completed', completed_at: new Date(NOW - HOUR).toISOString() })
+    const seeded = memoryStore({ conversations: [row] })
+    const h = makeHandler(providers(), seeded.store)
+    const res = await h(post('paid', { action: 'end', conversationId: row.id }))
+    expect(res.status).toBe(200)
+    expect((await res.json()).conversation.status).toBe('completed')
+  })
+
+  it('end never lets one learner end another\'s conversation', async () => {
+    const row = activeRow()
+    const seeded = memoryStore({ conversations: [row] })
+    const h = makeHandler(providers(), seeded.store)
+    const res = await h(post('admin', { action: 'end', conversationId: row.id }))
+    expect(res.status).toBe(404)
+    expect((await res.json()).code).toBe('conversation_not_found')
+  })
+
+  it('end exempts the admin from the 24 hour rule', async () => {
+    const row = activeRow({ user_id: 'admin-1', speaking_seconds: 10 })
+    const seeded = memoryStore({ conversations: [row] })
+    const h = makeHandler(providers(), seeded.store)
+    const res = await h(post('admin', { action: 'end', conversationId: row.id }))
+    expect((await res.json()).nextAvailableAt).toBeNull()
+  })
 })
 
 describe('speak-turn handler — turns', () => {

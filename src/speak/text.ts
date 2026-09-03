@@ -58,6 +58,7 @@ export const T = {
   typePlaceholder: 'Type your answer in English…',
   feedbackTitle: 'ملاحظات Emma',
   endConversation: 'أنهِ المحادثة',
+  endConfirm: 'هل تريد إنهاء المحادثة الآن؟ هتشوف ملاحظات Emma على اللي اتكلمت فيه لحد دلوقتي.',
   reviewTitle: 'ملاحظات Emma على محادثتك',
   reviewIntro: 'أحسنت! دي أهم الملاحظات على كل إجابة قلتها.',
   reviewEmpty: 'لم تُسجّل أي إجابة في هذه المحادثة بعد.',

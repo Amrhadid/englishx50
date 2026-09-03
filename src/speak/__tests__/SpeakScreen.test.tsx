@@ -104,6 +104,10 @@ function api(over: Partial<Api> = {}, opts: { current?: Conversation | null; goa
         nextAvailableAt: completed ? '2026-09-04T10:20:00.000Z' : null,
       }
     }),
+    end: vi.fn(async () => {
+      current = { ...current!, status: 'completed', completedAt: '2026-09-03T10:05:00.000Z' }
+      return { ok: true as const, conversation: current, nextAvailableAt: '2026-09-04T10:05:00.000Z' }
+    }),
     ...over,
   }
 }
@@ -226,6 +230,42 @@ describe('SpeakScreen', () => {
     expect(screen.queryByRole('button', { name: /تحميل الملاحظات/ })).toBeNull()
     // Progress reflects the server's total.
     expect(Number(screen.getByRole('progressbar').getAttribute('aria-valuenow'))).toBeGreaterThan(0)
+  })
+
+  it('ends a conversation early from the End button, after confirming, and shows the review', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const a = api()
+    renderScreen(a)
+    await startConversation()
+    await recordOnce()
+    await waitFor(() => expect(a.respond).toHaveBeenCalledTimes(1))
+    await stopAudioWhenPlaying()
+
+    const endBtn = screen.getByRole('button', { name: 'أنهِ المحادثة' })
+    await waitFor(() => expect(endBtn.hasAttribute('disabled')).toBe(false))
+    fireEvent.click(endBtn)
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(a.end).toHaveBeenCalledWith({ conversationId: 'conv-1' }))
+
+    await screen.findByRole('heading', { name: 'أكملت محادثة اليوم 🎉' })
+    // The mic bar is gone — the conversation is over, well below the 5-minute goal.
+    expect(screen.queryByRole('button', { name: 'ابدأ التسجيل' })).toBeNull()
+    confirmSpy.mockRestore()
+  })
+
+  it('does nothing when the End confirmation is declined', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const a = api()
+    renderScreen(a)
+    await startConversation()
+
+    const endBtn = screen.getByRole('button', { name: 'أنهِ المحادثة' })
+    await waitFor(() => expect(endBtn.hasAttribute('disabled')).toBe(false))
+    fireEvent.click(endBtn)
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(a.end).not.toHaveBeenCalled()
+    expect(mic()).toBeTruthy()
+    confirmSpy.mockRestore()
   })
 
   it('shows the full feedback and the PDF download once the 5-minute goal is reached', async () => {
