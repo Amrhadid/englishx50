@@ -4,7 +4,7 @@ import PartnerCard from './components/PartnerCard'
 import ScenarioChips from './components/ScenarioChips'
 import DailyProgress from './components/DailyProgress'
 import ConversationLog from './components/ConversationLog'
-import FeedbackCard from './components/FeedbackCard'
+import ConversationReview from './components/ConversationReview'
 import MicControls from './components/MicControls'
 import KeyboardInput from './components/KeyboardInput'
 import StatusNotice from './components/StatusNotice'
@@ -57,6 +57,8 @@ export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
   )
   const [showSettings, setShowSettings] = useState(false)
   const [showKeyboard, setShowKeyboard] = useState(false)
+  // Feedback is held back until the learner ends the conversation.
+  const [ended, setEnded] = useState(false)
 
   const recorder = useRecorder({ maxSeconds: MAX_RECORDING_SECONDS })
   const endedRef = useRef<() => void>(() => {})
@@ -85,11 +87,26 @@ export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
     }
   }, [session.error, onEntitlementLost])
 
+  const newChat = useCallback(() => {
+    setEnded(false)
+    setShowKeyboard(false)
+    setShowSettings(false)
+    startRef.current({ autoplay: true })
+  }, [])
+
+  const endConversation = useCallback(() => {
+    session.cancelRecording()
+    session.stopSpeaking()
+    setShowKeyboard(false)
+    setEnded(true)
+  }, [session])
+
   const changeScenario = useCallback(
     (id: ScenarioId) => {
       if (id === scenario || !isScenarioId(id)) return
       setScenario(id)
       setShowKeyboard(false)
+      setEnded(false)
       // `session.start` reads the new scenario after this render commits.
       queueMicrotask(() => startRef.current({ autoplay: true }))
     },
@@ -108,7 +125,7 @@ export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
 
   const busy = session.phase !== 'ready' && session.phase !== 'speaking' && session.phase !== 'idle'
   const speaking = session.phase === 'speaking'
-  const latestFeedback = [...session.turns].reverse().find((t) => t.role === 'user' && t.feedback)?.feedback ?? null
+  const hasAnswers = session.turns.some((t) => t.role === 'user')
 
   return (
     <div className="spk" dir="rtl">
@@ -139,6 +156,7 @@ export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
           )}
 
           {/* Desktop: the controls live here; on mobile the same element is a fixed bottom bar. */}
+          {!ended && (
           <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#ece7fb] bg-white/95 backdrop-blur min-[900px]:static min-[900px]:mt-2 min-[900px]:rounded-[28px] min-[900px]:border min-[900px]:bg-white min-[900px]:shadow-[0_10px_30px_-22px_rgba(83,74,183,0.5)]">
             <div className="spk-safe-bottom mx-auto flex max-w-5xl flex-col gap-3 px-4 pt-4 min-[900px]:px-6 min-[900px]:py-6">
               {showKeyboard && session.canSpeak && (
@@ -166,6 +184,7 @@ export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
               />
             </div>
           </div>
+          )}
         </div>
 
         {/* Column 2 — conversation + feedback */}
@@ -173,13 +192,25 @@ export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
           {session.error && (
             <StatusNotice error={session.error} onRetry={session.retry} onDismiss={session.dismissError} />
           )}
-          <h2 className="text-[15px] font-extrabold text-[#1b1730]">{T.conversationLabel}</h2>
-          <ConversationLog turns={session.turns} phase={session.phase} inlineFeedback />
-          {latestFeedback && (
-            <div className="hidden min-[900px]:block">
-              <h2 className="mb-2 text-[15px] font-extrabold text-[#1b1730]">{T.feedbackTitle}</h2>
-              <FeedbackCard feedback={latestFeedback} />
-            </div>
+          {ended ? (
+            <ConversationReview turns={session.turns} onNewChat={newChat} />
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-[15px] font-extrabold text-[#1b1730]">{T.conversationLabel}</h2>
+                {hasAnswers && (
+                  <button
+                    type="button"
+                    onClick={endConversation}
+                    disabled={busy}
+                    className="h-11 rounded-full border border-[#ece7fb] bg-white px-4 text-[13px] font-bold text-[#534AB7] transition hover:bg-[#f4f2fc] disabled:opacity-50"
+                  >
+                    {T.endConversation}
+                  </button>
+                )}
+              </div>
+              <ConversationLog turns={session.turns} phase={session.phase} />
+            </>
           )}
         </div>
       </main>
@@ -190,11 +221,7 @@ export default function SpeakScreen({ api, userId, onEntitlementLost }: Props) {
           voice={voice}
           onLevel={changeLevel}
           onVoice={changeVoice}
-          onNewChat={() => {
-            setShowSettings(false)
-            setShowKeyboard(false)
-            session.start({ autoplay: true })
-          }}
+          onNewChat={newChat}
           onClose={() => setShowSettings(false)}
         />
       )}

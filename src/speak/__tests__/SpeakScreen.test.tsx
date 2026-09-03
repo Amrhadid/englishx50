@@ -144,10 +144,9 @@ describe('SpeakScreen', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'إيقاف الصوت' })).toBeTruthy())
     expect(status()).toContain('Emma بتتكلم')
 
-    // Compact feedback under the learner's turn.
-    expect(screen.getAllByText('إجابة واضحة وطبيعية').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('The best part of my day was teaching my class.').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('نستخدم was لأن اليوم انتهى.').length).toBeGreaterThan(0)
+    // No tips during the conversation: feedback is held back until the end.
+    expect(screen.queryByText('إجابة واضحة وطبيعية')).toBeNull()
+    expect(screen.queryByText('The best part of my day was teaching my class.')).toBeNull()
 
     // Stop the audio → back to ready; the mic stream was released after recording.
     fireEvent.click(screen.getByRole('button', { name: 'إيقاف الصوت' }))
@@ -155,6 +154,44 @@ describe('SpeakScreen', () => {
     expect(track.stop).toHaveBeenCalled()
     // Session speaking time reached the progress bar.
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).not.toBe('0')
+
+    // Ending the conversation reveals Emma's notes for every answer.
+    fireEvent.click(screen.getByRole('button', { name: 'أنهِ المحادثة' }))
+    expect(screen.getByRole('heading', { name: 'ملاحظات Emma على محادثتك' })).toBeTruthy()
+    expect(screen.getByText('إجابة واضحة وطبيعية')).toBeTruthy()
+    expect(screen.getByText('The best part of my day was teaching my class.')).toBeTruthy()
+    expect(screen.getByText('نستخدم was لأن اليوم انتهى.')).toBeTruthy()
+    // The mic bar is gone while reviewing.
+    expect(screen.queryByRole('button', { name: 'ابدأ التسجيل' })).toBeNull()
+
+    // A new chat starts a fresh session.
+    fireEvent.click(screen.getByRole('button', { name: 'ابدأ محادثة جديدة' }))
+    await waitFor(() => expect(a.start).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(mic()).toBeTruthy())
+  })
+
+  it('shows only the typing animation while transcribing, with no status text', async () => {
+    let release: () => void = () => {}
+    const a = api({
+      transcribe: vi.fn(
+        () =>
+          new Promise((r) => {
+            release = () => r({ ok: true, transcript: 'Hello there.' })
+          }),
+      ),
+    })
+    renderScreen(a)
+    await screen.findByText('Hi! What was the best part of your day?')
+    await recordOnce()
+    await waitFor(() => expect(a.transcribe).toHaveBeenCalledTimes(1))
+    expect(status().trim()).toBe('')
+    expect(screen.queryByText(/تحويل/)).toBeNull()
+    // The animated dots are in the log (with a screen-reader-only label).
+    expect(document.querySelectorAll('.spk-dot').length).toBeGreaterThan(0)
+    await act(async () => {
+      release()
+    })
+    await waitFor(() => expect(a.respond).toHaveBeenCalledTimes(1))
   })
 
   it('shows a clear error when transcription fails and stays usable', async () => {

@@ -70,7 +70,8 @@ function statusText(phase: SessionPhase, seconds: number): string {
     case 'recording':
       return `${T.recording} · ${formatDuration(seconds)}`
     case 'transcribing':
-      return T.transcribing
+      // Nothing here: the animated typing bubble in the log is the indicator.
+      return ''
     case 'thinking':
       return T.thinking
     case 'speaking':
