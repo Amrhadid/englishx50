@@ -46,3 +46,11 @@ alter table public.x50_speaking_turns
 
 create index if not exists x50_speaking_turns_conversation_idx
   on public.x50_speaking_turns (conversation_id, created_at);
+
+-- speak-turn writes through the service role, not anon/authenticated — and
+-- policies.sql's default-privilege grant only covers anon/authenticated, so
+-- new tables (and this ALTER on the pre-existing turns table) need an
+-- explicit grant or every request fails with "permission denied for table"
+-- (surfaced to the learner as "storage_unavailable").
+grant select, insert, update, delete on public.x50_speaking_conversations to service_role;
+grant select, insert, update, delete on public.x50_speaking_turns to service_role;
