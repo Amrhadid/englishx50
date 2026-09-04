@@ -2,7 +2,32 @@
 // prompt. Lives only on the server: the client sends scenario/level ids and
 // never sees the prompt text.
 
-export const SCENARIO_IDS = ['daily', 'interview', 'airport', 'meeting', 'shopping', 'free'] as const
+// Emma picks one of these at random for every new conversation (the learner
+// gets exactly one reroll — see randomScenarioId() in src/speak/scenarios.ts).
+// Kept in this fixed order so a client-side reroll excluding "the current id"
+// and a server-side default fallback agree on the same 20-item universe.
+export const SCENARIO_IDS = [
+  'introduce',
+  'daily',
+  'weekend',
+  'family',
+  'hobbies',
+  'cooking',
+  'restaurant',
+  'shopping',
+  'airport',
+  'hotel',
+  'directions',
+  'doctor',
+  'past',
+  'future',
+  'vacation',
+  'interview',
+  'work',
+  'meeting',
+  'customer',
+  'opinion',
+] as const
 export type ScenarioId = (typeof SCENARIO_IDS)[number]
 
 export const LEVEL_IDS = ['beginner', 'intermediate', 'advanced'] as const
@@ -16,34 +41,103 @@ interface ScenarioSpec {
 }
 
 export const SCENARIOS: Record<ScenarioId, ScenarioSpec> = {
-  daily: {
-    opener: 'Hi! What was the best part of your day?',
+  introduce: {
+    opener: "Hi! I don't think we've met before — could you introduce yourself?",
     brief:
-      "Everyday small talk: the learner's day, routine, family, hobbies, weekend plans. Stay warm and curious.",
+      "Getting to know each other for the first time. Ask about their name, where they're from, what they do, and one interesting thing about them.",
   },
-  interview: {
-    opener: 'Welcome! Could you tell me a little about yourself and the job you are applying for?',
+  daily: {
+    opener: 'Hi! Can you walk me through what a normal day looks like for you?',
     brief:
-      'A friendly job interview. You are the interviewer: ask about experience, strengths, a challenge they solved, and why they want the role.',
+      'Their daily routine: when they wake up, morning habits, work or study schedule, evenings. Keep it grounded in ordinary weekday life.',
+  },
+  weekend: {
+    opener: 'Hey! What do you usually do on weekends?',
+    brief:
+      'Weekend activities and plans: rest, family time, going out, hobbies. Ask what they did last weekend or plan to do this one.',
+  },
+  family: {
+    opener: "I'd love to hear about the people close to you — do you have a big family?",
+    brief:
+      'Friends and family: siblings, parents, close friends, how they spend time together. Warm and personal, never intrusive.',
+  },
+  hobbies: {
+    opener: 'What do you like to do in your free time?',
+    brief:
+      'Hobbies and free time: sports, reading, gaming, art, music. Ask what they enjoy, why, and how they got into it.',
+  },
+  cooking: {
+    opener: "Do you enjoy cooking? What's your favorite dish to make?",
+    brief:
+      'Food and cooking: favorite dishes, cooking at home vs eating out, a recipe they know well.',
+  },
+  restaurant: {
+    opener: 'Welcome! Table for how many today?',
+    brief:
+      'You are a waiter at a restaurant. Cover ordering food, recommendations, dietary preferences, and paying the bill.',
+  },
+  shopping: {
+    opener: 'Hi there! Are you looking for anything special today?',
+    brief:
+      'You are a shop assistant in a clothing store. Cover sizes, colors, trying things on, prices, and making a decision.',
   },
   airport: {
     opener: 'Good morning! Where are you flying to today?',
     brief:
       'At the airport: you play check-in staff, security, or a fellow traveller. Cover tickets, luggage, gates, boarding, delays, and directions.',
   },
+  hotel: {
+    opener: 'Welcome! Do you have a reservation with us?',
+    brief:
+      'You are a hotel receptionist. Cover checking in, room preferences, breakfast times, and hotel amenities.',
+  },
+  directions: {
+    opener: 'Excuse me — you look like you know the area. Could you help me find something?',
+    brief:
+      "You are a stranger asking the learner for directions to a nearby place (a pharmacy, a station, a cafe). Have them explain the route, and ask a follow-up if it's unclear.",
+  },
+  doctor: {
+    opener: 'Good morning, what brings you in today?',
+    brief:
+      'You are a doctor at a routine check-up. Ask about symptoms, how long they have felt this way, and give simple, reassuring advice. This is only roleplay practice — never give real medical diagnoses.',
+  },
+  past: {
+    opener: "What's something interesting that happened to you a few years ago?",
+    brief:
+      'Talking about the past: a memorable trip, a childhood memory, how something used to be different. Practice past-tense storytelling.',
+  },
+  future: {
+    opener: 'What are your plans for the next few years?',
+    brief: 'Future plans: career goals, learning new things, where they would like to be. Practice future tense and ambition.',
+  },
+  vacation: {
+    opener: 'If you could go anywhere in the world, where would your dream vacation be?',
+    brief:
+      "Dream vacation: destination, what they'd do there, who they'd bring. Encourage vivid, descriptive answers.",
+  },
+  interview: {
+    opener: 'Welcome! Could you tell me a little about yourself and the job you are applying for?',
+    brief:
+      'A friendly job interview. You are the interviewer: ask about experience, strengths, a challenge they solved, and why they want the role.',
+  },
+  work: {
+    opener: 'What does a typical day at your job look like?',
+    brief: 'A day at work: tasks, colleagues, challenges, what they enjoy or find difficult about their job.',
+  },
   meeting: {
     opener: 'Thanks for joining. Could you give us a quick update on your project?',
     brief:
       'A short work meeting. You are a colleague or manager: ask for updates, deadlines, problems, and next steps. Keep it professional but relaxed.',
   },
-  shopping: {
-    opener: 'Hi there! Are you looking for anything special today?',
+  customer: {
+    opener: "Hi, I'm calling because I have a problem with my order — can you help me?",
     brief:
-      'Restaurant and shopping: you are a waiter or shop assistant. Cover ordering food, sizes, prices, paying, returns, and recommendations.',
+      'You are a customer with a problem (a late delivery, a broken item, a billing error). The learner plays customer support solving it. Present a clear complaint, then react realistically to their proposed solution — ask for detail if it is vague, thank them if it is satisfying.',
   },
-  free: {
-    opener: 'Hi! What would you like to talk about today?',
-    brief: 'Open conversation about whatever the learner chooses. Follow their interests.',
+  opinion: {
+    opener: 'Here is a question for you: do you think social media does more good than harm?',
+    brief:
+      'Expressing and defending an opinion: pick a mild, everyday debate topic (technology, city life vs countryside, remote work). Ask for their opinion, then respectfully push back once with a counterpoint so they practice defending their view. Never touch politics, religion, or anything sensitive.',
   },
 }
 

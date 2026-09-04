@@ -1,7 +1,27 @@
 // EnglishX50 /speak — client-side types. Mirrors the `speak-turn` Edge
 // Function contract (supabase/functions/speak-turn/handler.ts).
 
-export type ScenarioId = 'daily' | 'interview' | 'airport' | 'meeting' | 'shopping' | 'free'
+export type ScenarioId =
+  | 'introduce'
+  | 'daily'
+  | 'weekend'
+  | 'family'
+  | 'hobbies'
+  | 'cooking'
+  | 'restaurant'
+  | 'shopping'
+  | 'airport'
+  | 'hotel'
+  | 'directions'
+  | 'doctor'
+  | 'past'
+  | 'future'
+  | 'vacation'
+  | 'interview'
+  | 'work'
+  | 'meeting'
+  | 'customer'
+  | 'opinion'
 export type LevelId = 'beginner' | 'intermediate' | 'advanced'
 
 /** Compact, structured feedback on one learner answer. */

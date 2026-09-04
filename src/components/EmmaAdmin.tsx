@@ -2,12 +2,26 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 const SCENARIO_LABEL: Record<string, string> = {
-  daily: 'Daily conversation',
-  interview: 'Job interview',
-  airport: 'At the airport',
-  meeting: 'Meeting',
-  shopping: 'Restaurant & shopping',
-  free: 'Free conversation',
+  introduce: 'Introduce Yourself',
+  daily: 'My Daily Routine',
+  weekend: 'My Weekend',
+  family: 'Friends and Family',
+  hobbies: 'Hobbies and Free Time',
+  cooking: 'Food and Cooking',
+  restaurant: 'At a Restaurant',
+  shopping: 'Shopping for Clothes',
+  airport: 'At the Airport',
+  hotel: 'Hotel Check-in',
+  directions: 'Asking for Directions',
+  doctor: 'Visiting a Doctor',
+  past: 'Talking About the Past',
+  future: 'Future Plans',
+  vacation: 'My Dream Vacation',
+  interview: 'Job Interview',
+  work: 'A Day at Work',
+  meeting: 'Joining a Meeting',
+  customer: "Solving a Customer's Problem",
+  opinion: 'Expressing and Defending an Opinion',
 }
 
 const LEVEL_LABEL: Record<string, string> = {

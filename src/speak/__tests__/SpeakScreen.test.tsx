@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SpeakScreen from '../SpeakScreen'
-import type { Conversation, SessionResult, SpeakApi, StartResult, TurnResult } from '../types'
+import { SCENARIOS } from '../scenarios'
+import { T } from '../text'
+import type { Conversation, ScenarioId, SessionResult, SpeakApi, StartResult, TurnResult } from '../types'
 
 vi.mock('../../lib/supabase', () => ({ supabase: null, isSupabaseConfigured: false }))
 
@@ -115,10 +117,16 @@ function api(over: Partial<Api> = {}, opts: { current?: Conversation | null; goa
 const makePdf = vi.fn(async () => new Uint8Array([0x25, 0x50, 0x44, 0x46]))
 const download = vi.fn()
 
-function renderScreen(a: Api) {
+function renderScreen(a: Api, initialScenario: ScenarioId = 'daily') {
   return render(
     <MemoryRouter>
-      <SpeakScreen api={a as unknown as SpeakApi} userId="u1" makePdf={makePdf} download={download} />
+      <SpeakScreen
+        api={a as unknown as SpeakApi}
+        userId="u1"
+        makePdf={makePdf}
+        download={download}
+        initialScenario={initialScenario}
+      />
     </MemoryRouter>,
   )
 }
@@ -126,14 +134,15 @@ function renderScreen(a: Api) {
 const mic = () => screen.getByRole('button', { name: 'ابدأ التسجيل' })
 const stopBtn = () => screen.getByRole('button', { name: 'إنهاء التسجيل' })
 const startBtn = () => screen.getByRole('button', { name: 'ابدأ المحادثة' })
+/** The pre-start topic card (PartnerCard's own subtitle also names the topic, so scope to this). */
+const topicCard = () => within(screen.getByRole('region', { name: T.topicLabel }))
 /** The mic bar's live status line (the first role="status" in the DOM). */
 const status = () => screen.getAllByRole('status')[0].textContent ?? ''
 
-async function startConversation(scenario?: string) {
+async function startConversation() {
   await waitFor(() => expect(startBtn().hasAttribute('disabled')).toBe(false))
-  if (scenario) fireEvent.click(screen.getByRole('radio', { name: new RegExp(scenario) }))
   fireEvent.click(startBtn())
-  await screen.findAllByText(scenario === 'في المطار' ? OPENERS.airport : OPENERS.daily)
+  await screen.findByRole('button', { name: 'ابدأ التسجيل' })
 }
 
 /** Press the mic, wait ~1s of fake time, press again — one full recording. */
@@ -181,14 +190,14 @@ describe('SpeakScreen', () => {
     expect(screen.getByRole('heading', { name: 'اتكلم إنجليزي من غير توتر' })).toBeTruthy()
     expect(screen.getByText('هدف اليوم: 5 دقائق')).toBeTruthy()
     expect(screen.getByText('Emma')).toBeTruthy()
-    for (const label of ['محادثة يومية', 'مقابلة عمل', 'في المطار', 'اجتماع', 'مطعم وتسوق', 'محادثة حرة']) {
-      expect(screen.getByRole('radio', { name: new RegExp(label) })).toBeTruthy()
-    }
     await waitFor(() => expect(a.session).toHaveBeenCalledTimes(1))
     // Nothing starts and no mic is requested until the learner presses start.
     await waitFor(() => expect(startBtn().hasAttribute('disabled')).toBe(false))
     expect(a.start).not.toHaveBeenCalled()
     expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled()
+    // Emma assigns today's topic — no picker, just the assigned one and a single reroll.
+    expect(topicCard().getByText(new RegExp(SCENARIOS.find((s) => s.id === 'daily')!.label))).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'موضوع تاني' }).hasAttribute('disabled')).toBe(false)
 
     await startConversation()
     const [opener] = screen.getAllByText(OPENERS.daily)
@@ -199,13 +208,38 @@ describe('SpeakScreen', () => {
     expect(mic().className).toMatch(/h-20 w-20/)
   })
 
-  it('starts with the selected scenario and locks the chips afterwards', async () => {
+  it('starts with the topic Emma assigned, and hides the topic card once running', async () => {
     const a = api()
-    renderScreen(a)
-    await startConversation('في المطار')
+    renderScreen(a, 'airport')
+    await startConversation()
     expect((a.start.mock.calls[0] as unknown as [{ scenario: string }])[0].scenario).toBe('airport')
-    expect(screen.getByRole('radio', { name: /في المطار/ }).getAttribute('aria-checked')).toBe('true')
-    expect(screen.getByRole('radio', { name: /محادثة يومية/ }).hasAttribute('disabled')).toBe(true)
+    // The topic card (and its skip button) is only for the pre-start screen.
+    expect(screen.queryByText('موضوع اليوم')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'موضوع تاني' })).toBeNull()
+  })
+
+  it('lets the learner reroll the assigned topic exactly once before starting', async () => {
+    const a = api()
+    renderScreen(a, 'airport')
+    await waitFor(() => expect(startBtn().hasAttribute('disabled')).toBe(false))
+    const initialLabel = SCENARIOS.find((s) => s.id === 'airport')!.label
+    expect(topicCard().getByText(new RegExp(initialLabel))).toBeTruthy()
+
+    const skipBtn = screen.getByRole('button', { name: 'موضوع تاني' })
+    fireEvent.click(skipBtn)
+    // A different topic is now shown, and the skip is spent.
+    expect(topicCard().queryByText(new RegExp(initialLabel))).toBeNull()
+    expect(skipBtn.hasAttribute('disabled')).toBe(true)
+
+    const rerolledLabel = SCENARIOS.find((s) => topicCard().queryByText(new RegExp(s.label)))?.label
+    expect(rerolledLabel).toBeTruthy()
+
+    // A second click changes nothing further.
+    fireEvent.click(skipBtn)
+    expect(topicCard().getByText(new RegExp(rerolledLabel!))).toBeTruthy()
+
+    await startConversation()
+    expect((a.start.mock.calls[0] as unknown as [{ scenario: string }])[0].scenario).not.toBe('airport')
   })
 
   it('completes a push-to-talk turn with no tips shown, and grows the progress bar', async () => {

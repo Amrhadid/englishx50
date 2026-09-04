@@ -18,13 +18,29 @@ export type MockFailure =
   | 'resume'
   | 'complete'
 
+// Mirrors supabase/functions/speak-turn/prompt.ts's SCENARIOS openers (the
+// dev mock never calls the server, so it keeps its own copy).
 const OPENERS: Record<ScenarioId, string> = {
-  daily: 'Hi! What was the best part of your day?',
-  interview: 'Welcome! Could you tell me a little about yourself and the job you are applying for?',
-  airport: 'Good morning! Where are you flying to today?',
-  meeting: 'Thanks for joining. Could you give us a quick update on your project?',
+  introduce: "Hi! I don't think we've met before — could you introduce yourself?",
+  daily: 'Hi! Can you walk me through what a normal day looks like for you?',
+  weekend: 'Hey! What do you usually do on weekends?',
+  family: "I'd love to hear about the people close to you — do you have a big family?",
+  hobbies: 'What do you like to do in your free time?',
+  cooking: "Do you enjoy cooking? What's your favorite dish to make?",
+  restaurant: 'Welcome! Table for how many today?',
   shopping: 'Hi there! Are you looking for anything special today?',
-  free: 'Hi! What would you like to talk about today?',
+  airport: 'Good morning! Where are you flying to today?',
+  hotel: 'Welcome! Do you have a reservation with us?',
+  directions: 'Excuse me — you look like you know the area. Could you help me find something?',
+  doctor: 'Good morning, what brings you in today?',
+  past: "What's something interesting that happened to you a few years ago?",
+  future: 'What are your plans for the next few years?',
+  vacation: 'If you could go anywhere in the world, where would your dream vacation be?',
+  interview: 'Welcome! Could you tell me a little about yourself and the job you are applying for?',
+  work: 'What does a typical day at your job look like?',
+  meeting: 'Thanks for joining. Could you give us a quick update on your project?',
+  customer: "Hi, I'm calling because I have a problem with my order — can you help me?",
+  opinion: 'Here is a question for you: do you think social media does more good than harm?',
 }
 
 const REPLIES = [

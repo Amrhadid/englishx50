@@ -5,7 +5,7 @@ import type { SessionPhase } from '../types'
 interface Props {
   phase: SessionPhase
   canSpeak: boolean
-  /** Idle only: the learner has picked a scenario and may start. */
+  /** Idle only: Emma has a topic assigned and the learner may start. */
   onStart: () => void
   supported: boolean
   recordingSeconds: number

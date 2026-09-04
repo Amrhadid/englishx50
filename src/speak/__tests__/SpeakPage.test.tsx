@@ -2,6 +2,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { isScenarioId } from '../scenarios'
 import type { SpeakApi } from '../types'
 
 // The page reads the same two signals the rest of the site uses; stub them.
@@ -121,7 +122,9 @@ describe('SpeakPage access control', () => {
     await waitFor(() => expect(startBtn.hasAttribute('disabled')).toBe(false))
     startBtn.click()
     await waitFor(() => expect(api.start).toHaveBeenCalledTimes(1))
-    expect(api.start.mock.calls[0][0]).toMatchObject({ scenario: 'daily', level: 'intermediate' })
+    // Emma assigns the topic at random now — just check it's a real one and the level is unchanged.
+    expect(api.start.mock.calls[0][0]).toMatchObject({ level: 'intermediate' })
+    expect(isScenarioId(api.start.mock.calls[0][0].scenario)).toBe(true)
     await waitFor(() => expect(screen.getAllByText('Hi! What was the best part of your day?').length).toBeGreaterThan(0))
   })
 

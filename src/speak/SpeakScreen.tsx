@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import SpeakHeader from './components/SpeakHeader'
 import PartnerCard from './components/PartnerCard'
-import ScenarioChips from './components/ScenarioChips'
+import TopicCard from './components/TopicCard'
 import DailyProgress from './components/DailyProgress'
 import ConversationLog from './components/ConversationLog'
 import ConversationReview from './components/ConversationReview'
@@ -14,7 +14,7 @@ import SettingsSheet from './components/SettingsSheet'
 import { useRecorder } from './hooks/useRecorder'
 import { useAudioPlayer } from './hooks/useAudioPlayer'
 import { useSpeakSession } from './hooks/useSpeakSession'
-import { DEFAULT_LEVEL, DEFAULT_SCENARIO, isLevelId } from './scenarios'
+import { DEFAULT_LEVEL, isLevelId, randomScenarioId } from './scenarios'
 import { LEVEL_STORAGE_PREFIX, MAX_RECORDING_SECONDS, VOICE_STORAGE_PREFIX } from './constants'
 import { downloadBytes, feedbackFileName, renderFeedbackPdf } from './feedbackPdf'
 import { T } from './text'
@@ -29,6 +29,8 @@ interface Props {
   /** Test seam for the PDF generator (defaults to the canvas renderer). */
   makePdf?: (c: Conversation) => Promise<Uint8Array>
   download?: (bytes: Uint8Array, fileName: string) => void
+  /** Test seam: fixes Emma's initially-assigned topic instead of picking one at random. */
+  initialScenario?: ScenarioId
 }
 
 function readStored<Tv>(key: string, guard: (v: unknown) => v is Tv, fallback: Tv): Tv {
@@ -62,8 +64,18 @@ export default function SpeakScreen({
   onEntitlementLost,
   makePdf = renderFeedbackPdf,
   download = downloadBytes,
+  initialScenario,
 }: Props) {
-  const [scenario, setScenario] = useState<ScenarioId>(DEFAULT_SCENARIO)
+  // Emma assigns the topic; the learner gets exactly one reroll (skip) before starting.
+  const [scenario, setScenario] = useState<ScenarioId>(() => initialScenario ?? randomScenarioId())
+  const [topicSkipped, setTopicSkipped] = useState(false)
+  const skipTopic = useCallback(() => {
+    setTopicSkipped((used) => {
+      if (used) return used
+      setScenario((prev) => randomScenarioId(prev))
+      return true
+    })
+  }, [])
   const [level, setLevel] = useState<LevelId>(() => readStored(LEVEL_STORAGE_PREFIX + userId, isLevelId, DEFAULT_LEVEL))
   const [voice, setVoice] = useState<boolean>(
     () => readStored(VOICE_STORAGE_PREFIX + userId, (v): v is 'on' | 'off' => v === 'on' || v === 'off', 'on') === 'on',
@@ -194,12 +206,7 @@ export default function SpeakScreen({
             canReplay={player.canReplay}
             statusLabel={goalDone ? T.goalDone : undefined}
           />
-          <ScenarioChips
-            value={activeScenario}
-            onChange={setScenario}
-            // Locked to the conversation's scenario once one exists.
-            disabled={session.phase !== 'idle'}
-          />
+          {session.phase === 'idle' && <TopicCard scenario={scenario} onSkip={skipTopic} skipUsed={topicSkipped} />}
           <DailyProgress seconds={session.speakingSeconds} goalSeconds={session.goalSeconds} />
 
           {conversationOpen && (
