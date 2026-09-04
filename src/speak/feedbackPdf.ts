@@ -8,7 +8,7 @@
 // `buildPdf` (pure) is unit-tested; `renderFeedbackPdf` needs a browser.
 
 import { levelLabel, SCENARIOS } from './scenarios'
-import type { Conversation, SpeakFeedback } from './types'
+import type { Conversation, SpeakFeedback, VocabSuggestions, VocabWord } from './types'
 
 // ---------------------------------------------------------------------------
 // Minimal PDF writer: one JPEG image per page
@@ -261,8 +261,79 @@ function feedbackBlocks(ctx: Ctx, fb: SpeakFeedback, width: number, x: number): 
   return out
 }
 
+/** One row of the vocabulary table: English word, Arabic meaning, and (upgrades only) the word it replaces. */
+function vocabRow(word: VocabWord, width: number, x: number, striped: boolean): Block {
+  const hasFrom = Boolean(word.from)
+  const height = (hasFrom ? 34 : 25) * SCALE
+  const midY = hasFrom ? height * 0.4 : height * 0.5
+  return {
+    height,
+    draw: (c, y) => {
+      if (striped) {
+        c.fillStyle = COLOR.soft
+        c.fillRect(x, y, width, height)
+      }
+      c.textBaseline = 'alphabetic'
+      c.font = `700 ${11.5 * SCALE}px ${FONT}`
+      c.fillStyle = COLOR.ink
+      c.direction = 'rtl'
+      c.textAlign = 'right'
+      c.fillText(word.ar, x + width - 12 * SCALE, y + midY + 4 * SCALE)
+      c.font = `800 ${11.5 * SCALE}px ${FONT}`
+      c.fillStyle = COLOR.purple
+      c.direction = 'ltr'
+      c.textAlign = 'left'
+      c.fillText(word.en, x + 12 * SCALE, y + midY + 4 * SCALE)
+      if (word.from) {
+        c.font = `500 ${9.5 * SCALE}px ${FONT}`
+        c.fillStyle = COLOR.faint
+        c.direction = 'rtl'
+        c.textAlign = 'right'
+        c.fillText(`بدل: ${word.from}`, x + width - 12 * SCALE, y + height - 7 * SCALE)
+      }
+    },
+  }
+}
+
+/** One vocabulary group: a purple label followed by its striped rows. */
+function vocabGroup(ctx: Ctx, title: string, words: VocabWord[], width: number, x: number): Block[] {
+  if (words.length === 0) return []
+  const out: Block[] = [
+    paragraph(ctx, title, { font: `800 ${12 * SCALE}px ${FONT}`, color: COLOR.purple, rtl: true, lineHeight: 17 * SCALE }, width, x),
+    spacer(4 * SCALE),
+  ]
+  words.forEach((w, i) => out.push(vocabRow(w, width, x, i % 2 === 0)))
+  out.push(spacer(16 * SCALE))
+  return out
+}
+
+/** The three-group vocabulary review table (20 words: missing / contextual / upgrades). */
+function vocabBlocks(ctx: Ctx, vocab: VocabSuggestions, width: number, x: number): Block[] {
+  const total = vocab.missing.length + vocab.contextual.length + vocab.upgrades.length
+  if (total === 0) return []
+  return [
+    spacer(6 * SCALE),
+    paragraph(ctx, 'قائمة مفردات مقترحة', { font: `900 ${16 * SCALE}px ${FONT}`, color: COLOR.ink, rtl: true, lineHeight: 22 * SCALE }, width, x),
+    paragraph(
+      ctx,
+      'كلمات كان يمكن استخدامها، كلمات مقترحة لنفس الموضوع، وكلمات أقوى بدل التي استخدمتها — مع المعنى بالعربي.',
+      { font: `600 ${10 * SCALE}px ${FONT}`, color: COLOR.muted, rtl: true, lineHeight: 15 * SCALE },
+      width,
+      x,
+    ),
+    spacer(10 * SCALE),
+    ...vocabGroup(ctx, '١) كلمات كان يجب استخدامها', vocab.missing, width, x),
+    ...vocabGroup(ctx, '٢) كلمات مقترحة لنفس الموضوع', vocab.contextual, width, x),
+    ...vocabGroup(ctx, '٣) كلمات أقوى بدل التي استخدمتها', vocab.upgrades, width, x),
+  ]
+}
+
 /** Lay out the report; returns finished canvases. */
-export function layoutFeedbackPages(conversation: Conversation, makeCanvas: () => HTMLCanvasElement): HTMLCanvasElement[] {
+export function layoutFeedbackPages(
+  conversation: Conversation,
+  makeCanvas: () => HTMLCanvasElement,
+  vocabulary?: VocabSuggestions,
+): HTMLCanvasElement[] {
   const measure = makeCanvas()
   measure.width = W
   measure.height = H
@@ -305,6 +376,8 @@ export function layoutFeedbackPages(conversation: Conversation, makeCanvas: () =
     } })
     blocks.push(...group.slice(2))
   })
+
+  if (vocabulary) blocks.push(...vocabBlocks(mctx, vocabulary, width, x))
 
   // Paginate.
   const top = HEADER_H + 12 * SCALE
@@ -350,13 +423,13 @@ function canvasToJpeg(canvas: HTMLCanvasElement): Promise<Uint8Array> {
 }
 
 /** Render the conversation's feedback to PDF bytes (browser only). */
-export async function renderFeedbackPdf(conversation: Conversation): Promise<Uint8Array> {
+export async function renderFeedbackPdf(conversation: Conversation, vocabulary?: VocabSuggestions): Promise<Uint8Array> {
   try {
     await Promise.all([`900 20px ${FONT}`, `700 12px ${FONT}`, `500 12px ${FONT}`].map((f) => document.fonts.load(f)))
   } catch {
     /* fall back to whatever font is available */
   }
-  const canvases = layoutFeedbackPages(conversation, () => document.createElement('canvas'))
+  const canvases = layoutFeedbackPages(conversation, () => document.createElement('canvas'), vocabulary)
   const pages: PdfPage[] = []
   for (const c of canvases) pages.push({ jpeg: await canvasToJpeg(c), width: c.width, height: c.height })
   return buildPdf(pages, { title: 'EnglishX50 speaking feedback' })

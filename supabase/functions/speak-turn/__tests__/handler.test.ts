@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createSpeakHandler, nextAvailableAt, toModelMessages, type SpeakDeps } from '../handler.ts'
 import { MinuteLimiter } from '../ratelimit.ts'
-import { MOCK_TURN, ProviderError, type Providers } from '../providers.ts'
+import { MOCK_TURN, MOCK_VOCAB, ProviderError, type Providers } from '../providers.ts'
 import type { ConversationRow, Store, TurnRow } from '../store.ts'
 
 const NOW = Date.UTC(2026, 8, 3, 12)
@@ -71,6 +71,7 @@ function memoryStore(seed: { conversations?: ConversationRow[]; turns?: Record<s
         goal_seconds: goalSeconds,
         started_at: new Date(NOW).toISOString(),
         completed_at: null,
+        vocab_json: null,
       }
       conversations.push(row)
       return row
@@ -107,7 +108,7 @@ function memoryStore(seed: { conversations?: ConversationRow[]; turns?: Record<s
 function providers(over: Partial<Providers> = {}): Providers {
   return {
     transcriber: { transcribe: vi.fn(async () => 'I had a great day today.') },
-    model: { turn: vi.fn(async () => MOCK_TURN) },
+    model: { turn: vi.fn(async () => MOCK_TURN), vocabulary: vi.fn(async () => MOCK_VOCAB) },
     synthesizer: { synthesize: vi.fn(async () => ({ base64: 'QUJD', mime: 'audio/mpeg' })) },
     ...over,
   }
@@ -153,6 +154,7 @@ const activeRow = (over: Partial<ConversationRow> = {}): ConversationRow => ({
   goal_seconds: 300,
   started_at: new Date(NOW - 2 * HOUR).toISOString(),
   completed_at: null,
+  vocab_json: null,
   ...over,
 })
 
@@ -532,6 +534,67 @@ describe('speak-turn handler — turns', () => {
     const daily = await makeHandler(providers(), seeded.store, {}, supabaseFetch({ turnsToday: 150 }))(post('paid', respond('conv-active')))
     expect(daily.status).toBe(429)
     expect((await daily.json()).code).toBe('rate_limited')
+  })
+})
+
+describe('speak-turn handler — vocabulary', () => {
+  it('generates the vocabulary review from the transcript and caches it on the row', async () => {
+    const p = providers()
+    const seeded = memoryStore({
+      conversations: [activeRow({ status: 'completed', completed_at: new Date(NOW - HOUR).toISOString() })],
+      turns: { 'conv-active': [{ id: 't1', transcript: 'Hello', reply: 'Hi! Where to?', feedback: null, speaking_seconds: 5, created_at: '', audio_path: null }] },
+    })
+    const h = makeHandler(p, seeded.store)
+    const res = await h(post('paid', { action: 'vocabulary', conversationId: 'conv-active' }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.vocabulary).toEqual(MOCK_VOCAB)
+    expect(p.model!.vocabulary).toHaveBeenCalledTimes(1)
+    expect(seeded.conversations[0].vocab_json).toEqual(MOCK_VOCAB)
+
+    // A second request must not call the model again — it reads the cached row.
+    const again = await h(post('paid', { action: 'vocabulary', conversationId: 'conv-active' }))
+    expect((await again.json()).vocabulary).toEqual(MOCK_VOCAB)
+    expect(p.model!.vocabulary).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns an empty list rather than calling the model when there are no turns yet', async () => {
+    const p = providers()
+    const seeded = memoryStore({ conversations: [activeRow()] })
+    const res = await makeHandler(p, seeded.store)(post('paid', { action: 'vocabulary', conversationId: 'conv-active' }))
+    const body = await res.json()
+    expect(body.vocabulary).toEqual({ missing: [], contextual: [], upgrades: [] })
+    expect(p.model!.vocabulary).not.toHaveBeenCalled()
+  })
+
+  it('never lets one learner fetch another\'s vocabulary review', async () => {
+    const seeded = memoryStore({ conversations: [activeRow()] })
+    const res = await makeHandler(providers(), seeded.store)(post('admin', { action: 'vocabulary', conversationId: 'conv-active' }))
+    expect(res.status).toBe(404)
+    expect((await res.json()).code).toBe('conversation_not_found')
+  })
+
+  it('returns 503 when the model is not configured', async () => {
+    const seeded = memoryStore({
+      conversations: [activeRow()],
+      turns: { 'conv-active': [{ id: 't1', transcript: 'Hello', reply: 'Hi!', feedback: null, speaking_seconds: 5, created_at: '', audio_path: null }] },
+    })
+    const res = await makeHandler(providers({ model: null }), seeded.store)(post('paid', { action: 'vocabulary', conversationId: 'conv-active' }))
+    expect(res.status).toBe(503)
+    expect((await res.json()).code).toBe('provider_unavailable')
+  })
+
+  it('reports a malformed model answer instead of guessing', async () => {
+    const seeded = memoryStore({
+      conversations: [activeRow()],
+      turns: { 'conv-active': [{ id: 't1', transcript: 'Hello', reply: 'Hi!', feedback: null, speaking_seconds: 5, created_at: '', audio_path: null }] },
+    })
+    const vocabulary = vi.fn(async () => ({ missing: [], contextual: [], upgrades: [] }))
+    const res = await makeHandler(providers({ model: { turn: vi.fn(async () => MOCK_TURN), vocabulary } }), seeded.store)(
+      post('paid', { action: 'vocabulary', conversationId: 'conv-active' }),
+    )
+    expect(res.status).toBe(502)
+    expect((await res.json()).code).toBe('ai_malformed')
   })
 })
 

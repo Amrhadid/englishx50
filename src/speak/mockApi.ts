@@ -2,7 +2,7 @@
 // devMock.ts (never in production) or explicitly by tests. Conversations live
 // in memory for the page's lifetime; `?mock=…` in devMock.ts picks the gate.
 
-import type { Conversation, ScenarioId, SpeakApi, SpeakAudio, SpeakFeedback, StoredTurn } from './types'
+import type { Conversation, ScenarioId, SpeakApi, SpeakAudio, SpeakFeedback, StoredTurn, VocabSuggestions } from './types'
 
 export type MockFailure =
   | 'start'
@@ -90,6 +90,35 @@ export function silentWav(seconds = 1.2, sampleRate = 8000): SpeakAudio {
   let bin = ''
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
   return { base64: btoa(bin), mime: 'audio/wav' }
+}
+
+const MOCK_VOCAB: VocabSuggestions = {
+  missing: [
+    { en: 'schedule', ar: 'جدول' },
+    { en: 'commute', ar: 'تنقّل يومي' },
+    { en: 'assignment', ar: 'مهمة' },
+    { en: 'deadline', ar: 'موعد نهائي' },
+    { en: 'colleague', ar: 'زميل عمل' },
+    { en: 'break', ar: 'استراحة' },
+    { en: 'routine', ar: 'روتين' },
+  ],
+  contextual: [
+    { en: 'alarm clock', ar: 'منبه' },
+    { en: 'errand', ar: 'مشوار' },
+    { en: 'grocery shopping', ar: 'تسوق البقالة' },
+    { en: 'household chores', ar: 'أعمال منزلية' },
+    { en: 'wind down', ar: 'يهدأ قبل النوم' },
+    { en: 'multitask', ar: 'ينجز أكثر من مهمة' },
+    { en: 'productive', ar: 'منتج' },
+  ],
+  upgrades: [
+    { en: 'exhausted', ar: 'منهك', from: 'tired' },
+    { en: 'delighted', ar: 'مسرور جداً', from: 'happy' },
+    { en: 'occasionally', ar: 'أحياناً', from: 'sometimes' },
+    { en: 'accomplish', ar: 'ينجز', from: 'do' },
+    { en: 'enormous', ar: 'ضخم', from: 'big' },
+    { en: 'swiftly', ar: 'بسرعة', from: 'fast' },
+  ],
 }
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
@@ -266,6 +295,11 @@ export function createMockSpeakApi(opts: { fail?: MockFailure | string | null; d
         history.unshift(current)
       }
       return { ok: true, conversation: current, nextAvailableAt: iso(new Date(current.completedAt!).getTime() + 86_400_000) }
+    },
+    async vocabulary() {
+      await wait(delay)
+      if (fail === 'network') return { ok: false, code: 'network' }
+      return { ok: true, vocabulary: MOCK_VOCAB }
     },
   }
 }

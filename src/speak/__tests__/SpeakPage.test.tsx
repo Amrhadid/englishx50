@@ -48,6 +48,7 @@ function fakeApi(): SpeakApi & { session: ReturnType<typeof vi.fn>; start: Retur
       nextAvailableAt: null,
     })),
     end: vi.fn(async () => ({ ok: true as const, conversation: { ...conversation, status: 'completed' as const }, nextAvailableAt: null })),
+    vocabulary: vi.fn(async () => ({ ok: true as const, vocabulary: { missing: [], contextual: [], upgrades: [] } })),
   }
 }
 

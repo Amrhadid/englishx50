@@ -26,6 +26,8 @@ export interface ConversationRow {
   goal_seconds: number
   started_at: string
   completed_at: string | null
+  /** Cached vocabulary review (see speaking_vocabulary.sql) — generated once, on first request. */
+  vocab_json: unknown | null
 }
 
 export interface TurnRow {
@@ -67,7 +69,7 @@ export interface Store {
 }
 
 const CONVERSATION_FIELDS =
-  'id,user_id,scenario,level,status,speaking_seconds,goal_seconds,started_at,completed_at'
+  'id,user_id,scenario,level,status,speaking_seconds,goal_seconds,started_at,completed_at,vocab_json'
 const TURN_FIELDS = 'id,transcript,reply,feedback,speaking_seconds,created_at,audio_path'
 
 function num(v: unknown): number {
@@ -86,6 +88,7 @@ function normaliseConversation(r: Record<string, unknown>): ConversationRow {
     goal_seconds: num(r.goal_seconds) || 300,
     started_at: String(r.started_at),
     completed_at: r.completed_at ? String(r.completed_at) : null,
+    vocab_json: r.vocab_json ?? null,
   }
 }
 

@@ -9,7 +9,7 @@
 // selected exclusively by SPEAK_MOCK_MODE=true — production never falls back
 // to them (a missing provider is a 503, not a fake answer).
 
-import { SPEAKING_TURN_TOOL } from './prompt.ts'
+import { SPEAKING_TURN_TOOL, VOCAB_TOOL } from './prompt.ts'
 import type { FetchLike } from './access.ts'
 
 export type ProviderErrorKind = 'rate_limited' | 'timeout' | 'upstream' | 'malformed' | 'refused'
@@ -46,6 +46,8 @@ export interface TurnInput {
 export interface ConversationModel {
   /** Returns the raw tool input the model produced (validated by the caller). */
   turn(input: TurnInput, opts: CallOptions): Promise<unknown>
+  /** One-shot post-conversation vocabulary review; also returns raw tool input. */
+  vocabulary(input: { system: string; transcript: string }, opts: CallOptions): Promise<unknown>
 }
 
 export interface SpeechAudio {
@@ -119,42 +121,52 @@ export interface AnthropicOptions {
 }
 
 export function anthropicModel(apiKey: string, fetchFn: FetchLike, options: AnthropicOptions): ConversationModel {
+  const callTool = async (
+    system: string,
+    messages: ModelMessage[],
+    tool: typeof SPEAKING_TURN_TOOL | typeof VOCAB_TOOL,
+    signal: AbortSignal,
+  ): Promise<unknown> => {
+    const body: Record<string, unknown> = {
+      model: options.model,
+      max_tokens: 2048,
+      system,
+      messages,
+      tools: [tool],
+      tool_choice: { type: 'auto', disable_parallel_tool_use: true },
+    }
+    if (options.effort && options.effort !== 'off') body.output_config = { effort: options.effort }
+
+    const resp = await fetchFn('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal,
+    })
+    if (resp.status === 429) throw new ProviderError('rate_limited', 'Model rate limited', 429)
+    if (resp.status === 529) throw new ProviderError('upstream', 'Model overloaded', 529)
+    if (!resp.ok) throw new ProviderError('upstream', `Model error (${resp.status})`, resp.status)
+
+    const data = (await resp.json()) as {
+      stop_reason?: string
+      content?: { type: string; name?: string; input?: unknown }[]
+    }
+    if (data.stop_reason === 'refusal') throw new ProviderError('refused', 'Model refused the turn')
+    const block = (data.content ?? []).find((b) => b.type === 'tool_use' && b.name === tool.name)
+    if (!block || block.input == null) throw new ProviderError('malformed', 'Model returned no tool call')
+    return block.input
+  }
+
   return {
-    async turn({ system, messages }, { signal }) {
-      const body: Record<string, unknown> = {
-        model: options.model,
-        max_tokens: 2048,
-        system,
-        messages,
-        tools: [SPEAKING_TURN_TOOL],
-        tool_choice: { type: 'auto', disable_parallel_tool_use: true },
-      }
-      if (options.effort && options.effort !== 'off') body.output_config = { effort: options.effort }
-
-      const resp = await fetchFn('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify(body),
-        signal,
-      })
-      if (resp.status === 429) throw new ProviderError('rate_limited', 'Model rate limited', 429)
-      if (resp.status === 529) throw new ProviderError('upstream', 'Model overloaded', 529)
-      if (!resp.ok) throw new ProviderError('upstream', `Model error (${resp.status})`, resp.status)
-
-      const data = (await resp.json()) as {
-        stop_reason?: string
-        content?: { type: string; name?: string; input?: unknown }[]
-      }
-      if (data.stop_reason === 'refusal') throw new ProviderError('refused', 'Model refused the turn')
-      const block = (data.content ?? []).find(
-        (b) => b.type === 'tool_use' && b.name === SPEAKING_TURN_TOOL.name,
-      )
-      if (!block || block.input == null) throw new ProviderError('malformed', 'Model returned no tool call')
-      return block.input
+    turn({ system, messages }, { signal }) {
+      return callTool(system, messages, SPEAKING_TURN_TOOL, signal)
+    },
+    vocabulary({ system, transcript }, { signal }) {
+      return callTool(system, [{ role: 'user', content: transcript }], VOCAB_TOOL, signal)
     },
   }
 }
@@ -208,10 +220,39 @@ export const MOCK_TURN = {
   },
 }
 
+export const MOCK_VOCAB = {
+  missing: [
+    { en: 'schedule', ar: 'جدول' },
+    { en: 'commute', ar: 'تنقّل يومي' },
+    { en: 'assignment', ar: 'مهمة' },
+    { en: 'deadline', ar: 'موعد نهائي' },
+    { en: 'colleague', ar: 'زميل عمل' },
+    { en: 'break', ar: 'استراحة' },
+    { en: 'routine', ar: 'روتين' },
+  ],
+  contextual: [
+    { en: 'alarm clock', ar: 'منبه' },
+    { en: 'errand', ar: 'مشوار' },
+    { en: 'grocery shopping', ar: 'تسوق البقالة' },
+    { en: 'household chores', ar: 'أعمال منزلية' },
+    { en: 'wind down', ar: 'يهدأ قبل النوم' },
+    { en: 'multitask', ar: 'ينجز أكثر من مهمة' },
+    { en: 'productive', ar: 'منتج' },
+  ],
+  upgrades: [
+    { en: 'exhausted', ar: 'منهك', from: 'tired' },
+    { en: 'delighted', ar: 'مسرور جداً', from: 'happy' },
+    { en: 'occasionally', ar: 'أحياناً', from: 'sometimes' },
+    { en: 'accomplish', ar: 'ينجز', from: 'do' },
+    { en: 'enormous', ar: 'ضخم', from: 'big' },
+    { en: 'swiftly', ar: 'بسرعة', from: 'fast' },
+  ],
+}
+
 export function mockProviders(): Providers {
   return {
     transcriber: { transcribe: async () => MOCK_TRANSCRIPT },
-    model: { turn: async () => MOCK_TURN },
+    model: { turn: async () => MOCK_TURN, vocabulary: async () => MOCK_VOCAB },
     synthesizer: null,
   }
 }

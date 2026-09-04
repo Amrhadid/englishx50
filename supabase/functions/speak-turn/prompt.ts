@@ -186,6 +186,30 @@ Feedback (separate from the reply):
 You MUST answer by calling the speaking_turn tool exactly once with the reply and the feedback. Do not write anything outside the tool call.`
 }
 
+/** The system prompt for the one-shot vocabulary review generated after a conversation completes. */
+export function buildVocabPrompt(scenario: ScenarioId, level: LevelId): string {
+  return `You are Emma's vocabulary coach. You are given the full transcript of one completed English-speaking conversation between yourself (Emma) and an Arabic-speaking learner practising EnglishX50's "${SCENARIOS[scenario].brief}" scenario.
+
+LEARNER LEVEL: ${LEVEL_GUIDE[level]}
+
+From the transcript, produce a curated vocabulary list of exactly 20 English words or short phrases with their Arabic meaning, split into three groups:
+
+1. "missing" — exactly 7 words. Words or phrases the learner clearly needed to express an idea but did not know or use: places where they hesitated, repeated themselves, used a very basic word, or described something in a roundabout way. Infer these from genuine gaps in what they actually said.
+2. "contextual" — exactly 7 words. Useful, natural vocabulary for this scenario/topic that the learner never used but would strengthen future conversations on the same topic.
+3. "upgrades" — exactly 6 words. A stronger, more natural or more precise synonym for a word the learner actually used verbatim. Put their original word in "from" and the stronger word in "en".
+
+Rules:
+- Each "en" entry is a single common word or a short 2-3 word phrase — never rare or academic vocabulary unless the learner's level is advanced.
+- Each "ar" is the Arabic meaning in that exact sense: plain MSA, 1-4 words.
+- "from" (upgrades only) must be a word or short phrase that genuinely appears in the learner's transcript, not something you invent.
+- Never repeat the same word across the three groups.
+- Always fill every group to its exact count. If the transcript alone does not give you 7 genuine gaps or 6 genuine upgrades, fill the remainder with the most useful general vocabulary for this scenario and level — but keep the "missing"/"contextual" split meaningful, and never invent a fake "from" word that is not in the transcript.
+
+You MUST answer by calling the vocabulary_suggestions tool exactly once. Do not write anything outside the tool call.
+
+CONVERSATION TRANSCRIPT:`
+}
+
 /** Tool schema Emma answers through. Strict: the model must return exactly this shape. */
 export const SPEAKING_TURN_TOOL = {
   name: 'speaking_turn',
@@ -222,5 +246,65 @@ export const SPEAKING_TURN_TOOL = {
       },
     },
     required: ['reply', 'feedback'],
+  },
+} as const
+
+/** Tool schema for the post-conversation vocabulary review. Strict, fixed counts per group. */
+export const VOCAB_TOOL = {
+  name: 'vocabulary_suggestions',
+  description: 'A curated 20-word vocabulary review for one completed learner conversation.',
+  strict: true,
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      missing: {
+        type: 'array',
+        minItems: 7,
+        maxItems: 7,
+        description: 'Words the learner needed but did not use — 7 items.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            en: { type: 'string', description: 'The English word or short phrase.' },
+            ar: { type: 'string', description: 'Its Arabic meaning in this sense.' },
+          },
+          required: ['en', 'ar'],
+        },
+      },
+      contextual: {
+        type: 'array',
+        minItems: 7,
+        maxItems: 7,
+        description: 'Useful vocabulary for this scenario the learner never used — 7 items.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            en: { type: 'string', description: 'The English word or short phrase.' },
+            ar: { type: 'string', description: 'Its Arabic meaning in this sense.' },
+          },
+          required: ['en', 'ar'],
+        },
+      },
+      upgrades: {
+        type: 'array',
+        minItems: 6,
+        maxItems: 6,
+        description: 'A stronger word than one the learner actually used — 6 items.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            en: { type: 'string', description: 'The stronger English word or short phrase.' },
+            ar: { type: 'string', description: 'Its Arabic meaning in this sense.' },
+            from: { type: 'string', description: "The learner's own word this upgrades, verbatim from the transcript." },
+          },
+          required: ['en', 'ar', 'from'],
+        },
+      },
+    },
+    required: ['missing', 'contextual', 'upgrades'],
   },
 } as const

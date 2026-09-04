@@ -83,6 +83,20 @@ export interface StoredTurn {
   createdAt: string
 }
 
+/** One word/phrase + Arabic meaning; upgrades also carry the learner's original word. */
+export interface VocabWord {
+  en: string
+  ar: string
+  from?: string
+}
+
+/** The three-group vocabulary review generated once per completed conversation. */
+export interface VocabSuggestions {
+  missing: VocabWord[]
+  contextual: VocabWord[]
+  upgrades: VocabWord[]
+}
+
 export type ConversationStatus = 'active' | 'completed'
 
 export interface Conversation {
@@ -116,6 +130,7 @@ export type StartResult =
 export type ConversationResult = { ok: true; conversation: Conversation } | ApiFailure
 export type EndResult = { ok: true; conversation: Conversation; nextAvailableAt: string | null } | ApiFailure
 export type TranscribeResult = { ok: true; transcript: string; audioPath: string | null } | ApiFailure
+export type VocabResult = { ok: true; vocabulary: VocabSuggestions } | ApiFailure
 export type TurnResult =
   | {
       ok: true
@@ -147,6 +162,8 @@ export interface SpeakApi {
   }): Promise<TurnResult>
   /** End the active conversation early, before the speaking goal is reached. */
   end(input: { conversationId: string }): Promise<EndResult>
+  /** The post-conversation vocabulary review (cached on the server after the first call). */
+  vocabulary(input: { conversationId: string }): Promise<VocabResult>
 }
 
 export interface ConversationTurn {

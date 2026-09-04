@@ -14,6 +14,8 @@ export const LIMITS = {
   maxReplyChars: 700,
   /** Longest single feedback field (characters). */
   maxFeedbackChars: 400,
+  /** Longest word/phrase or meaning in a vocabulary suggestion (characters). */
+  maxVocabWordChars: 60,
   /** Most prior messages passed to the model (assistant + user, most recent kept). */
   maxHistoryMessages: 12,
   /** Per-user request ceiling per minute (all actions). */
@@ -26,8 +28,8 @@ export const LIMITS = {
   ttsTimeoutMs: 20_000,
 } as const
 
-export type SpeakAction = 'session' | 'conversation' | 'start' | 'transcribe' | 'respond' | 'end'
-const ACTIONS: readonly string[] = ['session', 'conversation', 'start', 'transcribe', 'respond', 'end']
+export type SpeakAction = 'session' | 'conversation' | 'start' | 'transcribe' | 'respond' | 'end' | 'vocabulary'
+const ACTIONS: readonly string[] = ['session', 'conversation', 'start', 'transcribe', 'respond', 'end', 'vocabulary']
 
 /** Learner speaking time that completes one conversation (seconds). */
 export const GOAL_SECONDS = 300
@@ -118,7 +120,7 @@ export function parseSpeakRequest(body: unknown): ParseResult {
     wantAudio: b.wantAudio !== false,
   }
 
-  if (action === 'respond' || action === 'conversation' || action === 'end') {
+  if (action === 'respond' || action === 'conversation' || action === 'end' || action === 'vocabulary') {
     const id = typeof b.conversationId === 'string' ? b.conversationId.trim() : ''
     if (!/^[\w-]{4,64}$/.test(id)) return { ok: false, error: 'Missing conversationId' }
     req.conversationId = id
@@ -191,4 +193,49 @@ export function validateModelOutput(raw: unknown): SpeakingTurnResponse | null {
   }
 
   return { reply, feedback }
+}
+
+/** One word/phrase + Arabic meaning; upgrades also carry the learner's original word. */
+export interface VocabWord {
+  en: string
+  ar: string
+  from?: string
+}
+
+/** The three-group vocabulary review generated once per completed conversation. */
+export interface VocabSuggestions {
+  missing: VocabWord[]
+  contextual: VocabWord[]
+  upgrades: VocabWord[]
+}
+
+function cleanVocabList(raw: unknown, cap: number, requireFrom: boolean): VocabWord[] {
+  if (!Array.isArray(raw)) return []
+  const out: VocabWord[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object' || out.length >= cap) continue
+    const r = item as Record<string, unknown>
+    const en = cleanText(r.en, LIMITS.maxVocabWordChars)
+    const ar = cleanText(r.ar, LIMITS.maxVocabWordChars)
+    if (!en || !ar) continue
+    const from = cleanText(r.from, LIMITS.maxVocabWordChars)
+    if (requireFrom && !from) continue
+    out.push(from ? { en, ar, from } : { en, ar })
+  }
+  return out
+}
+
+/**
+ * Validate the raw tool input the vocabulary model produced. Returns null
+ * only when every group came back empty (a genuinely unusable answer) —
+ * a partial list (e.g. 5 of 7) is still worth showing.
+ */
+export function validateVocabOutput(raw: unknown): VocabSuggestions | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const missing = cleanVocabList(r.missing, 7, false)
+  const contextual = cleanVocabList(r.contextual, 7, false)
+  const upgrades = cleanVocabList(r.upgrades, 6, true)
+  if (missing.length === 0 && contextual.length === 0 && upgrades.length === 0) return null
+  return { missing, contextual, upgrades }
 }

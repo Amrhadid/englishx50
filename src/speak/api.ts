@@ -6,7 +6,7 @@
 import { supabase } from '../lib/supabase'
 import { REQUEST_TIMEOUT_MS } from './constants'
 import { isLevelId, isScenarioId } from './scenarios'
-import type { ApiFailure, Conversation, SpeakApi, SpeakErrorCode, SpeakFeedback, StoredTurn } from './types'
+import type { ApiFailure, Conversation, SpeakApi, SpeakErrorCode, SpeakFeedback, StoredTurn, VocabSuggestions, VocabWord } from './types'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -145,6 +145,26 @@ export function conversationOf(raw: unknown): Conversation | null {
   }
 }
 
+function vocabWordsOf(raw: unknown): VocabWord[] {
+  if (!Array.isArray(raw)) return []
+  const out: VocabWord[] = []
+  for (const item of raw) {
+    const w = item as Record<string, unknown> | null
+    const en = str(w?.en)
+    const ar = str(w?.ar)
+    if (!en || !ar) continue
+    const from = str(w?.from)
+    out.push(from ? { en, ar, from } : { en, ar })
+  }
+  return out
+}
+
+function vocabOf(raw: unknown): VocabSuggestions | null {
+  const v = raw as Record<string, unknown> | null
+  if (!v) return null
+  return { missing: vocabWordsOf(v.missing), contextual: vocabWordsOf(v.contextual), upgrades: vocabWordsOf(v.upgrades) }
+}
+
 export function createSupabaseSpeakApi(): SpeakApi {
   return {
     async session() {
@@ -228,6 +248,14 @@ export function createSupabaseSpeakApi(): SpeakApi {
         conversation,
         nextAvailableAt: typeof res.data.nextAvailableAt === 'string' ? res.data.nextAvailableAt : null,
       }
+    },
+
+    async vocabulary({ conversationId }) {
+      const res = await call({ action: 'vocabulary', conversationId })
+      if (!res.ok) return res
+      const vocabulary = vocabOf(res.data.vocabulary)
+      if (!vocabulary) return { ok: false, code: 'server' }
+      return { ok: true, vocabulary }
     },
   }
 }

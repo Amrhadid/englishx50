@@ -110,6 +110,7 @@ function api(over: Partial<Api> = {}, opts: { current?: Conversation | null; goa
       current = { ...current!, status: 'completed', completedAt: '2026-09-03T10:05:00.000Z' }
       return { ok: true as const, conversation: current, nextAvailableAt: '2026-09-04T10:05:00.000Z' }
     }),
+    vocabulary: vi.fn(async () => ({ ok: true as const, vocabulary: { missing: [], contextual: [], upgrades: [] } })),
     ...over,
   }
 }

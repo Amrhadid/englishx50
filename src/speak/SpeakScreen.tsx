@@ -62,7 +62,7 @@ export default function SpeakScreen({
   api,
   userId,
   onEntitlementLost,
-  makePdf = renderFeedbackPdf,
+  makePdf: makePdfProp,
   download = downloadBytes,
   initialScenario,
 }: Props) {
@@ -124,6 +124,17 @@ export default function SpeakScreen({
     writeStored(VOICE_STORAGE_PREFIX + userId, on ? 'on' : 'off')
     if (!on) session.stopSpeaking()
   }
+
+  // Default PDF generator: fetch the (server-cached) vocabulary review before
+  // rendering, unless a test seam already supplies the whole generator.
+  const makePdf = useCallback(
+    async (c: Conversation) => {
+      if (makePdfProp) return makePdfProp(c)
+      const res = await api.vocabulary({ conversationId: c.id })
+      return renderFeedbackPdf(c, res.ok ? res.vocabulary : undefined)
+    },
+    [api, makePdfProp],
+  )
 
   const openHistory = useCallback(
     async (c: Conversation) => {

@@ -2,7 +2,7 @@
 // Function, written against web-standard Request/Response only so it runs in
 // Deno on the edge and in Vitest under Node (see __tests__/handler.test.ts).
 //
-// One endpoint, six actions (POST JSON, `action` field):
+// One endpoint, seven actions (POST JSON, `action` field):
 //
 //   session       → the learner's current conversation (active, or completed
 //                   inside the 24 h window), when the next one may start, and
@@ -18,13 +18,16 @@
 //                   speaking goal is reached; marks it completed as-is so the
 //                   review/PDF and the 24 h window behave exactly as a normal
 //                   completion would
+//   vocabulary    → a 20-word review (7 missing / 7 contextual / 6 upgrades)
+//                   generated once from the conversation transcript, cached
+//                   on the row so repeat PDF downloads never re-call the model
 //
 // Every action first resolves the caller through the fail-closed entitlement
 // check (access.ts), then the per-minute limiter, and only then touches a paid
 // provider. Nothing about the caller beyond the user id reaches a provider.
 
 import { bearerToken, resolveAccess, type AccessEnv, type FetchLike } from './access.ts'
-import { buildSystemPrompt, openerFor, isScenarioId, isLevelId, type LevelId, type ScenarioId } from './prompt.ts'
+import { buildSystemPrompt, buildVocabPrompt, openerFor, isScenarioId, isLevelId, type LevelId, type ScenarioId } from './prompt.ts'
 import { MinuteLimiter, countTurnsToday } from './ratelimit.ts'
 import {
   CONVERSATION_WINDOW_MS,
@@ -33,6 +36,7 @@ import {
   LIMITS,
   parseSpeakRequest,
   validateModelOutput,
+  validateVocabOutput,
   type SpeakRequest,
   type SpeakingTurnResponse,
 } from './validate.ts'
@@ -270,6 +274,34 @@ export function createSpeakHandler(deps: SpeakDeps): (req: Request) => Promise<R
         conversation: serialiseConversation(updated, turns),
         nextAvailableAt: access.isAdmin ? null : nextAvailableAt(updated, now()),
       })
+    }
+
+    if (request.action === 'vocabulary') {
+      const row = await store.conversation(request.conversationId!, access.userId)
+      if (row === undefined) return fail('storage_unavailable', 503, 'Conversation storage is unavailable')
+      if (!row) return fail('conversation_not_found', 404, 'No such conversation')
+      // Cached on first request so a re-download never re-calls the model.
+      if (row.vocab_json) return json({ ok: true, vocabulary: row.vocab_json })
+      const turns = (await store.turns(row.id)) ?? []
+      if (turns.length === 0) {
+        return json({ ok: true, vocabulary: { missing: [], contextual: [], upgrades: [] } })
+      }
+      if (!providers.model) return fail('provider_unavailable', 503, 'The conversation model is not configured')
+      const scenario: ScenarioId = isScenarioId(row.scenario) ? row.scenario : 'daily'
+      const level: LevelId = isLevelId(row.level) ? row.level : 'intermediate'
+      const transcript = turns.map((t) => `Learner: ${t.transcript}\nEmma: ${t.reply}`).join('\n\n')
+      let vocab: ReturnType<typeof validateVocabOutput>
+      try {
+        const raw = await withTimeout(LIMITS.modelTimeoutMs, (signal) =>
+          providers.model!.vocabulary({ system: buildVocabPrompt(scenario, level), transcript }, { signal }),
+        )
+        vocab = validateVocabOutput(raw)
+      } catch (e) {
+        return providerFailure(e, 'ai_failed')
+      }
+      if (!vocab) return fail('ai_malformed', 502, 'The AI returned an unusable vocabulary list')
+      await store.updateConversation(row.id, { vocab_json: vocab })
+      return json({ ok: true, vocabulary: vocab })
     }
 
     if (request.action === 'start') {
