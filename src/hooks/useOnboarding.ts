@@ -22,6 +22,11 @@ function daysSince(iso: string | null): number {
  */
 export function useOnboarding() {
   const { user } = useAuth()
+  // Supabase republishes a new `user` object (same account) whenever the tab
+  // regains focus and the client re-validates the session — depending on the
+  // object itself would re-run this effect and re-show the loading state on
+  // every tab switch. The id is what actually identifies "a different user".
+  const userId = user?.id ?? null
   const [student, setStudent] = useState<Student | null>(null)
   const [progress, setProgress] = useState<Record<number, string>>({})
   // Challenge numbers whose cooldown an admin waived for this account.
@@ -31,7 +36,7 @@ export function useOnboarding() {
   const [loading, setLoading] = useState(true)
 
   const refetch = useCallback(async () => {
-    if (!supabase || !user) {
+    if (!supabase || !userId) {
       setStudent(null)
       setProgress({})
       setCooldownSkips([])
@@ -41,13 +46,13 @@ export function useOnboarding() {
     }
     setLoading(true)
     const [{ data }, { data: prog }, skips, unlocks] = await Promise.all([
-      supabase.from('x50_students').select('*').eq('user_id', user.id).maybeSingle(),
+      supabase.from('x50_students').select('*').eq('user_id', userId).maybeSingle(),
       supabase
         .from('x50_challenge_progress')
         .select('challenge_number, completed_at')
-        .eq('user_id', user.id),
-      fetchCooldownSkips(user.id),
-      fetchChallengeUnlocks(user.id),
+        .eq('user_id', userId),
+      fetchCooldownSkips(userId),
+      fetchChallengeUnlocks(userId),
     ])
     setStudent((data as Student | null) ?? null)
     setCooldownSkips(skips)
@@ -61,7 +66,7 @@ export function useOnboarding() {
       ),
     )
     setLoading(false)
-  }, [user])
+  }, [userId])
 
   useEffect(() => {
     refetch()
