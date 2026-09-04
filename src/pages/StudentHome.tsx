@@ -13,7 +13,6 @@ import NotesModal from '../components/NotesModal'
 import NoticeModal from '../components/NoticeModal'
 import type { Challenge } from '../types'
 import Challenges from '../components/Challenges'
-import Countdown from '../components/Countdown'
 import ComingSoonModal from '../components/ComingSoonModal'
 import FeedbackModal from '../components/FeedbackModal'
 import SpeakingModal from '../components/SpeakingModal'
@@ -246,7 +245,6 @@ export default function StudentHome() {
         levelTestDone={levelTestDone}
         lockLabelFor={lockLabelFor}
       />
-      <Countdown onStart={scrollToChallenges} />
 
       <SiteFooter />
 
