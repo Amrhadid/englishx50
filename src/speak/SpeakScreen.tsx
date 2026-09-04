@@ -209,8 +209,17 @@ export default function SpeakScreen({
                 if (confirm(T.endConfirm)) session.endConversation()
               }}
               disabled={!session.canSpeak}
-              className="mx-auto block px-2 py-1 text-[13px] font-bold text-[#7a7596] transition hover:text-[#1b1730] hover:underline disabled:opacity-40"
+              className="mx-auto flex h-11 items-center justify-center gap-1.5 rounded-full border border-[#ece7fb] bg-white px-5 text-[13px] font-bold text-[#534AB7] shadow-sm transition hover:bg-[#f4f2fc] disabled:opacity-40"
             >
+              <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                <path
+                  d="M9 11.5 11 13.5 15.5 9M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
               {T.endConversation}
             </button>
           )}
