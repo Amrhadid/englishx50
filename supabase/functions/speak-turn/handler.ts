@@ -291,16 +291,22 @@ export function createSpeakHandler(deps: SpeakDeps): (req: Request) => Promise<R
       const scenario: ScenarioId = isScenarioId(row.scenario) ? row.scenario : 'daily'
       const level: LevelId = isLevelId(row.level) ? row.level : 'intermediate'
       const transcript = turns.map((t) => `Learner: ${t.transcript}\nEmma: ${t.reply}`).join('\n\n')
-      let vocab: ReturnType<typeof validateVocabOutput>
-      try {
-        const raw = await withTimeout(LIMITS.modelTimeoutMs, (signal) =>
-          providers.model!.vocabulary({ system: buildVocabPrompt(scenario, level), transcript }, { signal }),
-        )
-        vocab = validateVocabOutput(raw)
-      } catch (e) {
-        return providerFailure(e, 'ai_failed')
+      let vocab: ReturnType<typeof validateVocabOutput> = null
+      let lastVocabError: unknown = null
+      // One retry covers the occasional non-tool answer, same as the turn action.
+      for (let attempt = 0; attempt < 2 && !vocab; attempt++) {
+        try {
+          const raw = await withTimeout(LIMITS.modelTimeoutMs, (signal) =>
+            providers.model!.vocabulary({ system: buildVocabPrompt(scenario, level), transcript }, { signal }),
+          )
+          vocab = validateVocabOutput(raw)
+          if (!vocab) lastVocabError = new ProviderError('malformed', 'Model output failed validation')
+        } catch (e) {
+          lastVocabError = e
+          if (!(e instanceof ProviderError && e.kind === 'malformed')) break
+        }
       }
-      if (!vocab) return fail('ai_malformed', 502, 'The AI returned an unusable vocabulary list')
+      if (!vocab) return providerFailure(lastVocabError, 'ai_failed')
       await store.updateConversation(row.id, { vocab_json: vocab })
       return json({ ok: true, vocabulary: vocab })
     }

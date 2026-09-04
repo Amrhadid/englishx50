@@ -605,6 +605,24 @@ describe('speak-turn handler — vocabulary', () => {
     )
     expect(res.status).toBe(502)
     expect((await res.json()).code).toBe('ai_malformed')
+    expect(vocabulary).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries once and succeeds when the first vocabulary answer is malformed', async () => {
+    const seeded = memoryStore({
+      conversations: [activeRow()],
+      turns: { 'conv-active': [{ id: 't1', transcript: 'Hello', reply: 'Hi!', feedback: null, speaking_seconds: 5, created_at: '', audio_path: null }] },
+    })
+    const vocabulary = vi
+      .fn()
+      .mockResolvedValueOnce({ missing: [], contextual: [], upgrades: [] })
+      .mockResolvedValueOnce(MOCK_VOCAB)
+    const res = await makeHandler(providers({ model: { turn: vi.fn(async () => MOCK_TURN), vocabulary } }), seeded.store)(
+      post('paid', { action: 'vocabulary', conversationId: 'conv-active' }),
+    )
+    expect(res.status).toBe(200)
+    expect((await res.json()).vocabulary).toEqual(MOCK_VOCAB)
+    expect(vocabulary).toHaveBeenCalledTimes(2)
   })
 })
 

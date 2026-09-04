@@ -249,7 +249,14 @@ export const SPEAKING_TURN_TOOL = {
   },
 } as const
 
-/** Tool schema for the post-conversation vocabulary review. Strict, fixed counts per group. */
+/**
+ * Tool schema for the post-conversation vocabulary review.
+ *
+ * No minItems/maxItems: Anthropic's strict tool-use JSON schema subset
+ * rejects those keywords outright (every call failed with a schema error
+ * until this was found — the exact counts are enforced by the prompt text
+ * and, defensively, by validateVocabOutput's per-group cap on the way in).
+ */
 export const VOCAB_TOOL = {
   name: 'vocabulary_suggestions',
   description: 'A curated 20-word vocabulary review for one completed learner conversation.',
@@ -260,9 +267,7 @@ export const VOCAB_TOOL = {
     properties: {
       missing: {
         type: 'array',
-        minItems: 7,
-        maxItems: 7,
-        description: 'Words the learner needed but did not use — 7 items.',
+        description: 'Words the learner needed but did not use — exactly 7 items.',
         items: {
           type: 'object',
           additionalProperties: false,
@@ -275,9 +280,7 @@ export const VOCAB_TOOL = {
       },
       contextual: {
         type: 'array',
-        minItems: 7,
-        maxItems: 7,
-        description: 'Useful vocabulary for this scenario the learner never used — 7 items.',
+        description: 'Useful vocabulary for this scenario the learner never used — exactly 7 items.',
         items: {
           type: 'object',
           additionalProperties: false,
@@ -290,9 +293,7 @@ export const VOCAB_TOOL = {
       },
       upgrades: {
         type: 'array',
-        minItems: 6,
-        maxItems: 6,
-        description: 'A stronger word than one the learner actually used — 6 items.',
+        description: 'A stronger word than one the learner actually used — exactly 6 items.',
         items: {
           type: 'object',
           additionalProperties: false,

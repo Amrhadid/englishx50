@@ -20,7 +20,8 @@ export const T = {
   resumeHint: 'واصلنا محادثتك من حيث توقفت 👋',
   loadingSession: 'جارٍ تجهيز محادثتك…',
   completedTitle: 'أكملت محادثة اليوم 🎉',
-  completedBody: 'تكلمت 5 دقائق مع Emma. دي ملاحظاتها على كل إجابة قلتها.',
+  /** `duration` is the actual speaking time, formatted m:ss (e.g. "4:32"). */
+  completedBody: (duration: string) => `تكلمت ${duration} مع Emma. دي ملاحظاتها على كل إجابة قلتها.`,
   lockedTitle: 'محادثة اليوم مكتملة',
   lockedBody: 'بتقدر تبدأ محادثة جديدة كل 24 ساعة. المحادثة التالية متاحة بعد:',
   lockedNow: 'المحادثة التالية متاحة الآن — أعد تحميل الصفحة.',

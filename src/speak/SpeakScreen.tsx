@@ -17,6 +17,7 @@ import { useSpeakSession } from './hooks/useSpeakSession'
 import { DEFAULT_LEVEL, isLevelId, randomScenarioId } from './scenarios'
 import { LEVEL_STORAGE_PREFIX, MAX_RECORDING_SECONDS, VOICE_STORAGE_PREFIX } from './constants'
 import { downloadBytes, feedbackFileName, renderFeedbackPdf } from './feedbackPdf'
+import { formatDuration } from './format'
 import { T } from './text'
 import type { Conversation, LevelId, ScenarioId, SpeakApi } from './types'
 import './speak.css'
@@ -173,7 +174,7 @@ export default function SpeakScreen({
         <ConversationReview
           conversation={session.conversation}
           title={session.phase === 'completed' ? T.completedTitle : T.reviewTitle}
-          intro={session.phase === 'completed' ? T.completedBody : T.reviewIntro}
+          intro={session.phase === 'completed' ? T.completedBody(formatDuration(session.conversation.speakingSeconds)) : T.reviewIntro}
           makePdf={makePdf}
           download={download}
           fileName={feedbackFileName}
