@@ -7,7 +7,14 @@ import type { SpeakApi } from '../types'
 
 // The page reads the same two signals the rest of the site uses; stub them.
 const auth = { user: null as null | { id: string; email?: string }, authReady: true }
-const onboarding = { premiumActive: false, loading: false }
+const refetch = vi.fn(async () => {})
+const onboarding: { premiumActive: boolean; loading: boolean; student: { emma_intro_seen_at: string | null } | null; refetch: typeof refetch } = {
+  premiumActive: false,
+  loading: false,
+  student: null,
+  refetch,
+}
+const claimEmmaIntro = vi.fn(async () => ({ ok: true as const, alreadyClaimed: false }))
 
 vi.mock('../../hooks/useAuth', () => ({ useAuth: () => auth }))
 vi.mock('../../hooks/useOnboardingContext', () => ({ useOnboardingContext: () => onboarding }))
@@ -15,6 +22,7 @@ vi.mock('../../context/OnboardingContext', () => ({
   OnboardingProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 vi.mock('../../lib/supabase', () => ({ supabase: null, isSupabaseConfigured: false }))
+vi.mock('../../lib/emmaIntro', () => ({ claimEmmaIntro: () => claimEmmaIntro() }))
 
 import SpeakPage from '../SpeakPage'
 
@@ -70,6 +78,9 @@ describe('SpeakPage access control', () => {
     auth.authReady = true
     onboarding.premiumActive = false
     onboarding.loading = false
+    onboarding.student = null
+    refetch.mockClear()
+    claimEmmaIntro.mockClear()
     sessionStorage.clear()
   })
 
@@ -143,5 +154,29 @@ describe('SpeakPage access control', () => {
     api.session.mockResolvedValue({ ok: false, code: 'not_premium', status: 403 })
     renderPage(api)
     await waitFor(() => expect(screen.getByRole('heading', { name: 'تدريب المحادثة متاح للمشتركين' })).toBeTruthy())
+  })
+
+  it('shows the one-time Emma intro popup to a paid learner who has never seen it, and claims it on dismiss', async () => {
+    auth.user = { id: 'u1', email: 'paid@example.com' }
+    onboarding.premiumActive = true
+    onboarding.student = { emma_intro_seen_at: null }
+    const api = fakeApi()
+    renderPage(api)
+    const dismissBtn = await screen.findByRole('button', { name: 'اتكلم مع Emma من هنا' })
+    // The screen underneath is already usable — the popup is an overlay, not a blocker on load.
+    expect(screen.getByRole('heading', { name: 'اتكلم إنجليزي من غير توتر' })).toBeTruthy()
+    dismissBtn.click()
+    await waitFor(() => expect(claimEmmaIntro).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(refetch).toHaveBeenCalledTimes(1))
+  })
+
+  it('never shows the intro popup once emma_intro_seen_at is set', async () => {
+    auth.user = { id: 'u1', email: 'paid@example.com' }
+    onboarding.premiumActive = true
+    onboarding.student = { emma_intro_seen_at: '2026-09-01T00:00:00Z' }
+    const api = fakeApi()
+    renderPage(api)
+    await waitFor(() => expect(api.session).toHaveBeenCalledTimes(1))
+    expect(screen.queryByRole('button', { name: 'اتكلم مع Emma من هنا' })).toBeNull()
   })
 })

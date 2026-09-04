@@ -45,6 +45,8 @@ export interface Student {
   university: string | null
   code: string | null
   code_redeemed_at: string | null
+  /** Set once the learner has dismissed the one-time "meet Emma" popup (see emma_intro.sql). */
+  emma_intro_seen_at?: string | null
   created_at?: string
 }
 

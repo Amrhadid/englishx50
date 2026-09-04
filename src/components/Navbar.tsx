@@ -64,6 +64,12 @@ export default function Navbar({ onStart, onRedeem }: NavbarProps) {
           >
             آراء الطلاب
           </button>
+          <Link
+            to="/speak"
+            className="hidden rounded-full px-3.5 py-2 text-sm font-bold text-[#6b6685] transition hover:bg-[#f1edff] hover:text-[#8B5CF6] sm:inline-block"
+          >
+            اتكلم مع Emma
+          </Link>
           {onRedeem && (
             <button
               onClick={onRedeem}
