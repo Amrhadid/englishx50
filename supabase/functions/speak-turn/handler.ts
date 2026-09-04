@@ -263,11 +263,12 @@ export function createSpeakHandler(deps: SpeakDeps): (req: Request) => Promise<R
       if (!row) return fail('conversation_not_found', 404, 'No such conversation')
       // Already completed (e.g. a double tap, or it just reached its goal):
       // hand back the current row rather than erroring — ending is idempotent.
-      const updated =
-        row.status === 'active'
-          ? await store.updateConversation(row.id, { status: 'completed', completed_at: new Date(now()).toISOString() })
-          : row
+      const justCompleted = row.status === 'active'
+      const updated = justCompleted
+        ? await store.updateConversation(row.id, { status: 'completed', completed_at: new Date(now()).toISOString() })
+        : row
       if (!updated) return fail('storage_unavailable', 503, 'Could not end the conversation')
+      if (justCompleted) await store.maybeGrantEmmaGift(access.userId)
       const turns = (await store.turns(updated.id)) ?? []
       return json({
         ok: true,
@@ -429,6 +430,7 @@ export function createSpeakHandler(deps: SpeakDeps): (req: Request) => Promise<R
       speaking_seconds: total,
       ...(completed ? { status: 'completed', completed_at: new Date(now()).toISOString() } : {}),
     })
+    if (completed) await store.maybeGrantEmmaGift(access.userId)
     return json({
       ok: true,
       reply: turn.reply,

@@ -66,6 +66,14 @@ export interface Store {
   }): Promise<string | null>
   /** Uploads a learner recording and returns its storage path, or null if the upload failed. */
   uploadAudio(input: { userId: string; bytes: Uint8Array; mime: string }): Promise<string | null>
+  /**
+   * Grants the one-time 20-day subscription gift once this account has 5
+   * completed conversations of at least a minute each (see emma_gift.sql).
+   * Safe to call after every completion — it re-counts and is guarded
+   * server-side, so it can only ever grant once. Returns true only when this
+   * call is the one that granted it.
+   */
+  maybeGrantEmmaGift(userId: string): Promise<boolean>
 }
 
 const CONVERSATION_FIELDS =
@@ -215,6 +223,22 @@ export function createStore(env: StoreEnv, fetchFn: FetchLike): Store {
         return resp.ok ? path : null
       } catch {
         return null
+      }
+    },
+
+    async maybeGrantEmmaGift(userId) {
+      if (!enabled) return false
+      try {
+        const resp = await fetchFn(`${env.supabaseUrl}/rest/v1/rpc/x50_maybe_grant_emma_gift`, {
+          method: 'POST',
+          headers: headers(),
+          body: JSON.stringify({ p_user: userId }),
+        })
+        if (!resp.ok) return false
+        const data = (await resp.json()) as { granted?: unknown }
+        return data?.granted === true
+      } catch {
+        return false
       }
     },
   }

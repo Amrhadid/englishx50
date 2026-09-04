@@ -49,6 +49,7 @@ function supabaseFetch(opts: { turnsToday?: number } = {}) {
 function memoryStore(seed: { conversations?: ConversationRow[]; turns?: Record<string, TurnRow[]> } = {}) {
   const conversations: ConversationRow[] = [...(seed.conversations ?? [])]
   const turns: Record<string, TurnRow[]> = { ...(seed.turns ?? {}) }
+  const giftClaimed = new Set<string>()
   let n = 0
   const store: Store = {
     async latestConversation(userId) {
@@ -101,8 +102,17 @@ function memoryStore(seed: { conversations?: ConversationRow[]; turns?: Record<s
     async uploadAudio({ userId }) {
       return `${userId}/${++n}.webm`
     },
+    async maybeGrantEmmaGift(userId) {
+      if (giftClaimed.has(userId)) return false
+      const qualifying = conversations.filter(
+        (c) => c.user_id === userId && c.status === 'completed' && c.speaking_seconds >= 60,
+      ).length
+      if (qualifying < 5) return false
+      giftClaimed.add(userId)
+      return true
+    },
   }
-  return { store, conversations, turns }
+  return { store, conversations, turns, giftClaimed }
 }
 
 function providers(over: Partial<Providers> = {}): Providers {
@@ -595,6 +605,77 @@ describe('speak-turn handler — vocabulary', () => {
     )
     expect(res.status).toBe(502)
     expect((await res.json()).code).toBe('ai_malformed')
+  })
+})
+
+describe('speak-turn handler — emma gift', () => {
+  /** 4 already-completed, qualifying (>=60s) conversations for another one to complete the 5th. */
+  const fourQualifying = (userId: string) =>
+    Array.from({ length: 4 }, (_, i) =>
+      activeRow({
+        id: `conv-old-${i}`,
+        user_id: userId,
+        status: 'completed',
+        speaking_seconds: 90,
+        completed_at: new Date(NOW - (i + 2) * HOUR).toISOString(),
+      }),
+    )
+
+  it('grants the gift when ending the 5th qualifying conversation', async () => {
+    const row = activeRow({ speaking_seconds: 65 })
+    const seeded = memoryStore({ conversations: [...fourQualifying('paid-1'), row] })
+    const h = makeHandler(providers(), seeded.store)
+    await h(post('paid', { action: 'end', conversationId: row.id }))
+    expect(seeded.giftClaimed.has('paid-1')).toBe(true)
+  })
+
+  it('grants the gift when a turn completes the 5th qualifying conversation', async () => {
+    // Requests are capped at LIMITS.maxRecordingSeconds (60s); +60 reaches the 300s goal.
+    const row = activeRow({ speaking_seconds: 240 })
+    const seeded = memoryStore({ conversations: [...fourQualifying('paid-1'), row] })
+    const h = makeHandler(providers(), seeded.store)
+    await h(post('paid', respond('conv-active', { speakingSeconds: 60 })))
+    expect(seeded.giftClaimed.has('paid-1')).toBe(true)
+  })
+
+  it('does not grant the gift below 5 qualifying conversations', async () => {
+    const row = activeRow({ speaking_seconds: 65 })
+    const seeded = memoryStore({ conversations: [...fourQualifying('paid-1').slice(0, 3), row] })
+    const h = makeHandler(providers(), seeded.store)
+    await h(post('paid', { action: 'end', conversationId: row.id }))
+    expect(seeded.giftClaimed.has('paid-1')).toBe(false)
+  })
+
+  it('does not count a completed conversation under a minute toward the gift', async () => {
+    const short = activeRow({ id: 'conv-short', speaking_seconds: 65 })
+    const seeded = memoryStore({
+      conversations: [
+        ...fourQualifying('paid-1').map((c) => ({ ...c, speaking_seconds: 30 })), // completed, but too short
+        short,
+      ],
+    })
+    const h = makeHandler(providers(), seeded.store)
+    await h(post('paid', { action: 'end', conversationId: short.id }))
+    expect(seeded.giftClaimed.has('paid-1')).toBe(false)
+  })
+
+  it('is never granted twice, even across repeated completions past the threshold', async () => {
+    const rows = [
+      ...fourQualifying('paid-1'),
+      activeRow({ id: 'conv-5th', speaking_seconds: 65, status: 'completed', completed_at: new Date(NOW - HOUR).toISOString() }),
+      activeRow({ id: 'conv-6th', speaking_seconds: 65 }),
+    ]
+    const seeded = memoryStore({ conversations: rows })
+    const spy = vi.spyOn(seeded.store, 'maybeGrantEmmaGift')
+    const h = makeHandler(providers(), seeded.store)
+    await h(post('paid', { action: 'end', conversationId: 'conv-6th' }))
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(seeded.giftClaimed.has('paid-1')).toBe(true)
+    // A second completion after the gift is already claimed changes nothing.
+    const seventh = activeRow({ id: 'conv-7th', speaking_seconds: 65 })
+    seeded.conversations.push(seventh)
+    await h(post('paid', { action: 'end', conversationId: 'conv-7th' }))
+    expect(seeded.giftClaimed.has('paid-1')).toBe(true)
   })
 })
 
