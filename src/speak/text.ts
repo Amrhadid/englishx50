@@ -57,7 +57,7 @@ export const T = {
   settingsNewChat: 'ابدأ محادثة جديدة',
   typePlaceholder: 'Type your answer in English…',
   feedbackTitle: 'ملاحظات Emma',
-  endConversation: 'أنهِ المحادثة',
+  endConversation: 'احصل على التقييم',
   endConfirm: 'هل تريد إنهاء المحادثة الآن؟ هتشوف ملاحظات Emma على اللي اتكلمت فيه لحد دلوقتي.',
   reviewTitle: 'ملاحظات Emma على محادثتك',
   reviewIntro: 'أحسنت! دي أهم الملاحظات على كل إجابة قلتها.',

@@ -241,7 +241,7 @@ describe('SpeakScreen', () => {
     await waitFor(() => expect(a.respond).toHaveBeenCalledTimes(1))
     await stopAudioWhenPlaying()
 
-    const endBtn = screen.getByRole('button', { name: 'أنهِ المحادثة' })
+    const endBtn = screen.getByRole('button', { name: 'احصل على التقييم' })
     await waitFor(() => expect(endBtn.hasAttribute('disabled')).toBe(false))
     fireEvent.click(endBtn)
     expect(confirmSpy).toHaveBeenCalledTimes(1)
@@ -259,7 +259,7 @@ describe('SpeakScreen', () => {
     renderScreen(a)
     await startConversation()
 
-    const endBtn = screen.getByRole('button', { name: 'أنهِ المحادثة' })
+    const endBtn = screen.getByRole('button', { name: 'احصل على التقييم' })
     await waitFor(() => expect(endBtn.hasAttribute('disabled')).toBe(false))
     fireEvent.click(endBtn)
     expect(confirmSpy).toHaveBeenCalledTimes(1)
