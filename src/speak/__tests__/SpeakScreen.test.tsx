@@ -84,7 +84,7 @@ function api(over: Partial<Api> = {}, opts: { current?: Conversation | null; goa
       current = resumed ? current : conv({ scenario, opener: OPENERS[scenario], goalSeconds: goal })
       return { ok: true, conversation: current!, reply: current!.opener, audio: null, resumed }
     }),
-    transcribe: vi.fn(async () => ({ ok: true as const, transcript: 'The best part of my day is teaching my class.' })),
+    transcribe: vi.fn(async () => ({ ok: true as const, transcript: 'The best part of my day is teaching my class.', audioPath: null })),
     respond: vi.fn(async ({ text, speakingSeconds }: { text: string; speakingSeconds: number }): Promise<TurnResult> => {
       const seconds = speakingSeconds || 4
       current = {

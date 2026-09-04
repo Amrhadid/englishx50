@@ -92,9 +92,13 @@ function memoryStore(seed: { conversations?: ConversationRow[]; turns?: Record<s
         feedback: input.feedback,
         speaking_seconds: input.speakingSeconds,
         created_at: new Date(NOW).toISOString(),
+        audio_path: input.audioPath,
       }
       turns[input.conversationId] = [...(turns[input.conversationId] ?? []), row]
       return row.id
+    },
+    async uploadAudio({ userId }) {
+      return `${userId}/${++n}.webm`
     },
   }
   return { store, conversations, turns }
@@ -217,7 +221,7 @@ describe('speak-turn handler — conversations', () => {
   it('start resumes an active conversation (with its turns) instead of opening a second one', async () => {
     const seeded = memoryStore({
       conversations: [activeRow()],
-      turns: { 'conv-active': [{ id: 't1', transcript: 'Hello', reply: 'Hi! Where to?', feedback: { positive: 'x' }, speaking_seconds: 5, created_at: '' }] },
+      turns: { 'conv-active': [{ id: 't1', transcript: 'Hello', reply: 'Hi! Where to?', feedback: { positive: 'x' }, speaking_seconds: 5, created_at: '', audio_path: null }] },
     })
     const res = await makeHandler(providers(), seeded.store)(post('paid', start))
     const body = await res.json()
@@ -284,7 +288,7 @@ describe('speak-turn handler — conversations', () => {
   it('conversation returns one past conversation with its turns, only to its owner', async () => {
     const seeded = memoryStore({
       conversations: [activeRow({ id: 'conv-c1', status: 'completed', completed_at: new Date(NOW - 2 * 86_400_000).toISOString() })],
-      turns: { 'conv-c1': [{ id: 't', transcript: 'a', reply: 'b', feedback: null, speaking_seconds: 3, created_at: '' }] },
+      turns: { 'conv-c1': [{ id: 't', transcript: 'a', reply: 'b', feedback: null, speaking_seconds: 3, created_at: '', audio_path: null }] },
     })
     const h = makeHandler(providers(), seeded.store)
     const ok = await (await h(post('paid', { action: 'conversation', conversationId: 'conv-c1' }))).json()
@@ -354,9 +358,12 @@ describe('speak-turn handler — turns', () => {
     expect((await h(bad)).status).toBe(400)
   })
 
-  it('transcribes audio and reports an empty recording clearly', async () => {
+  it('transcribes audio, uploads it, and reports an empty recording clearly', async () => {
     const ok = await makeHandler()(post('paid', { action: 'transcribe', audio: 'QUJD', mime: 'audio/webm' }))
-    expect(await ok.json()).toEqual({ ok: true, transcript: 'I had a great day today.' })
+    const body = await ok.json()
+    expect(body.ok).toBe(true)
+    expect(body.transcript).toBe('I had a great day today.')
+    expect(body.audioPath).toBe('paid-1/1.webm')
 
     const silent = providers({ transcriber: { transcribe: async () => '   ' } })
     const empty = await makeHandler(silent)(post('paid', { action: 'transcribe', audio: 'QUJD' }))
@@ -381,7 +388,7 @@ describe('speak-turn handler — turns', () => {
     const p = providers()
     const seeded = memoryStore({
       conversations: [activeRow()],
-      turns: { 'conv-active': [{ id: 't1', transcript: 'Hello', reply: 'Hi! Where to?', feedback: null, speaking_seconds: 5, created_at: '' }] },
+      turns: { 'conv-active': [{ id: 't1', transcript: 'Hello', reply: 'Hi! Where to?', feedback: null, speaking_seconds: 5, created_at: '', audio_path: null }] },
     })
     const res = await makeHandler(p, seeded.store)(post('paid', respond('conv-active')))
     expect(res.status).toBe(200)
@@ -408,6 +415,29 @@ describe('speak-turn handler — turns', () => {
     expect(seeded.turns['conv-active']).toHaveLength(2)
     expect(seeded.turns['conv-active'][1]).toMatchObject({ transcript: 'I work as a teacher for five years.', speaking_seconds: 6.2 })
     expect(seeded.conversations[0].speaking_seconds).toBeCloseTo(126.2)
+  })
+
+  it('carries the recording from transcribe through to the persisted turn', async () => {
+    const seeded = memoryStore({ conversations: [activeRow()] })
+    const h = makeHandler(providers(), seeded.store)
+    const transcribed = await (await h(post('paid', { action: 'transcribe', audio: 'QUJD', mime: 'audio/webm' }))).json()
+    expect(transcribed.audioPath).toBe('paid-1/1.webm')
+
+    await h(post('paid', respond('conv-active', { audioPath: transcribed.audioPath })))
+    expect(seeded.turns['conv-active'][0].audio_path).toBe('paid-1/1.webm')
+  })
+
+  it('never blocks a turn on a failed audio upload, and rejects a forged audio path', async () => {
+    const seeded = memoryStore({ conversations: [activeRow()] })
+    seeded.store.uploadAudio = async () => null
+    const h = makeHandler(providers(), seeded.store)
+
+    const transcribed = await (await h(post('paid', { action: 'transcribe', audio: 'QUJD', mime: 'audio/webm' }))).json()
+    expect(transcribed.ok).toBe(true)
+    expect(transcribed.audioPath).toBeNull()
+
+    await h(post('paid', respond('conv-active', { audioPath: '../../etc/passwd' })))
+    expect(seeded.turns['conv-active'][0].audio_path).toBeNull()
   })
 
   it('marks the conversation complete once speaking time reaches the goal', async () => {

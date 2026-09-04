@@ -327,7 +327,9 @@ export function createSpeakHandler(deps: SpeakDeps): (req: Request) => Promise<R
       }
       transcript = transcript.replace(/\s+/g, ' ').trim().slice(0, LIMITS.maxTranscriptChars)
       if (transcript.length < 2) return fail('empty_transcript', 422, 'No speech detected')
-      return json({ ok: true, transcript })
+      // Best-effort: a failed upload never blocks the transcript from going out.
+      const audioPath = await store.uploadAudio({ userId: access.userId, bytes, mime: request.mime || 'audio/webm' })
+      return json({ ok: true, transcript, audioPath })
     }
 
     // respond
@@ -387,6 +389,7 @@ export function createSpeakHandler(deps: SpeakDeps): (req: Request) => Promise<R
       reply: turn.reply,
       feedback: turn.feedback,
       speakingSeconds: seconds,
+      audioPath: request.audioPath ?? null,
     })
     const total = Math.round((conversation.speaking_seconds + seconds) * 10) / 10
     const completed = total >= conversation.goal_seconds

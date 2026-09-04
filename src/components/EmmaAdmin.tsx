@@ -56,7 +56,13 @@ interface TurnRow {
   } | null
   speaking_seconds: number
   created_at: string
+  audio_path: string | null
 }
+
+/** Private bucket for learner recordings — see supabase/speaking_audio.sql. */
+const AUDIO_BUCKET = 'x50-speaking-audio'
+/** How long a listen link stays valid once generated. */
+const AUDIO_URL_TTL_SECONDS = 60 * 60
 
 interface StudentLite {
   user_id: string
@@ -96,6 +102,8 @@ export default function EmmaAdmin() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed'>('all')
+  const [audioUrls, setAudioUrls] = useState<Record<string, string>>({})
+  const [audioError, setAudioError] = useState<string | null>(null)
 
   const load = async () => {
     if (!supabase) {
@@ -113,7 +121,7 @@ export default function EmmaAdmin() {
         .limit(500),
       supabase
         .from('x50_speaking_turns')
-        .select('id,conversation_id,user_id,transcript,reply,feedback,speaking_seconds,created_at')
+        .select('id,conversation_id,user_id,transcript,reply,feedback,speaking_seconds,created_at,audio_path')
         .order('created_at', { ascending: true })
         .limit(5000),
       supabase.from('x50_students').select('user_id,name,phone'),
@@ -161,6 +169,37 @@ export default function EmmaAdmin() {
 
   const selected = selectedId ? conversations.find((c) => c.id === selectedId) : null
   const selectedTurns = selectedId ? (turnsByConversation[selectedId] ?? []) : []
+
+  // Sign a listen link for every recorded turn in the opened conversation.
+  // The bucket is private, so a fresh signed URL is generated per visit
+  // rather than stored — nothing long-lived sits in the database.
+  useEffect(() => {
+    if (!supabase || !selectedId) return
+    const paths = selectedTurns.map((t) => t.audio_path).filter((p): p is string => !!p)
+    const missing = paths.filter((p) => !audioUrls[p])
+    if (missing.length === 0) return
+    let cancelled = false
+    supabase.storage
+      .from(AUDIO_BUCKET)
+      .createSignedUrls(missing, AUDIO_URL_TTL_SECONDS)
+      .then(({ data, error: err }) => {
+        if (cancelled) return
+        if (err) {
+          setAudioError(err.message)
+          return
+        }
+        setAudioError(null)
+        const next: Record<string, string> = {}
+        for (const row of data ?? []) {
+          if (row.path && row.signedUrl) next[row.path] = row.signedUrl
+        }
+        setAudioUrls((prev) => ({ ...prev, ...next }))
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- audioUrls is read, not depended on (would refetch what it just fetched)
+  }, [selectedId, selectedTurns])
 
   if (loading) return <p className="text-sm text-[#9a9aa2]">Loading conversations…</p>
 
@@ -222,6 +261,12 @@ export default function EmmaAdmin() {
           </dl>
         </div>
 
+        {audioError && (
+          <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            Couldn't prepare recordings for playback: {audioError}
+          </p>
+        )}
+
         <div className="flex flex-col gap-4">
           {selectedTurns.length === 0 && (
             <p className="text-sm text-[#9a9aa2]">No turns recorded for this conversation yet.</p>
@@ -231,6 +276,15 @@ export default function EmmaAdmin() {
               <p className="mb-2 text-xs font-bold text-[#9a9aa2]">
                 Turn {i + 1} · {formatDate(t.created_at)} · {formatDuration(t.speaking_seconds)} spoken
               </p>
+              {t.audio_path && (
+                <div className="mb-2">
+                  {audioUrls[t.audio_path] ? (
+                    <audio controls preload="none" src={audioUrls[t.audio_path]} className="h-9 w-full max-w-sm" />
+                  ) : (
+                    <p className="text-xs text-[#9a9aa2]">Preparing recording…</p>
+                  )}
+                </div>
+              )}
               <div className="mb-2 rounded-xl bg-[#f4f3f7] px-3 py-2 text-sm text-[#111]" dir="ltr">
                 <span className="font-bold text-[#534AB7]">Student: </span>
                 {t.transcript}

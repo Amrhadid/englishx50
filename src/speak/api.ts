@@ -194,11 +194,12 @@ export function createSupabaseSpeakApi(): SpeakApi {
       if (!res.ok) return res
       const transcript = typeof res.data.transcript === 'string' ? res.data.transcript.trim() : ''
       if (!transcript) return { ok: false, code: 'empty_transcript' }
-      return { ok: true, transcript }
+      const audioPath = typeof res.data.audioPath === 'string' ? res.data.audioPath : null
+      return { ok: true, transcript, audioPath }
     },
 
-    async respond({ conversationId, level, text, speakingSeconds, wantAudio }) {
-      const res = await call({ action: 'respond', conversationId, level, text, speakingSeconds, wantAudio })
+    async respond({ conversationId, level, text, speakingSeconds, wantAudio, audioPath }) {
+      const res = await call({ action: 'respond', conversationId, level, text, speakingSeconds, wantAudio, audioPath })
       if (!res.ok) return res
       const reply = typeof res.data.reply === 'string' ? res.data.reply.trim() : ''
       const feedback = feedbackOf(res.data.feedback)

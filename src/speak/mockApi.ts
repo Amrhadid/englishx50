@@ -220,9 +220,10 @@ export function createMockSpeakApi(opts: { fail?: MockFailure | string | null; d
       if (fail === 'empty') return { ok: false, code: 'empty_transcript', status: 422 }
       if (fail === 'network') return { ok: false, code: 'network' }
       if (fail === 'timeout') return { ok: false, code: 'timeout' }
-      return { ok: true, transcript: 'The best part of my day is teaching my class.' }
+      return { ok: true, transcript: 'The best part of my day is teaching my class.', audioPath: null }
     },
     async respond({ text, speakingSeconds, wantAudio }) {
+      // audioPath is accepted by the real API but the dev mock never persists turns to storage.
       await wait(delay)
       if (fail === 'ai') return { ok: false, code: 'ai_failed', status: 502 }
       if (fail === 'malformed') return { ok: false, code: 'ai_malformed', status: 502 }

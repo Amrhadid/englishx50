@@ -35,7 +35,7 @@ function fakeApi(): SpeakApi & { session: ReturnType<typeof vi.fn>; start: Retur
     session: vi.fn(async () => ({ ok: true as const, current: null, nextAvailableAt: null, history: [] })),
     conversation: vi.fn(async () => ({ ok: true as const, conversation })),
     start: vi.fn(async () => ({ ok: true as const, conversation, reply: conversation.opener, audio: null, resumed: false })),
-    transcribe: vi.fn(async () => ({ ok: true as const, transcript: 'x' })),
+    transcribe: vi.fn(async () => ({ ok: true as const, transcript: 'x', audioPath: null })),
     respond: vi.fn(async () => ({
       ok: true as const,
       reply: 'y',

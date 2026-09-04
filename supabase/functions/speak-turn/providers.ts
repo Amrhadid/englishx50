@@ -63,7 +63,7 @@ export interface Providers {
   synthesizer: Synthesizer | null
 }
 
-function extOf(mime: string): string {
+export function extOf(mime: string): string {
   if (mime.includes('mp4') || mime.includes('m4a')) return 'mp4'
   if (mime.includes('mpeg') || mime.includes('mp3')) return 'mp3'
   if (mime.includes('ogg')) return 'ogg'

@@ -52,6 +52,8 @@ export interface SpeakRequest {
   /** Base64 audio (transcribe). */
   audio?: string
   mime?: string
+  /** The storage path a prior `transcribe` call returned for this recording (respond). */
+  audioPath?: string | null
   history: HistoryMessage[]
   /** Seconds the learner spoke for this turn, as measured by the client. */
   speakingSeconds: number
@@ -134,6 +136,10 @@ export function parseSpeakRequest(body: unknown): ParseResult {
     const text = cleanText(b.text, LIMITS.maxTranscriptChars)
     if (text.length < 2) return { ok: false, error: 'Missing text' }
     req.text = text
+    // Echoed back from a prior transcribe call — a storage path we generated, never trusted blindly.
+    if (typeof b.audioPath === 'string' && /^[\w-]{1,64}\/[\w.-]{1,120}$/.test(b.audioPath)) {
+      req.audioPath = b.audioPath
+    }
   }
 
   return { ok: true, value: req }

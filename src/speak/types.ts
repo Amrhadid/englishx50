@@ -115,7 +115,7 @@ export type StartResult =
   | ApiFailure
 export type ConversationResult = { ok: true; conversation: Conversation } | ApiFailure
 export type EndResult = { ok: true; conversation: Conversation; nextAvailableAt: string | null } | ApiFailure
-export type TranscribeResult = { ok: true; transcript: string } | ApiFailure
+export type TranscribeResult = { ok: true; transcript: string; audioPath: string | null } | ApiFailure
 export type TurnResult =
   | {
       ok: true
@@ -142,6 +142,8 @@ export interface SpeakApi {
     text: string
     speakingSeconds: number
     wantAudio: boolean
+    /** From a prior transcribe() call, so the recording gets attached to this turn. */
+    audioPath?: string | null
   }): Promise<TurnResult>
   /** End the active conversation early, before the speaking goal is reached. */
   end(input: { conversationId: string }): Promise<EndResult>

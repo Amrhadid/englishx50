@@ -4,11 +4,15 @@
 // not (a failed history read).
 
 import type { FetchLike } from './access.ts'
+import { extOf } from './providers.ts'
 
 export interface StoreEnv {
   supabaseUrl: string
   serviceRoleKey: string
 }
+
+/** Private bucket — only the admin can generate a listen link (see speaking_audio.sql). */
+const AUDIO_BUCKET = 'x50-speaking-audio'
 
 export type ConversationStatus = 'active' | 'completed'
 
@@ -31,6 +35,8 @@ export interface TurnRow {
   feedback: unknown
   speaking_seconds: number
   created_at: string
+  /** Storage object path for the learner's recording, or null (typed answer, or the upload failed). */
+  audio_path: string | null
 }
 
 export interface Store {
@@ -54,12 +60,15 @@ export interface Store {
     reply: string
     feedback: unknown
     speakingSeconds: number
+    audioPath: string | null
   }): Promise<string | null>
+  /** Uploads a learner recording and returns its storage path, or null if the upload failed. */
+  uploadAudio(input: { userId: string; bytes: Uint8Array; mime: string }): Promise<string | null>
 }
 
 const CONVERSATION_FIELDS =
   'id,user_id,scenario,level,status,speaking_seconds,goal_seconds,started_at,completed_at'
-const TURN_FIELDS = 'id,transcript,reply,feedback,speaking_seconds,created_at'
+const TURN_FIELDS = 'id,transcript,reply,feedback,speaking_seconds,created_at,audio_path'
 
 function num(v: unknown): number {
   const n = Number(v)
@@ -163,6 +172,7 @@ export function createStore(env: StoreEnv, fetchFn: FetchLike): Store {
             feedback: t.feedback ?? null,
             speaking_seconds: num(t.speaking_seconds),
             created_at: String(t.created_at),
+            audio_path: typeof t.audio_path === 'string' ? t.audio_path : null,
           }))
         : null
     },
@@ -180,9 +190,29 @@ export function createStore(env: StoreEnv, fetchFn: FetchLike): Store {
           reply: input.reply,
           feedback: input.feedback,
           speaking_seconds: Math.round(input.speakingSeconds * 10) / 10,
+          audio_path: input.audioPath,
         }),
       })
       return r?.[0]?.id ?? null
+    },
+
+    async uploadAudio({ userId, bytes, mime }) {
+      if (!enabled || bytes.length === 0) return null
+      const path = `${userId}/${Date.now()}-${crypto.randomUUID()}.${extOf(mime)}`
+      try {
+        const resp = await fetchFn(`${env.supabaseUrl}/storage/v1/object/${AUDIO_BUCKET}/${path}`, {
+          method: 'POST',
+          headers: {
+            apikey: env.serviceRoleKey,
+            authorization: `Bearer ${env.serviceRoleKey}`,
+            'content-type': mime || 'audio/webm',
+          },
+          body: bytes,
+        })
+        return resp.ok ? path : null
+      } catch {
+        return null
+      }
     },
   }
 }

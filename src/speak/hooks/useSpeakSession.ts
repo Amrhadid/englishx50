@@ -106,6 +106,8 @@ export function useSpeakSession(opts: Options): SpeakSession {
   const conversationRef = useRef<Conversation | null>(null)
   /** The learner turn Emma has not answered yet (resent by `retry()`). */
   const pendingRef = useRef<ConversationTurn | null>(null)
+  /** The pending turn's recording path, if any, so a retry keeps it attached. */
+  const pendingAudioPathRef = useRef<string | null>(null)
   const lastScenarioRef = useRef<ScenarioId | null>(null)
   /** Set when the last reply completed the conversation: review after playback. */
   const completeAfterSpeechRef = useRef(false)
@@ -238,10 +240,11 @@ export function useSpeakSession(opts: Options): SpeakSession {
 
   /** Ask Emma to answer `userTurn` (already on screen) and play her reply. */
   const respond = useCallback(
-    async (session: number, userTurn: ConversationTurn, seconds: number) => {
+    async (session: number, userTurn: ConversationTurn, seconds: number, audioPath: string | null = null) => {
       const current = conversationRef.current
       if (!current) return
       pendingRef.current = userTurn
+      pendingAudioPathRef.current = audioPath
       setPhase('thinking')
       const { level: lv, voice: vc } = optsRef.current
       const res = await api.respond({
@@ -250,6 +253,7 @@ export function useSpeakSession(opts: Options): SpeakSession {
         text: userTurn.text,
         speakingSeconds: seconds,
         wantAudio: vc,
+        audioPath,
       })
       if (!alive(session)) return
       if (!res.ok) {
@@ -313,7 +317,7 @@ export function useSpeakSession(opts: Options): SpeakSession {
         failWith(res.code, false)
         return
       }
-      await respond(session, addUserTurn(res.transcript), seconds)
+      await respond(session, addUserTurn(res.transcript), seconds, res.audioPath)
     },
     [addUserTurn, alive, api, failWith, respond],
   )
@@ -405,7 +409,7 @@ export function useSpeakSession(opts: Options): SpeakSession {
     if (!pending) return
     busyRef.current = true
     try {
-      await respond(session, pending, 0)
+      await respond(session, pending, 0, pendingAudioPathRef.current)
     } finally {
       busyRef.current = false
     }
