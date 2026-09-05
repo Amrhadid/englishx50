@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'node',
-    include: ['src/speak/**/*.test.{ts,tsx}', 'supabase/functions/speak-turn/**/*.test.ts'],
+    include: ['src/speak/**/*.test.{ts,tsx}', 'src/lib/**/*.test.ts', 'supabase/functions/speak-turn/**/*.test.ts'],
     setupFiles: ['src/speak/__tests__/setup.ts'],
     restoreMocks: true,
   },
