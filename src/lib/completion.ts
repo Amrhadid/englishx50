@@ -138,6 +138,86 @@ export function allVideosWatched(userId: string | null | undefined, c: Challenge
   return videos.every((v) => watched.has(v.uid))
 }
 
+const TASK_PREFIX = 'x50_taskdone_'
+
+function taskKey(userId: string | null | undefined, challengeId: string): string {
+  return `${TASK_PREFIX}${userId ?? 'anon'}:${challengeId}`
+}
+
+/** Speaking-task indices the SERVER says this account has submitted. */
+function getServerDoneTasks(userId: string | null | undefined, challengeId: string): number[] {
+  try {
+    const raw = localStorage.getItem(taskKey(userId, challengeId))
+    const arr = raw ? JSON.parse(raw) : []
+    return Array.isArray(arr) ? arr : []
+  } catch {
+    return []
+  }
+}
+
+function saveServerDoneTasks(userId: string, challengeId: string, indices: number[]): void {
+  try {
+    localStorage.setItem(taskKey(userId, challengeId), JSON.stringify(indices))
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
+/** True once a speaking task has a saved attempt here or a submission on the server. */
+export function isTaskDone(userId: string | null | undefined, c: Challenge, index: number): boolean {
+  if (getAttempt(challengeTaskId(userId, c.id, c.number, index))) return true
+  return getServerDoneTasks(userId, c.id).includes(index)
+}
+
+/**
+ * Pull this account's watched videos and speaking submissions for a challenge
+ * from the DB into the local caches. Completion used to be judged from
+ * localStorage alone, so a student who finished on another device (or cleared
+ * the cache) was told to "complete the previous challenge" / "watch part 1"
+ * again. Best-effort: any failure just leaves the local state as it was.
+ */
+export async function syncChallengeFromServer(userId: string, c: Challenge): Promise<void> {
+  if (!supabase) return
+  const videos = challengeVideos(c)
+  const tasks = challengeSpeakingTasks(c)
+  const [views, subs] = await Promise.all([
+    videos.length
+      ? supabase
+          .from('x50_video_views')
+          .select('video_id, watched_percent')
+          .eq('user_id', userId)
+          .in('video_id', videos.map((v) => v.uid))
+          .gte('watched_percent', VIDEO_WATCHED_PCT)
+      : Promise.resolve({ data: null, error: null }),
+    tasks.length
+      ? supabase
+          .from('x50_submissions')
+          .select('question, challenge_id, challenge_number')
+          .eq('user_id', userId)
+          .or(`challenge_id.eq.${c.id},challenge_number.eq.${c.number}`)
+      : Promise.resolve({ data: null, error: null }),
+  ])
+  if (!views.error) {
+    for (const row of (views.data as { video_id: string }[] | null) ?? []) {
+      markVideoWatched(userId, c.id, row.video_id)
+    }
+  }
+  if (!subs.error && subs.data) {
+    const questions = (subs.data as { question: string | null }[]).map((r) =>
+      (r.question ?? '').trim(),
+    )
+    const done = tasks
+      .map((_, i) => i)
+      .filter((i) => {
+        // A single-task challenge is done by any submission for it; with
+        // several tasks the submission's question identifies which one.
+        if (tasks.length === 1) return questions.length > 0
+        return questions.includes(tasks[i].trim())
+      })
+    if (done.length) saveServerDoneTasks(userId, c.id, done)
+  }
+}
+
 /** True once every video is watched and every speaking task has a saved attempt. */
 export function isChallengeComplete(userId: string | null | undefined, c: Challenge): boolean {
   const videos = challengeVideos(c)
@@ -146,18 +226,22 @@ export function isChallengeComplete(userId: string | null | undefined, c: Challe
 
   const watched = new Set(getWatchedVideos(userId, c.id))
   const allVideos = videos.every((v) => watched.has(v.uid))
-  const allTasks = tasks.every(
-    (_, i) => !!getAttempt(challengeTaskId(userId, c.id, c.number, i)),
-  )
+  const allTasks = tasks.every((_, i) => isTaskDone(userId, c, i))
   return allVideos && allTasks
 }
 
 /**
  * If the challenge just became complete and isn't recorded yet, persist
  * completed_at to the DB. Returns true when a new completion was recorded.
+ * Checks the local state first and, when that falls short, the server's
+ * record of this account's views and submissions.
  */
 export async function recordCompletionIfDone(userId: string, c: Challenge): Promise<boolean> {
-  if (!supabase || !isChallengeComplete(userId, c)) return false
+  if (!supabase) return false
+  if (!isChallengeComplete(userId, c)) {
+    await syncChallengeFromServer(userId, c)
+    if (!isChallengeComplete(userId, c)) return false
+  }
   const { data } = await supabase
     .from('x50_challenge_progress')
     .select('challenge_number')

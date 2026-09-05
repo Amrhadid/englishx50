@@ -1,8 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { isPlaceholderChallenge, mergeWithPlaceholders } from '../lib/placeholders'
 import { challengeVideos } from '../lib/challenge'
-import { challengeLockState, allVideosWatched, type LockState } from '../lib/completion'
+import {
+  challengeLockState,
+  allVideosWatched,
+  recordCompletionIfDone,
+  type LockState,
+} from '../lib/completion'
 import { levelTestTaskId, getAttempt, fetchServerTrials, hasLevelTestSubmission } from '../lib/progress'
 import { loadUserNotes, countNotes, REQUIRED_NOTES } from '../lib/notes'
 import { Link } from 'react-router-dom'
@@ -36,7 +41,7 @@ import { toArabicDigits, UI } from '../lib/theme'
  * has already established the account is subscribed.
  */
 export default function StudentHome() {
-  const { progress, student, daysLeft, cooldownSkips, challengeUnlocks } =
+  const { progress, student, daysLeft, cooldownSkips, challengeUnlocks, refetch } =
     useOnboardingContext()
   const { user } = useAuth()
   const isAdmin = isAdminEmail(user?.email)
@@ -121,6 +126,30 @@ export default function StudentHome() {
       active = false
     }
   }, [])
+
+  // Completion used to be judged from this browser's localStorage only, so a
+  // student who finished a challenge elsewhere kept seeing "أكمل التحدي
+  // السابق". Once per load, re-derive any unrecorded completion from the
+  // account's server-side views and submissions.
+  const reconciledFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!user || challenges.length === 0) return
+    const key = `${user.id}:${challenges.map((c) => c.id).join(',')}`
+    if (reconciledFor.current === key) return
+    reconciledFor.current = key
+    let active = true
+    Promise.all(
+      challenges.filter((c) => !progress[c.number]).map((c) => recordCompletionIfDone(user.id, c)),
+    ).then((results) => {
+      if (active && results.some(Boolean)) refetch()
+    })
+    return () => {
+      active = false
+    }
+    // progress is read once per (user, challenge list); a later refetch must
+    // not restart the reconciliation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, challenges])
 
   const scrollToChallenges = () =>
     document.getElementById('challenges')?.scrollIntoView({ behavior: 'smooth', block: 'start' })

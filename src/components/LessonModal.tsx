@@ -11,6 +11,7 @@ import {
   getVideoPosition,
   saveVideoPosition,
   recordCompletionIfDone,
+  syncChallengeFromServer,
   VIDEO_WATCHED_PCT,
 } from '../lib/completion'
 import { isAdminEmail } from '../lib/admin'
@@ -76,11 +77,20 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
     getVideoProgress(user?.id, challenge.id),
   )
   useEffect(() => {
-    Promise.resolve().then(() => {
+    let active = true
+    const refresh = () => {
+      if (!active) return
       setWatchedUids(getWatchedVideos(user?.id, challenge.id))
       setProgressPct(getVideoProgress(user?.id, challenge.id))
-    })
-  }, [user, challenge.id])
+    }
+    Promise.resolve().then(refresh)
+    // Parts finished on another device (or before a cache clear) live in the
+    // DB; pull them in so part 2 doesn't demand part 1 be watched again.
+    if (user?.id) syncChallengeFromServer(user.id, challenge).then(refresh)
+    return () => {
+      active = false
+    }
+  }, [user, challenge])
   const videoUnlocked = (index: number): boolean => {
     if (isAdmin || index <= 0) return true
     const prevUid = videos[index - 1]?.uid
@@ -144,7 +154,13 @@ export default function LessonModal({ challenge, onClose }: LessonModalProps) {
       const id = crypto.randomUUID()
       const { error } = await supabase
         .from('x50_video_views')
-        .insert({ id, student: studentId(), video_id: uid, watched_percent: 0 })
+        .insert({
+          id,
+          student: studentId(),
+          user_id: userIdRef.current ?? null,
+          video_id: uid,
+          watched_percent: 0,
+        })
       rowIdRef.current = error ? null : id
     }
 
