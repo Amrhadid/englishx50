@@ -779,6 +779,27 @@ export async function bypassLevelTest(student: StudentRecord): Promise<ActionRes
   return error ? fail(error) : { ok: true }
 }
 
+/**
+ * Add (or, with a negative number, remove) subscription days for a student.
+ * Server-side, admin-only (supabase/subscription_admin.sql). Resolves to the
+ * new days-left figure.
+ */
+export async function adjustSubscription(
+  userId: string,
+  deltaDays: number,
+): Promise<{ ok: true; daysLeft: number } | { ok: false; error: string }> {
+  if (!supabase) return { ok: false, error: 'Supabase is not configured.' }
+  const { data, error } = await supabase.rpc('x50_adjust_subscription', {
+    p_user: userId,
+    p_delta_days: Math.round(deltaDays),
+  })
+  if (error) {
+    const missing = error.message.includes('x50_adjust_subscription') || error.code === '42883' || error.code === 'PGRST202'
+    return { ok: false, error: missing ? 'Run supabase/subscription_admin.sql first — the RPC does not exist yet.' : error.message }
+  }
+  return { ok: true, daysLeft: Number(data) }
+}
+
 // ---------------------------------------------------------------------------
 // Export
 // ---------------------------------------------------------------------------

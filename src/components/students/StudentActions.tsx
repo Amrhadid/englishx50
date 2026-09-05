@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import {
+  adjustSubscription,
   bypassLevelTest,
   revokeSkip,
   revokeUnlock,
@@ -39,6 +40,7 @@ export default function StudentActions({
   const [skipNum, setSkipNum] = useState('')
   const [trialTask, setTrialTask] = useState('level_test')
   const [trialBonus, setTrialBonusInput] = useState('1')
+  const [subDays, setSubDays] = useState('30')
 
   const run = async (key: string, action: () => Promise<Result>, success: string) => {
     setBusy(key)
@@ -82,6 +84,63 @@ export default function StudentActions({
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
+        {/* Subscription */}
+        <Card className="p-5 lg:col-span-2">
+          <SectionTitle
+            hint={
+              s.subscription === 'none'
+                ? 'no subscription'
+                : s.daysLeft != null && s.daysLeft > 0
+                  ? `${s.daysLeft} day${s.daysLeft === 1 ? '' : 's'} left`
+                  : `expired ${Math.abs(s.daysLeft ?? 0)} day${Math.abs(s.daysLeft ?? 0) === 1 ? '' : 's'} ago`
+            }
+          >
+            Subscription
+          </SectionTitle>
+          <p className="mb-3 text-xs text-[#9a9aa2]">
+            {s.subscription === 'none'
+              ? 'This student has not redeemed a code. Adding days starts a subscription with that many days left.'
+              : 'Add days to extend the 100-day subscription, or remove days to shorten it. Takes effect on their next page load.'}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {[7, 20, 30].map((d) => (
+              <button
+                key={d}
+                onClick={() => run(`sub+${d}`, () => adjustSubscription(s.id, d), `Added ${d} days for ${s.name} ✓`)}
+                disabled={busy !== null}
+                className="rounded-xl bg-[#EEEDFE] px-3.5 py-2 text-sm font-bold text-[#534AB7] hover:bg-[#e2e0fb] disabled:opacity-60"
+              >
+                +{d} days
+              </button>
+            ))}
+            <span className="mx-1 text-[#c9c6d8]">|</span>
+            <input
+              type="number"
+              min={-3650}
+              max={3650}
+              value={subDays}
+              onChange={(e) => setSubDays(e.target.value)}
+              className={`${FIELD} w-24`}
+              aria-label="Days to add (negative to remove)"
+            />
+            <button
+              onClick={() => {
+                const d = Math.round(Number(subDays))
+                if (!d) {
+                  setMsg({ text: 'Enter a non-zero number of days.', ok: false })
+                  return
+                }
+                run('sub', () => adjustSubscription(s.id, d), `${d > 0 ? `Added ${d}` : `Removed ${-d}`} days for ${s.name} ✓`)
+              }}
+              disabled={busy !== null}
+              className={BTN_PRIMARY}
+            >
+              {busy?.startsWith('sub') ? 'Saving…' : 'Apply'}
+            </button>
+            <span className="text-[11px] text-[#9a9aa2]">negative removes days</span>
+          </div>
+        </Card>
+
         {/* Level test */}
         <Card className="p-5">
           <SectionTitle>Level test</SectionTitle>
