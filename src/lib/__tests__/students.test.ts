@@ -23,6 +23,7 @@ const empty = (): RawStudentData => ({
   profiles: [],
   challenges: [challenge(1), challenge(2), challenge(3)],
   views: [],
+  videoProgress: [],
   submissions: [],
   notes: [],
   progress: [],

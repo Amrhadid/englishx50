@@ -38,9 +38,19 @@ export interface ProfileRow {
 
 export interface VideoViewRow {
   student: string | null
+  user_id?: string | null
   video_id: string | null
   opened_at: string | null
   watched_percent: number | null
+}
+
+/** A row of x50_video_progress — the authoritative per-account video state. */
+export interface VideoProgressRow {
+  user_id: string
+  video_id: string
+  watched_percent: number | null
+  watched_at: string | null
+  updated_at: string | null
 }
 
 export interface SubmissionRow {
@@ -119,6 +129,7 @@ export interface RawStudentData {
   profiles: ProfileRow[]
   challenges: Challenge[]
   views: VideoViewRow[]
+  videoProgress: VideoProgressRow[]
   submissions: SubmissionRow[]
   notes: NoteRow[]
   progress: ProgressRow[]
@@ -332,9 +343,22 @@ export function buildStudents(raw: RawStudentData, nowMs = Date.now()): Students
   // Bucket every row under its user_id.
   const viewsBy = new Map<string, VideoViewRow[]>()
   for (const v of raw.views) {
-    const id = resolve(v.student)
+    const id = v.user_id ?? resolve(v.student)
     if (!id) continue
     ;(viewsBy.get(id) ?? viewsBy.set(id, []).get(id)!).push(v)
+  }
+  // The server-side progress rows are the source of truth for the watched
+  // percent; fold them in as views so per-video stats read the same either way.
+  for (const r of raw.videoProgress ?? []) {
+    if (!r.user_id || !r.video_id) continue
+    const row: VideoViewRow = {
+      student: null,
+      user_id: r.user_id,
+      video_id: r.video_id,
+      opened_at: r.updated_at,
+      watched_percent: r.watched_percent,
+    }
+    ;(viewsBy.get(r.user_id) ?? viewsBy.set(r.user_id, []).get(r.user_id)!).push(row)
   }
   const subsBy = new Map<string, SubmissionRow[]>()
   for (const s of raw.submissions) {
@@ -657,8 +681,9 @@ export async function loadStudents(nowMs = Date.now()): Promise<StudentsCohort> 
   }
   if (challengesRes.error) throw challengesRes.error
 
-  const [views, submissions, notes, progress, conversations, turns, trials, skips, unlocks] = await Promise.all([
-    optional<VideoViewRow>('Video views', db.from('x50_video_views').select('student, video_id, opened_at, watched_percent'), warnings),
+  const [views, videoProgress, submissions, notes, progress, conversations, turns, trials, skips, unlocks] = await Promise.all([
+    optional<VideoViewRow>('Video views', db.from('x50_video_views').select('student, user_id, video_id, opened_at, watched_percent'), warnings),
+    optional<VideoProgressRow>('Video progress', db.from('x50_video_progress').select('user_id, video_id, watched_percent, watched_at, updated_at'), warnings),
     optional<SubmissionRow>('Speaking submissions', db.from('x50_submissions').select('*').order('created_at', { ascending: false }), warnings),
     optional<NoteRow>('Notes', db.from('x50_notes').select('user_id, student, challenge_number, entries, updated_at'), warnings),
     optional<ProgressRow>('Challenge progress', db.from('x50_challenge_progress').select('user_id, challenge_number, completed_at'), warnings),
@@ -690,6 +715,7 @@ export async function loadStudents(nowMs = Date.now()): Promise<StudentsCohort> 
       profiles,
       challenges: (challengesRes.data as Challenge[] | null) ?? [],
       views,
+      videoProgress,
       submissions,
       notes,
       progress,

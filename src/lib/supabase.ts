@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+export const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
 /** True only when both env vars are present and non-empty. */
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)

@@ -67,8 +67,8 @@ export default function ChallengeLockedModal({
           <>
             <h2 className="mb-2 text-2xl font-black text-[#1b1730]">أكمل التحدي السابق أولاً</h2>
             <p className="text-[14px] font-semibold leading-relaxed text-[#7a7596]">
-              لازم تخلّص التحدي اللي قبله — شاهد كل الفيديوهات وسجّل مهام التحدّث — قبل ما تفتح التحدي
-              ده.
+              لازم تخلّص التحدي اللي قبله — شاهد كل فيديوهات الدرس كاملةً — وبعدها فترة انتظار ٥ أيام
+              قبل ما يفتح التحدي ده.
             </p>
           </>
         )}

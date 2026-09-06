@@ -2,12 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { isPlaceholderChallenge, mergeWithPlaceholders } from '../lib/placeholders'
 import { challengeVideos, hasSourceLink } from '../lib/challenge'
-import {
-  challengeLockState,
-  allVideosWatched,
-  recordCompletionIfDone,
-  type LockState,
-} from '../lib/completion'
+import { challengeLockState, recordCompletionIfDone, type LockState } from '../lib/completion'
+import { fetchAllVideoProgress, allVideosWatched, type ProgressByVideo } from '../lib/videoProgress'
 import { levelTestTaskId, getAttempt, fetchServerTrials, hasLevelTestSubmission } from '../lib/progress'
 import { loadUserNotes, countNotes, REQUIRED_NOTES } from '../lib/notes'
 import { Link } from 'react-router-dom'
@@ -79,6 +75,22 @@ export default function StudentHome() {
     }
   }, [user])
 
+  // Which lesson videos this account has watched, from the server. Reloaded
+  // whenever the lesson modal closes so the speaking gate reflects the videos
+  // just finished (on this or any other device).
+  const [videoProgress, setVideoProgress] = useState<ProgressByVideo>({})
+  useEffect(() => {
+    if (lessonFor) return
+    let active = true
+    const load = user ? fetchAllVideoProgress(user.id) : Promise.resolve({})
+    load.then((p) => {
+      if (active) setVideoProgress(p)
+    })
+    return () => {
+      active = false
+    }
+  }, [user, lessonFor])
+
   const notesDone = (c: Challenge): boolean =>
     isAdmin || !hasSourceLink(c) || countNotes(notesByChallenge[c.id] ?? []) >= REQUIRED_NOTES
 
@@ -126,10 +138,9 @@ export default function StudentHome() {
     }
   }, [])
 
-  // Completion used to be judged from this browser's localStorage only, so a
-  // student who finished a challenge elsewhere kept seeing "أكمل التحدي
-  // السابق". Once per load, re-derive any unrecorded completion from the
-  // account's server-side views and submissions.
+  // Completion is recorded server-side by the x50_video_progress trigger; once
+  // per load, backstop any challenge whose videos are all watched but that has
+  // no completion row yet (e.g. the trigger was added after they finished).
   const reconciledFor = useRef<string | null>(null)
   useEffect(() => {
     if (!user || challenges.length === 0) return
@@ -186,7 +197,7 @@ export default function StudentHome() {
   const openSpeaking = (c: Challenge) =>
     gateChallenge(c, () => {
       if (!notesDone(c)) return setNotesFor(c)
-      if (!isAdmin && !allVideosWatched(user?.id, c)) {
+      if (!isAdmin && !allVideosWatched(c, videoProgress)) {
         return setNotice({
           title: 'أكمل الدرس أولاً',
           message: 'شاهد كل فيديوهات الدرس كاملةً حتى تُفتح مهمة التحدّث.',
