@@ -7,7 +7,7 @@
 // devices / cache clears.
 
 import { supabase } from './supabase'
-import { challengeVideos, challengeSpeakingTasks } from './challenge'
+import { challengeVideos, challengeSpeakingTasks, hasSourceLink } from './challenge'
 import { challengeTaskId, getAttempt } from './progress'
 import type { Challenge } from '../types'
 
@@ -297,6 +297,9 @@ export type LockState =
  *   challenge does not have to be finished.
  * - `skips` ("Skip the cooldown") only drops the wait: the challenge opens as
  *   soon as the previous one is done, instead of 5 days later.
+ *
+ * Challenges without a source link are never locked: they are meant to open
+ * immediately, without waiting on the previous challenge's task or cooldown.
  */
 export function challengeLockState(
   challenge: Challenge,
@@ -305,6 +308,7 @@ export function challengeLockState(
   skips: number[] = [],
   unlocks: number[] = [],
 ): LockState {
+  if (!hasSourceLink(challenge)) return { locked: false }
   const idx = realNumbers.indexOf(challenge.number)
   if (idx <= 0) return { locked: false }
   if (unlocks.includes(challenge.number)) return { locked: false }

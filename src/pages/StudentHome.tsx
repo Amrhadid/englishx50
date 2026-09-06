@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { isPlaceholderChallenge, mergeWithPlaceholders } from '../lib/placeholders'
-import { challengeVideos } from '../lib/challenge'
+import { challengeVideos, hasSourceLink } from '../lib/challenge'
 import {
   challengeLockState,
   allVideosWatched,
@@ -79,7 +79,6 @@ export default function StudentHome() {
     }
   }, [user])
 
-  const hasSourceLink = (c: Challenge): boolean => Boolean(c.pdf_url && c.pdf_url.trim())
   const notesDone = (c: Challenge): boolean =>
     isAdmin || !hasSourceLink(c) || countNotes(notesByChallenge[c.id] ?? []) >= REQUIRED_NOTES
 

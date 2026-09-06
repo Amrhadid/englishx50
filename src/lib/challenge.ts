@@ -21,3 +21,13 @@ export function challengeSpeakingTasks(c: Challenge): string[] {
   if (c.speaking_task && c.speaking_task.trim()) return [c.speaking_task.trim()]
   return []
 }
+
+/**
+ * Whether the challenge carries a source link (the admin's "Source link /
+ * PDF URL" field). Challenges without one are the lighter, self-contained
+ * format: no vocabulary-notes step and no sequential lock — they open as soon
+ * as the student is on the program.
+ */
+export function hasSourceLink(c: Challenge): boolean {
+  return Boolean(c.pdf_url && c.pdf_url.trim())
+}
