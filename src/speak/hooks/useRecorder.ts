@@ -35,8 +35,19 @@ export function classifyMicError(err: unknown): RecorderErrorCode {
   return 'failed'
 }
 
-export function useRecorder(opts: { maxSeconds: number }): Recorder {
-  const { maxSeconds } = opts
+export function useRecorder(opts: { maxSeconds: number | (() => number) }): Recorder {
+  // `maxSeconds` may be a getter so the cap can depend on state that lives
+  // outside this hook (the time left in the 5:00 conversation goal). It is
+  // read once per tick through a ref, so callers can pass a fresh closure on
+  // every render without re-creating `start`.
+  const maxSecondsRef = useRef(opts.maxSeconds)
+  useEffect(() => {
+    maxSecondsRef.current = opts.maxSeconds
+  })
+  const readMax = () => {
+    const m = maxSecondsRef.current
+    return Math.max(0.2, typeof m === 'function' ? m() : m)
+  }
   const [status, setStatus] = useState<RecorderStatus>('idle')
   const [seconds, setSeconds] = useState(0)
   const [supported] = useState(() => canRecordAudio())
@@ -157,6 +168,7 @@ export function useRecorder(opts: { maxSeconds: number }): Recorder {
           setStatus('recording')
           timerRef.current = window.setInterval(() => {
             const elapsed = (Date.now() - startedAtRef.current) / 1000
+            const maxSeconds = readMax()
             setSeconds(Math.min(elapsed, maxSeconds))
             if (elapsed >= maxSeconds) stopRef.current()
           }, 200)
@@ -167,7 +179,7 @@ export function useRecorder(opts: { maxSeconds: number }): Recorder {
         },
       )
     })
-  }, [finish, maxSeconds])
+  }, [finish])
 
   // Never leave a microphone open in the background.
   useEffect(() => {

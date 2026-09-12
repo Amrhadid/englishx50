@@ -153,7 +153,7 @@ export function createMockSpeakApi(opts: { fail?: MockFailure | string | null; d
       scenario: 'interview',
       level: 'intermediate',
       status: 'completed',
-      speakingSeconds: 312,
+      speakingSeconds: 300,
       goalSeconds: 300,
       startedAt: iso(now - 3 * 86_400_000),
       completedAt: iso(now - 3 * 86_400_000 + 900_000),
@@ -164,7 +164,7 @@ export function createMockSpeakApi(opts: { fail?: MockFailure | string | null; d
       scenario: 'airport',
       level: 'beginner',
       status: 'completed',
-      speakingSeconds: 305,
+      speakingSeconds: 300,
       goalSeconds: 300,
       startedAt: iso(now - 2 * 86_400_000),
       completedAt: iso(now - 2 * 86_400_000 + 700_000),
@@ -191,7 +191,7 @@ export function createMockSpeakApi(opts: { fail?: MockFailure | string | null; d
       scenario: 'daily',
       level: 'intermediate',
       status: 'completed',
-      speakingSeconds: 304,
+      speakingSeconds: 300,
       goalSeconds: 300,
       startedAt: iso(now - 2 * 3_600_000),
       completedAt: iso(now - 3_600_000),
@@ -261,8 +261,9 @@ export function createMockSpeakApi(opts: { fail?: MockFailure | string | null; d
       if (fail === 'timeout') return { ok: false, code: 'timeout' }
       if (!current || current.status !== 'active') return { ok: false, code: 'conversation_completed', status: 409 }
       const i = turn++ % REPLIES.length
-      const seconds = speakingSeconds > 0 ? speakingSeconds : Math.min(60, text.split(/\s+/).length / 2.5)
-      current.speakingSeconds = Math.round((current.speakingSeconds + seconds) * 10) / 10
+      const requested = speakingSeconds > 0 ? speakingSeconds : Math.min(60, text.split(/\s+/).length / 2.5)
+      const seconds = Math.min(requested, Math.max(0, current.goalSeconds - current.speakingSeconds))
+      current.speakingSeconds = Math.min(current.goalSeconds, Math.round((current.speakingSeconds + seconds) * 10) / 10)
       current.turns = [
         ...(current.turns ?? []),
         { id: `mock-turn-${Date.now().toString(36)}`, transcript: text, reply: REPLIES[i], feedback: FEEDBACKS[i], speakingSeconds: seconds, createdAt: iso(Date.now()) },

@@ -413,10 +413,15 @@ export function createSpeakHandler(deps: SpeakDeps): (req: Request) => Promise<R
 
     // Typed answers carry no recording time; credit them with an estimate so a
     // keyboard-only learner can still complete the goal.
-    const seconds =
+    // Hard cap: a conversation never accrues more than `goal_seconds` (5:00).
+    // The last turn is credited only with the time left, so a late recording
+    // can't push the total past the goal.
+    const remaining = Math.max(0, conversation.goal_seconds - conversation.speaking_seconds)
+    const requested =
       request.speakingSeconds > 0
         ? request.speakingSeconds
         : estimateSpokenSeconds(request.text!, LIMITS.maxRecordingSeconds)
+    const seconds = Math.round(Math.min(requested, remaining) * 10) / 10
 
     const audio = request.wantAudio ? await synthesize(turn.reply) : null
     const turnId = await store.insertTurn({
@@ -430,7 +435,7 @@ export function createSpeakHandler(deps: SpeakDeps): (req: Request) => Promise<R
       speakingSeconds: seconds,
       audioPath: request.audioPath ?? null,
     })
-    const total = Math.round((conversation.speaking_seconds + seconds) * 10) / 10
+    const total = Math.min(conversation.goal_seconds, Math.round((conversation.speaking_seconds + seconds) * 10) / 10)
     const completed = total >= conversation.goal_seconds
     const updated = await store.updateConversation(conversation.id, {
       speaking_seconds: total,

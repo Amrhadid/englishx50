@@ -307,8 +307,16 @@ describe('SpeakScreen', () => {
     const a = api({}, { goal: 1 })
     renderScreen(a)
     await startConversation()
-    await recordOnce()
+    // Only 1s is left in the goal, so the recording auto-stops at the cap
+    // (strictly never past the goal) without the learner pressing stop.
+    await waitFor(() => expect(mic().hasAttribute('disabled')).toBe(false))
+    fireEvent.click(mic())
+    await waitFor(() => expect(status()).toContain('بسمعك دلوقتي'))
+    await act(async () => {
+      vi.advanceTimersByTime(1200)
+    })
     await waitFor(() => expect(a.respond).toHaveBeenCalledTimes(1))
+    expect(a.respond.mock.calls[0][0]).toMatchObject({ speakingSeconds: 1 })
     await stopAudioWhenPlaying()
 
     await screen.findByRole('heading', { name: 'أكملت محادثة اليوم 🎉' })

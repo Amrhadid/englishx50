@@ -59,6 +59,13 @@ function writeStored(key: string, value: string) {
  * resume) → push-to-talk until the 5-minute speaking goal → review + PDF →
  * locked until the next day.
  */
+/** Seconds one recording may run: the per-turn limit, or less if the 5:00 goal is closer. */
+function recordingCap(p: { speakingSeconds: number; goalSeconds: number }): number {
+  if (p.goalSeconds <= 0) return MAX_RECORDING_SECONDS
+  const remaining = Math.max(0, p.goalSeconds - p.speakingSeconds)
+  return Math.min(MAX_RECORDING_SECONDS, Math.max(0.2, Math.round(remaining * 10) / 10))
+}
+
 export default function SpeakScreen({
   api,
   userId,
@@ -87,10 +94,18 @@ export default function SpeakScreen({
   const [viewing, setViewing] = useState<Conversation | null>(null)
   const [loadingHistoryId, setLoadingHistoryId] = useState<string | null>(null)
 
-  const recorder = useRecorder({ maxSeconds: MAX_RECORDING_SECONDS })
+  // A recording may never run past the conversation's 5:00 cap: the per-turn
+  // limit shrinks to whatever time is left in the goal. The recorder reads the
+  // cap lazily through a ref because the session (which knows the progress)
+  // is created after the recorder.
+  const progressRef = useRef({ speakingSeconds: 0, goalSeconds: 0 })
+  const recorder = useRecorder({ maxSeconds: () => recordingCap(progressRef.current) })
   const endedRef = useRef<() => void>(() => {})
   const player = useAudioPlayer({ onEnded: () => endedRef.current() })
   const session = useSpeakSession({ api, recorder, player, level, voice })
+  useEffect(() => {
+    progressRef.current = { speakingSeconds: session.speakingSeconds, goalSeconds: session.goalSeconds }
+  }, [session.goalSeconds, session.speakingSeconds])
   useEffect(() => {
     endedRef.current = session.onPlaybackEnded
   }, [session.onPlaybackEnded])
@@ -268,7 +283,7 @@ export default function SpeakScreen({
                   canSpeak={session.canSpeak}
                   supported={recorder.supported}
                   recordingSeconds={session.recordingSeconds}
-                  maxSeconds={MAX_RECORDING_SECONDS}
+                  maxSeconds={recordingCap({ speakingSeconds: session.speakingSeconds, goalSeconds: session.goalSeconds })}
                   canReplay={player.canReplay}
                   onStart={() => session.start(scenario)}
                   onMic={session.toggleMic}

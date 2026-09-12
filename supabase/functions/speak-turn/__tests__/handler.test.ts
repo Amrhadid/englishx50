@@ -467,6 +467,16 @@ describe('speak-turn handler — turns', () => {
     expect((await again.json()).code).toBe('conversation_completed')
   })
 
+  it('never lets speaking time pass the 5:00 goal: the last turn is credited only with the time left', async () => {
+    // 296 s spoken, a 6.2 s recording arrives → only 4 s counts, total is exactly 300.
+    const seeded = memoryStore({ conversations: [activeRow({ speaking_seconds: 296 })] })
+    const body = await (await makeHandler(providers(), seeded.store)(post('paid', respond('conv-active', { speakingSeconds: 6.2 })))).json()
+    expect(body.completed).toBe(true)
+    expect(body.speakingSeconds).toBe(300)
+    expect(seeded.conversations[0].speaking_seconds).toBe(300)
+    expect(seeded.turns['conv-active'].at(-1)?.speaking_seconds).toBe(4)
+  })
+
   it('credits a typed answer with an estimated speaking time', async () => {
     const seeded = memoryStore({ conversations: [activeRow({ speaking_seconds: 0 })] })
     const text = Array.from({ length: 25 }, () => 'word').join(' ')
