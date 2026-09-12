@@ -237,25 +237,28 @@ export default function SpeakScreen({
           <DailyProgress seconds={session.speakingSeconds} goalSeconds={session.goalSeconds} />
 
           {conversationOpen && (
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm(T.endConfirm)) session.endConversation()
-              }}
-              disabled={!session.canSpeak}
-              className="mx-auto flex h-11 items-center justify-center gap-1.5 rounded-full border border-[#ece7fb] bg-white px-5 text-[13px] font-bold text-[#534AB7] shadow-sm transition hover:bg-[#f4f2fc] disabled:opacity-40"
-            >
-              <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
-                <path
-                  d="M9 11.5 11 13.5 15.5 9M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              {T.endConversation}
-            </button>
+            <div className="flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm(T.endConfirm)) session.endConversation()
+                }}
+                disabled={!session.canSpeak}
+                className="flex h-12 w-full max-w-sm items-center justify-center gap-2 rounded-full bg-[#534AB7] px-6 text-[15px] font-extrabold text-white shadow-md transition hover:bg-[#463d9e] active:scale-[0.99] disabled:opacity-40"
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+                  <path
+                    d="M9 11.5 11 13.5 15.5 9M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {T.endConversation}
+              </button>
+              <p className="text-center text-[12px] font-semibold text-[#6f6a8a]">{T.endHint}</p>
+            </div>
           )}
 
           {!recorder.supported && (
