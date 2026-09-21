@@ -5,7 +5,6 @@ import LevelTest from './LevelTest'
 
 interface ChallengesProps {
   challenges: Challenge[]
-  onTask: (challenge: Challenge) => void
   onFeedback: (challenge: Challenge) => void
   onSpeak: (challenge: Challenge) => void
   onLesson: (challenge: Challenge) => void
@@ -27,16 +26,6 @@ function LinkIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </svg>
-  )
-}
-
-function TargetIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]" aria-hidden="true">
-      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="2" />
-      <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="2" />
-      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
     </svg>
   )
 }
@@ -83,13 +72,13 @@ function FileIcon() {
 }
 
 /**
- * The six objects every challenge is made of, in the order a student works
- * through them: read the source, read the task, watch the lesson, record,
- * get the feedback, then keep the file.
+ * The five objects every challenge is made of, in the order a student works
+ * through them: read the source, watch the lesson, record, get the
+ * feedback, then keep the file. (The old "task" object was dropped — its
+ * modal just repeated the speaking prompt verbatim.)
  */
 const OBJECTS = [
   { key: 'source', label: 'المصدر', hint: 'Source', icon: <LinkIcon />, theme: ACTION_THEMES.source },
-  { key: 'task', label: 'المهمة', hint: 'Task', icon: <TargetIcon />, theme: ACTION_THEMES.task },
   { key: 'lesson', label: 'الدرس', hint: 'Lesson', icon: <PlayIcon />, theme: ACTION_THEMES.lesson },
   { key: 'speaking', label: 'التحدّث', hint: 'Speaking', icon: <MicIcon />, theme: ACTION_THEMES.speaking },
   { key: 'feedback', label: 'التقييم', hint: 'Feedback', icon: <ChartBarIcon />, theme: ACTION_THEMES.feedback },
@@ -99,25 +88,21 @@ const OBJECTS = [
 type ObjectKey = (typeof OBJECTS)[number]['key']
 
 /**
- * Whether a challenge actually has content for a given object. Speaking and
- * feedback are process actions (they work with a generic prompt / show
- * "no feedback yet"), so they always show; source, task, lesson and file are
- * admin-authored content and their button disappears entirely when empty.
+ * Whether a challenge actually has content for a given object, straight from
+ * what the admin panel filled in. Every object's button disappears entirely
+ * when its underlying content is empty.
  */
 function hasObject(key: ObjectKey, challenge: Challenge): boolean {
   switch (key) {
     case 'source':
       return hasSourceLink(challenge)
-    case 'task':
-      // The task is what to say about the source, so it makes no sense on
-      // its own once a challenge has no source.
-      return hasSourceLink(challenge) && challengeSpeakingTasks(challenge).length > 0
     case 'lesson':
       return challengeVideos(challenge).length > 0
+    case 'speaking':
+    case 'feedback':
+      return challengeSpeakingTasks(challenge).length > 0
     case 'file':
       return Boolean(challenge.file_url && challenge.file_url.trim())
-    default:
-      return true
   }
 }
 
@@ -199,7 +184,6 @@ function ChallengeSection({
 
 export default function Challenges({
   challenges,
-  onTask,
   onFeedback,
   onSpeak,
   onLesson,
@@ -212,7 +196,6 @@ export default function Challenges({
 }: ChallengesProps) {
   const handlers: Record<ObjectKey, (c: Challenge) => void> = {
     source: onSource,
-    task: onTask,
     lesson: onLesson,
     speaking: onSpeak,
     feedback: onFeedback,
@@ -227,7 +210,7 @@ export default function Challenges({
             التحديات
           </h2>
           <p className="mx-auto mt-3 max-w-lg text-[16px] leading-relaxed" style={{ color: UI.muted }}>
-            كل تحدي فيه ٦ خطوات: المصدر · المهمة · الدرس · التحدّث · التقييم · الملف
+            كل تحدي فيه ٥ خطوات: المصدر · الدرس · التحدّث · التقييم · الملف
           </p>
         </div>
         <LevelTest onUpgrade={onUpgrade} onComplete={onLevelTestComplete} done={levelTestDone} />

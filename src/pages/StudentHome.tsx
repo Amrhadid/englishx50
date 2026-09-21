@@ -18,7 +18,6 @@ import ComingSoonModal from '../components/ComingSoonModal'
 import FeedbackModal from '../components/FeedbackModal'
 import SpeakingModal from '../components/SpeakingModal'
 import LessonModal from '../components/LessonModal'
-import TaskModal from '../components/TaskModal'
 import DaysLeftBadge from '../components/DaysLeftBadge'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
@@ -30,8 +29,8 @@ import { toArabicDigits, UI } from '../lib/theme'
 /**
  * «ابدأ التحدي» — what a subscribed (premium / admin) account sees behind the
  * gate on /challenge. No marketing, no upgrade path: a personalized header,
- * the level test, and the challenges as sections of six objects each, with
- * every product modal (source, task, lesson, speaking, feedback, notes).
+ * the level test, and the challenges as sections of five objects each, with
+ * every product modal (source, lesson, speaking, feedback, notes).
  *
  * Assumes an <OnboardingProvider> ancestor, and that the caller (Challenge)
  * has already established the account is subscribed.
@@ -46,7 +45,6 @@ export default function StudentHome() {
   const [feedbackFor, setFeedbackFor] = useState<Challenge | null>(null)
   const [speakingFor, setSpeakingFor] = useState<Challenge | null>(null)
   const [lessonFor, setLessonFor] = useState<Challenge | null>(null)
-  const [taskFor, setTaskFor] = useState<Challenge | null>(null)
   const [comingSoonFor, setComingSoonFor] = useState<Challenge | null>(null)
   const [lockedFor, setLockedFor] = useState<{
     challenge: Challenge
@@ -191,9 +189,8 @@ export default function StudentHome() {
 
   const displayedChallenges = useMemo(() => mergeWithPlaceholders(challenges), [challenges])
 
-  // Speaking is reachable from two places (the Speaking object and the "start
-  // recording" button inside the task brief), so its prerequisites — notes,
-  // then the lesson videos — live in one place.
+  // Speaking's prerequisites — notes, then the lesson videos — live in one
+  // place so every caller gets them for free.
   const openSpeaking = (c: Challenge) =>
     gateChallenge(c, () => {
       if (!notesDone(c)) return setNotesFor(c)
@@ -261,7 +258,6 @@ export default function StudentHome() {
 
       <Challenges
         challenges={displayedChallenges}
-        onTask={(c) => gateChallenge(c, () => setTaskFor(c))}
         onFeedback={(c) => gateChallenge(c, () => setFeedbackFor(c))}
         onSpeak={openSpeaking}
         onLesson={(c) =>
@@ -310,17 +306,6 @@ export default function StudentHome() {
       )}
       {feedbackFor && <FeedbackModal challenge={feedbackFor} onClose={() => setFeedbackFor(null)} />}
       {speakingFor && <SpeakingModal challenge={speakingFor} onClose={() => setSpeakingFor(null)} />}
-      {taskFor && (
-        <TaskModal
-          challenge={taskFor}
-          onClose={() => setTaskFor(null)}
-          onStartSpeaking={() => {
-            const c = taskFor
-            setTaskFor(null)
-            openSpeaking(c)
-          }}
-        />
-      )}
       {lessonFor && <LessonModal challenge={lessonFor} onClose={() => setLessonFor(null)} />}
       {sourceFor && <SourceModal challenge={sourceFor} onClose={() => setSourceFor(null)} />}
       {notesFor && user && (
