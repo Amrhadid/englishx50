@@ -109,7 +109,9 @@ function hasObject(key: ObjectKey, challenge: Challenge): boolean {
     case 'source':
       return hasSourceLink(challenge)
     case 'task':
-      return challengeSpeakingTasks(challenge).length > 0
+      // The task is what to say about the source, so it makes no sense on
+      // its own once a challenge has no source.
+      return hasSourceLink(challenge) && challengeSpeakingTasks(challenge).length > 0
     case 'lesson':
       return challengeVideos(challenge).length > 0
     case 'file':
