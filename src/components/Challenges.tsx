@@ -1,5 +1,6 @@
 import type { Challenge } from '../types'
 import { themeFor, toArabicDigits, ACTION_THEMES, UI } from '../lib/theme'
+import { challengeVideos, challengeSpeakingTasks, hasSourceLink } from '../lib/challenge'
 import LevelTest from './LevelTest'
 
 interface ChallengesProps {
@@ -97,6 +98,27 @@ const OBJECTS = [
 
 type ObjectKey = (typeof OBJECTS)[number]['key']
 
+/**
+ * Whether a challenge actually has content for a given object. Speaking and
+ * feedback are process actions (they work with a generic prompt / show
+ * "no feedback yet"), so they always show; source, task, lesson and file are
+ * admin-authored content and their button disappears entirely when empty.
+ */
+function hasObject(key: ObjectKey, challenge: Challenge): boolean {
+  switch (key) {
+    case 'source':
+      return hasSourceLink(challenge)
+    case 'task':
+      return challengeSpeakingTasks(challenge).length > 0
+    case 'lesson':
+      return challengeVideos(challenge).length > 0
+    case 'file':
+      return Boolean(challenge.file_url && challenge.file_url.trim())
+    default:
+      return true
+  }
+}
+
 function ChallengeSection({
   challenge,
   index,
@@ -112,6 +134,7 @@ function ChallengeSection({
 }) {
   const theme = themeFor(index)
   const num = toArabicDigits(String(challenge.number).padStart(2, '0'))
+  const objects = OBJECTS.filter((o) => hasObject(o.key, challenge))
 
   return (
     <section
@@ -148,7 +171,7 @@ function ChallengeSection({
 
       {/* The six objects */}
       <div className="grid grid-cols-2 gap-2.5 px-5 pb-5 pt-1 sm:grid-cols-3 lg:grid-cols-6">
-        {OBJECTS.map((o) => (
+        {objects.map((o) => (
           <button
             key={o.key}
             onClick={() => onObject(o.key)}
