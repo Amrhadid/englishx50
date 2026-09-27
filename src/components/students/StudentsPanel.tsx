@@ -142,7 +142,7 @@ export default function StudentsPanel() {
         if (challengeState === 'speaking-passed' && !c.speakingPassed) return false
       }
       if (q) {
-        const hay = [s.name, s.phone, s.job, s.university, s.code, s.id].filter(Boolean).join(' ').toLowerCase()
+        const hay = [s.name, s.email, s.phone, s.job, s.university, s.code, s.id].filter(Boolean).join(' ').toLowerCase()
         if (!hay.includes(q)) return false
       }
       return true
@@ -305,7 +305,7 @@ export default function StudentsPanel() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name, phone, job, university or code…"
+                placeholder="Search by name, email, phone, job, university or code…"
                 aria-label="Search students"
                 className={`${FIELD} flex-1`}
               />
@@ -525,7 +525,7 @@ function StudentTable({ students, onOpen }: { students: StudentRecord[]; onOpen:
                         {s.atRisk && <Badge tone="red">At risk</Badge>}
                       </p>
                       <p className="truncate text-[11px] text-[#9a9aa2]" dir="ltr">
-                        {[s.phone, s.job].filter(Boolean).join(' · ') || s.id.slice(0, 8)}
+                        {[s.email, s.phone, s.job].filter(Boolean).join(' · ') || s.id.slice(0, 8)}
                       </p>
                     </div>
                   </div>
@@ -602,7 +602,7 @@ function StudentTable({ students, onOpen }: { students: StudentRecord[]; onOpen:
                   {s.atRisk && <Badge tone="red">At risk</Badge>}
                 </p>
                 <p className="truncate text-[11px] text-[#9a9aa2]" dir="ltr">
-                  {[s.phone, s.job].filter(Boolean).join(' · ')}
+                  {[s.email, s.phone, s.job].filter(Boolean).join(' · ')}
                 </p>
               </div>
               <SubscriptionBadge state={s.subscription} daysLeft={s.daysLeft} />
