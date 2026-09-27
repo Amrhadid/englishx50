@@ -34,6 +34,8 @@ export interface ProfileRow {
   code_redeemed_at: string | null
   created_at: string | null
   emma_gift_claimed_at?: string | null
+  /** Sign-in email, from x50_admin_student_emails (admin only). */
+  email?: string | null
 }
 
 export interface VideoViewRow {
@@ -219,6 +221,7 @@ export interface StudentStats {
 export interface StudentRecord {
   id: string
   name: string
+  email: string | null
   phone: string | null
   job: string | null
   university: string | null
@@ -592,6 +595,7 @@ export function buildStudents(raw: RawStudentData, nowMs = Date.now()): Students
     return {
       id,
       name: (p.name ?? '').trim() || (p.phone ?? '').trim() || `Student ${id.slice(0, 6)}`,
+      email: p.email?.trim() || null,
       phone: p.phone?.trim() || null,
       job: p.job?.trim() || null,
       university: p.university?.trim() || null,
@@ -680,6 +684,17 @@ export async function loadStudents(nowMs = Date.now()): Promise<StudentsCohort> 
     profiles = (retry.data as ProfileRow[] | null) ?? []
   }
   if (challengesRes.error) throw challengesRes.error
+
+  // Emails live in auth.users; the RPC only answers the admin account.
+  const emailsRes = await db.rpc('x50_admin_student_emails')
+  if (emailsRes.error) {
+    warnings.push(`Emails: ${emailsRes.error.message}`)
+  } else {
+    const emailBy = new Map(
+      ((emailsRes.data as { user_id: string; email: string | null }[] | null) ?? []).map((r) => [r.user_id, r.email]),
+    )
+    profiles = profiles.map((p) => ({ ...p, email: emailBy.get(p.user_id) ?? null }))
+  }
 
   const [views, videoProgress, submissions, notes, progress, conversations, turns, trials, skips, unlocks] = await Promise.all([
     optional<VideoViewRow>('Video views', db.from('x50_video_views').select('student, user_id, video_id, opened_at, watched_percent'), warnings),
