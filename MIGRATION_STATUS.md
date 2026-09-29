@@ -44,11 +44,24 @@ Nothing on the old project was modified or deleted. It is the rollback.
 
 ## Remaining
 
-1. **Edge function secrets** on the new project (Edge Functions → Secrets),
-   copy values from the old project:
-   `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `CLOUDFLARE_R2_ENDPOINT`,
-   `CLOUDFLARE_R2_BUCKET`, `CLOUDFLARE_R2_ACCESS_KEY_ID`,
-   `CLOUDFLARE_R2_SECRET_ACCESS_KEY`.
+1. **Edge function secrets** on the new project (Edge Functions → Secrets):
+   `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` (copy from the old project), plus the
+   R2 secrets below.
+
+   R2 bucket confirmed: **`locrativ-feedback-audio`** (Cloudflare account
+   `Siramrhadid@gmail...`; object keys match the `audio/<timestamp>-<uuid>.webm`
+   pattern the `audio` edge function writes). Supabase never displays a secret
+   value once set, and neither can this session, so rather than trying to
+   recover the old R2 access key/secret, a fresh, separately-revocable API
+   token scoped to this one bucket was the recommended path — create it under
+   R2 Object Storage → Manage API Tokens (Read & Write, scoped to
+   `locrativ-feedback-audio`), then set:
+   ```
+   CLOUDFLARE_R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+   CLOUDFLARE_R2_BUCKET=locrativ-feedback-audio
+   CLOUDFLARE_R2_ACCESS_KEY_ID=<new access key id>
+   CLOUDFLARE_R2_SECRET_ACCESS_KEY=<new secret access key>
+   ```
 2. **Switch hosting** (Cloudflare Pages, englishx50.com) and redeploy:
    ```
    VITE_SUPABASE_URL=https://ewypdhyeickjdkcubsgd.supabase.co
