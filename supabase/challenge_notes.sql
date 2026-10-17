@@ -21,6 +21,11 @@ create table if not exists public.x50_notes (
 create unique index if not exists x50_notes_user_challenge
   on public.x50_notes (user_id, challenge_id);
 
+-- Table-level grants for the API roles. RLS policies alone are not enough:
+-- without these, authenticated users hit "permission denied for table" and the
+-- student's save fails silently, so nothing ever reaches the admin view.
+grant select, insert, update on public.x50_notes to anon, authenticated;
+
 alter table public.x50_notes enable row level security;
 
 drop policy if exists x50_notes_select_own on public.x50_notes;
