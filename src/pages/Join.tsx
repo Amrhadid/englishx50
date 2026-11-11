@@ -5,6 +5,7 @@ import IntroVideo from '../components/IntroVideo'
 import ChallengeSystem from '../components/ChallengeSystem'
 import Features from '../components/Features'
 import JoinForm from '../components/JoinForm'
+import PaymentSection from '../components/PaymentSection'
 import SubscribeConfirmModal from '../components/SubscribeConfirmModal'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
@@ -19,6 +20,9 @@ import SiteFooter from '../components/SiteFooter'
  * There is deliberately no code box anywhere on this page: someone who already
  * has a code (or already redeemed) goes to «ابدأ التحدي» from the homepage.
  */
+/** The join form is hidden for now (payment link shown instead). Flip to true to bring it back. */
+const SHOW_JOIN_FORM = false
+
 export default function Join() {
   const [showConfirm, setShowConfirm] = useState(false)
 
@@ -72,7 +76,7 @@ export default function Join() {
       </section>
 
       <Features />
-      <JoinForm />
+      {SHOW_JOIN_FORM ? <JoinForm /> : <PaymentSection />}
 
       <SiteFooter />
 
