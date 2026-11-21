@@ -1,11 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { UI } from '../lib/theme'
 import { ERROR_COLOR, fieldClass } from '../lib/form'
 import { useAuth } from '../hooks/useAuth'
+import { activatePromo, fetchActivePromo, formatCountdown } from '../lib/promo'
 
 const FULL_PRICE = { amount: '6000', link: 'https://paymob.link/y6Aac' }
 
-/** Promo codes (matched case-insensitively) → discounted Paymob link. */
+/**
+ * Promo codes (matched case-insensitively) → discounted Paymob link. Validity
+ * is decided server-side (x50_activate_promo): a code only works for a
+ * signed-in user, lasts 6 hours from first activation, and can't be reused.
+ */
 const PROMO_CODES: Record<string, { amount: string; link: string }> = {
   youtube44: { amount: '4400', link: 'https://paymob.link/RDOaq' },
 }
@@ -19,20 +24,69 @@ const PROMO_CODES: Record<string, { amount: string; link: string }> = {
 export default function PaymentSection() {
   const { user, authReady, signInWithGoogle } = useAuth()
   const [code, setCode] = useState('')
-  const [applied, setApplied] = useState<string | null>(null)
+  // Tagged with the account it belongs to, so switching accounts drops it.
+  const [activation, setActivation] = useState<{ userId: string; code: string; expiresAt: number } | null>(null)
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
 
-  const offer = (applied && PROMO_CODES[applied]) || FULL_PRICE
+  const userId = user?.id
+  // Restore a still-running activation (e.g. after a reload) for this account.
+  useEffect(() => {
+    if (!userId) return
+    let cancelled = false
+    fetchActivePromo().then((a) => {
+      if (!cancelled && a && PROMO_CODES[a.code]) {
+        setNow(Date.now())
+        setActivation({ userId, code: a.code, expiresAt: new Date(a.expiresAt).getTime() })
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
 
-  const apply = () => {
+  const applied = activation && activation.userId === userId ? activation : null
+  const remaining = applied ? applied.expiresAt - now : 0
+  const active = applied !== null && remaining > 0
+  const expired = applied !== null && !active
+
+  // Tick the countdown while the discount is running.
+  useEffect(() => {
+    if (!active) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [active])
+
+  const offer = (applied && active && PROMO_CODES[applied.code]) || FULL_PRICE
+  const message = error || (expired ? 'انتهت صلاحية كود الخصم' : '')
+
+  const apply = async () => {
     const key = code.trim().toLowerCase()
-    if (!key) return
-    if (PROMO_CODES[key]) {
-      setApplied(key)
+    if (!key || busy) return
+    if (!PROMO_CODES[key]) {
+      setActivation(null)
+      setError('كود الخصم غير صحيح')
+      return
+    }
+    setBusy(true)
+    const res = await activatePromo(key)
+    setBusy(false)
+    if (res.status === 'active' && userId) {
+      setNow(Date.now())
+      setActivation({ userId, code: res.code, expiresAt: new Date(res.expiresAt).getTime() })
       setError('')
     } else {
-      setApplied(null)
-      setError('كود الخصم غير صحيح')
+      setActivation(null)
+      setError(
+        res.status === 'expired'
+          ? 'الكود ده اتستخدم قبل كده وانتهت صلاحيته'
+          : res.status === 'invalid'
+            ? 'كود الخصم غير صحيح'
+            : res.status === 'unauthenticated'
+              ? 'سجّل دخولك الأول عشان تستخدم الكود'
+              : 'حصلت مشكلة، جرّب تاني',
+      )
     }
   }
 
@@ -73,7 +127,7 @@ export default function PaymentSection() {
                 style={{ color: UI.pinkInk }}
               >
                 <span dir="ltr">{offer.amount} EGP</span>
-                {applied && (
+                {active && (
                   <span dir="ltr" className="text-[22px] font-bold line-through" style={{ color: UI.muted }}>
                     {FULL_PRICE.amount} EGP
                   </span>
@@ -103,26 +157,30 @@ export default function PaymentSection() {
                     onKeyDown={(e) => e.key === 'Enter' && apply()}
                     placeholder="اكتب الكود"
                     dir="ltr"
-                    className={fieldClass(Boolean(error))}
-                    aria-invalid={Boolean(error)}
+                    className={fieldClass(Boolean(message))}
+                    aria-invalid={Boolean(message)}
                   />
                   <button
                     type="button"
                     onClick={apply}
+                    disabled={busy}
                     className="shrink-0 rounded-[12px] px-5 text-[16px] font-bold text-white transition hover:brightness-110"
                     style={{ backgroundColor: UI.ink }}
                   >
                     تطبيق
                   </button>
                 </div>
-                {error && (
+                {message && (
                   <p className="mt-2 text-[14px] font-bold" style={{ color: ERROR_COLOR }}>
-                    {error}
+                    {message}
                   </p>
                 )}
-                {applied && (
+                {active && (
                   <p className="mt-2 text-[14px] font-bold" style={{ color: '#16A34A' }}>
-                    تم تطبيق كود الخصم ✓
+                    تم تطبيق كود الخصم ✓ — ينتهي خلال{' '}
+                    <span dir="ltr" data-testid="promo-countdown">
+                      {formatCountdown(remaining)}
+                    </span>
                   </p>
                 )}
               </div>
