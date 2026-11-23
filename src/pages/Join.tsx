@@ -22,6 +22,8 @@ import SiteFooter from '../components/SiteFooter'
  */
 /** The join form is hidden for now (payment link shown instead). Flip to true to bring it back. */
 const SHOW_JOIN_FORM = false
+/** Prices / payment section hidden for everyone (signed in or not). Flip to true to bring it back. */
+const SHOW_PAYMENT = false
 
 export default function Join() {
   const [showConfirm, setShowConfirm] = useState(false)
@@ -76,7 +78,7 @@ export default function Join() {
       </section>
 
       <Features />
-      {SHOW_JOIN_FORM ? <JoinForm /> : <PaymentSection />}
+      {SHOW_JOIN_FORM ? <JoinForm /> : SHOW_PAYMENT && <PaymentSection />}
 
       <SiteFooter />
 
