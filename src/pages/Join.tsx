@@ -20,8 +20,8 @@ import SiteFooter from '../components/SiteFooter'
  * There is deliberately no code box anywhere on this page: someone who already
  * has a code (or already redeemed) goes to «ابدأ التحدي» from the homepage.
  */
-/** The join form is hidden for now (payment link shown instead). Flip to true to bring it back. */
-const SHOW_JOIN_FORM = false
+/** Show the join form (fill in → WhatsApp with a prefilled message). Set false to show the payment section instead. */
+const SHOW_JOIN_FORM = true
 /** Prices / payment section hidden for everyone (signed in or not). Flip to true to bring it back. */
 const SHOW_PAYMENT = false
 
