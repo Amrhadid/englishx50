@@ -40,7 +40,7 @@ export default function Home() {
           </Link>
           <div className="nav-pill">
             <Link to="/challenge">ادخل التحدي</Link>
-            <Link to="/speak">اتكلم مع Emma</Link>
+            {/* Emma hidden from all users; restore to undo: <Link to="/speak">اتكلم مع Emma</Link> */}
             <Link to="/reviews">آراء الطلاب</Link>
           </div>
           <div className="nav-side">
