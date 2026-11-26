@@ -107,7 +107,7 @@ export default function RedeemPanel({ initialCode }: { initialCode?: string }) {
   const expired = !!student?.code && daysLeft <= 0
 
   return (
-    <>
+    <div className="x50p">
       <SiteHeader />
       <div className="flex min-h-[70vh] items-center justify-center bg-white px-5 py-16" dir="rtl">
       <div className="w-full max-w-md">
@@ -242,6 +242,6 @@ export default function RedeemPanel({ initialCode }: { initialCode?: string }) {
           </Link>
         </div>
       </div>
-    </>
+    </div>
   )
 }
