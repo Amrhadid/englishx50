@@ -10,7 +10,9 @@ import Admin from './pages/Admin'
 import Speaking from './pages/Speaking'
 import Rehearsal from './pages/Rehearsal'
 import ReviewsPage from './pages/ReviewsPage'
+// Emma page kept intact, only unrouted (see /speak route below).
 import SpeakPage from './speak/SpeakPage'
+void SpeakPage
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -28,7 +30,9 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/admin" element={<Admin />} />
         <Route path="/speaking" element={<Speaking />} />
         {/* Premium AI speaking partner (Emma); gated inside the page. */}
-        <Route path="/speak" element={<SpeakPage />} />
+        {/* HIDDEN from all users: /speak redirects home. To undo, swap in the SpeakPage route below. */}
+        <Route path="/speak" element={<Navigate to="/" replace />} />
+        {/* <Route path="/speak" element={<SpeakPage />} /> */}
       </Routes>
     </BrowserRouter>
   </StrictMode>,
