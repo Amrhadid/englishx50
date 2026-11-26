@@ -32,7 +32,7 @@ export default function ReviewsPage() {
   const displayedReviews = useMemo(() => (reviews.length > 0 ? reviews : PLACEHOLDER_REVIEWS), [reviews])
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="x50p min-h-screen bg-white">
       <SiteHeader />
       <div style={{ backgroundColor: UI.sand }}>
         <Reviews reviews={displayedReviews} />
