@@ -8,7 +8,8 @@ import { UI } from '../lib/theme'
  */
 const NAV = [
   { to: '/challenge', label: 'ادخل التحدي' },
-  { to: '/speak', label: 'اتكلم مع Emma' },
+  // Emma hidden from all users (route /speak redirects home). Restore this line + the route in main.tsx to undo.
+  // { to: '/speak', label: 'اتكلم مع Emma' },
   { to: '/join', label: 'اشترك' },
   { to: '/reviews', label: 'آراء الطلاب' },
 ]
