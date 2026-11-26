@@ -32,7 +32,7 @@ export default function Join() {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="x50p min-h-screen bg-white">
       <SiteHeader>
         <Link to="/" className="text-[14px] font-bold underline" style={{ color: UI.muted }}>
           الرئيسية
